@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QRコード生成ツール — ysmrastro toolbox</title>
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="apple-touch-icon" href="../favicon.png">
   <script src="https://unpkg.com/qr-code-styling@1.8.4/lib/qr-code-styling.js"></script>
   <link rel="stylesheet" href="../shared/css/variables.css">
   <link rel="stylesheet" href="../shared/css/reset.css">
@@ -25,13 +27,7 @@
       <div class="tb-layout-2col__main">
         <h1 style="font-size: var(--tb-font-size-xl); color: var(--tb-accent); margin-bottom: var(--tb-space-lg);">QRコード生成ツール</h1>
 
-        <!-- プリセットテーマ -->
-        <section class="tb-card" style="margin-bottom: var(--tb-space-lg);">
-          <h2 class="tb-section-title">プリセットテーマ</h2>
-          <div class="preset-grid" id="presetGrid"></div>
-        </section>
-
-        <!-- URL入力 -->
+        <!-- コンテンツ -->
         <section class="tb-card" style="margin-bottom: var(--tb-space-lg);">
           <h2 class="tb-section-title">コンテンツ</h2>
           <div class="tb-form-group">
@@ -40,7 +36,50 @@
           </div>
         </section>
 
-        <!-- ドットスタイル -->
+        <!-- 中央ロゴ -->
+        <section class="tb-card" style="margin-bottom: var(--tb-space-lg);">
+          <h2 class="tb-section-title">中央ロゴ</h2>
+
+          <!-- プリセットロゴ -->
+          <div class="tb-form-group">
+            <label class="tb-label">プリセットロゴ</label>
+            <div class="logo-grid" id="logoGrid"></div>
+          </div>
+
+          <p class="upload-or">または</p>
+
+          <!-- カスタム画像アップロード -->
+          <div class="tb-form-group">
+            <label class="tb-label">カスタム画像
+              <button class="tb-btn tb-btn--ghost" id="clearImage" style="display:none; font-size: var(--tb-font-size-xs);">クリア</button>
+            </label>
+            <div class="tb-upload" id="dropArea">
+              <p id="uploadText">クリックまたはドラッグ&ドロップで画像を選択</p>
+              <img id="imagePreview" style="display:none">
+            </div>
+            <input type="file" id="imageInput" accept="image/*" style="display:none">
+          </div>
+
+          <!-- 画像サイズ・マージン -->
+          <div class="tb-grid tb-grid--2">
+            <div class="tb-form-group">
+              <label class="tb-label">画像サイズ</label>
+              <div class="range-row">
+                <input type="range" class="tb-range" id="imageSize" min="0.1" max="0.5" step="0.05" value="0.35">
+                <span class="range-value" id="imageSizeValue">0.35</span>
+              </div>
+            </div>
+            <div class="tb-form-group">
+              <label class="tb-label">画像マージン</label>
+              <div class="range-row">
+                <input type="range" class="tb-range" id="imageMargin" min="0" max="20" step="1" value="8">
+                <span class="range-value" id="imageMarginValue">8px</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- スタイル -->
         <section class="tb-card" style="margin-bottom: var(--tb-space-lg);">
           <h2 class="tb-section-title">スタイル</h2>
           <div class="tb-grid tb-grid--2">
@@ -84,7 +123,7 @@
           </div>
         </section>
 
-        <!-- カラー設定 -->
+        <!-- カラー -->
         <section class="tb-card" style="margin-bottom: var(--tb-space-lg);">
           <h2 class="tb-section-title">カラー</h2>
 
@@ -158,50 +197,13 @@
           </div>
         </section>
 
-        <!-- 画像設定 -->
+        <!-- プリセットテーマ -->
         <section class="tb-card" style="margin-bottom: var(--tb-space-lg);">
-          <h2 class="tb-section-title">中央ロゴ</h2>
-
-          <!-- プリセットロゴ -->
-          <div class="tb-form-group">
-            <label class="tb-label">プリセットロゴ</label>
-            <div class="logo-grid" id="logoGrid"></div>
-          </div>
-
-          <p class="upload-or">または</p>
-
-          <!-- カスタム画像アップロード -->
-          <div class="tb-form-group">
-            <label class="tb-label">カスタム画像
-              <button class="tb-btn tb-btn--ghost" id="clearImage" style="display:none; font-size: var(--tb-font-size-xs);">クリア</button>
-            </label>
-            <div class="tb-upload" id="dropArea">
-              <p id="uploadText">クリックまたはドラッグ&ドロップで画像を選択</p>
-              <img id="imagePreview" style="display:none">
-            </div>
-            <input type="file" id="imageInput" accept="image/*" style="display:none">
-          </div>
-
-          <!-- 画像サイズ・マージン -->
-          <div class="tb-grid tb-grid--2">
-            <div class="tb-form-group">
-              <label class="tb-label">画像サイズ</label>
-              <div class="range-row">
-                <input type="range" class="tb-range" id="imageSize" min="0.1" max="0.5" step="0.05" value="0.35">
-                <span class="range-value" id="imageSizeValue">0.35</span>
-              </div>
-            </div>
-            <div class="tb-form-group">
-              <label class="tb-label">画像マージン</label>
-              <div class="range-row">
-                <input type="range" class="tb-range" id="imageMargin" min="0" max="20" step="1" value="8">
-                <span class="range-value" id="imageMarginValue">8px</span>
-              </div>
-            </div>
-          </div>
+          <h2 class="tb-section-title">プリセットテーマ</h2>
+          <div class="preset-grid" id="presetGrid"></div>
         </section>
 
-        <!-- サイズ設定 -->
+        <!-- 出力設定 -->
         <section class="tb-card" style="margin-bottom: var(--tb-space-lg);">
           <h2 class="tb-section-title">出力設定</h2>
           <div class="tb-grid tb-grid--2">
