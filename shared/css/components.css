@@ -1,0 +1,214 @@
+/* ボタン */
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tb-space-sm);
+  padding: 0.6rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: var(--tb-radius-md);
+  font-size: var(--tb-font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--tb-transition), border-color var(--tb-transition);
+  white-space: nowrap;
+}
+
+.tb-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tb-btn--primary {
+  background: var(--tb-accent);
+  color: var(--tb-bg-primary);
+  font-weight: 700;
+}
+
+.tb-btn--primary:hover:not(:disabled) {
+  background: var(--tb-accent-hover);
+}
+
+.tb-btn--secondary {
+  background: var(--tb-bg-tertiary);
+  color: var(--tb-text-primary);
+  border-color: var(--tb-border);
+}
+
+.tb-btn--secondary:hover:not(:disabled) {
+  border-color: var(--tb-border-hover);
+  background: var(--tb-bg-secondary);
+}
+
+.tb-btn--ghost {
+  background: none;
+  color: var(--tb-text-secondary);
+  border: none;
+  padding: 0.4rem 0.6rem;
+}
+
+.tb-btn--ghost:hover {
+  color: var(--tb-text-primary);
+}
+
+.tb-btn--block {
+  width: 100%;
+}
+
+/* 入力フィールド */
+.tb-input,
+.tb-select {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-primary);
+  color: var(--tb-text-primary);
+  font-size: var(--tb-font-size-base);
+  transition: border-color var(--tb-transition);
+}
+
+.tb-input:focus,
+.tb-select:focus {
+  outline: none;
+  border-color: var(--tb-accent);
+}
+
+.tb-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  padding-right: 2.2rem;
+}
+
+/* カラーピッカー */
+.tb-color {
+  width: 40px;
+  height: 36px;
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-sm);
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+}
+
+/* レンジスライダー */
+.tb-range {
+  width: 100%;
+  accent-color: var(--tb-accent);
+}
+
+/* ラベル */
+.tb-label {
+  display: block;
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+  margin-bottom: var(--tb-space-xs);
+}
+
+/* フォームグループ */
+.tb-form-group {
+  margin-bottom: var(--tb-space-md);
+}
+
+/* カード */
+.tb-card {
+  background: var(--tb-bg-secondary);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  padding: var(--tb-space-lg);
+  transition: border-color var(--tb-transition);
+}
+
+.tb-card:hover {
+  border-color: var(--tb-border-hover);
+}
+
+/* セクション見出し */
+.tb-section-title {
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  color: var(--tb-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--tb-space-md);
+  padding-bottom: var(--tb-space-sm);
+  border-bottom: 1px solid var(--tb-border);
+}
+
+/* タブ */
+.tb-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--tb-bg-primary);
+  border-radius: var(--tb-radius-md);
+  padding: 2px;
+  margin-bottom: var(--tb-space-md);
+}
+
+.tb-tab {
+  flex: 1;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: var(--tb-radius-sm);
+  background: transparent;
+  color: var(--tb-text-secondary);
+  font-size: var(--tb-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--tb-transition), color var(--tb-transition);
+}
+
+.tb-tab:hover {
+  color: var(--tb-text-primary);
+}
+
+.tb-tab.active {
+  background: var(--tb-bg-secondary);
+  color: var(--tb-text-primary);
+}
+
+/* グリッド */
+.tb-grid {
+  display: grid;
+  gap: var(--tb-space-md);
+}
+
+.tb-grid--2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.tb-grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ファイルアップロード */
+.tb-upload {
+  border: 2px dashed var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  padding: var(--tb-space-lg);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--tb-transition), background var(--tb-transition);
+}
+
+.tb-upload:hover {
+  border-color: var(--tb-accent);
+}
+
+.tb-upload.has-file {
+  border-color: var(--tb-accent);
+  background: var(--tb-accent-subtle);
+}
+
+.tb-upload img {
+  max-width: 80px;
+  max-height: 80px;
+  margin: 0 auto var(--tb-space-sm);
+}
+
+.tb-upload p {
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+}

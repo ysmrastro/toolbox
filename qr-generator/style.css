@@ -1,0 +1,196 @@
+/* QRジェネレーター固有スタイル */
+
+/* プリセットテーマ */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: var(--tb-space-sm);
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tb-space-xs);
+  padding: var(--tb-space-sm);
+  border: 2px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-primary);
+  cursor: pointer;
+  transition: border-color var(--tb-transition);
+}
+
+.preset-card:hover {
+  border-color: var(--tb-text-secondary);
+}
+
+.preset-card.active {
+  border-color: var(--tb-accent);
+}
+
+.preset-card__preview {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--tb-radius-sm);
+  overflow: hidden;
+}
+
+.preset-card__preview canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.preset-card__name {
+  font-size: var(--tb-font-size-xs);
+  color: var(--tb-text-secondary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* プリセットロゴ */
+.logo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: var(--tb-space-sm);
+}
+
+.logo-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: var(--tb-space-sm);
+  border: 2px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-primary);
+  cursor: pointer;
+  transition: border-color var(--tb-transition);
+}
+
+.logo-btn:hover {
+  border-color: var(--tb-text-secondary);
+}
+
+.logo-btn.active {
+  border-color: var(--tb-accent);
+  background: var(--tb-accent-subtle);
+}
+
+.logo-btn svg {
+  width: 28px;
+  height: 28px;
+  fill: var(--tb-text-primary);
+}
+
+/* カラー設定行 */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+}
+
+.color-row .tb-color {
+  flex-shrink: 0;
+}
+
+.color-row .tb-label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+/* グラデーション設定 */
+.gradient-settings {
+  display: none;
+  margin-top: var(--tb-space-md);
+}
+
+.gradient-settings.visible {
+  display: block;
+}
+
+/* レンジスライダー値表示 */
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+}
+
+.range-row .tb-range {
+  flex: 1;
+}
+
+.range-value {
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+  font-family: var(--tb-font-mono);
+  min-width: 3.5em;
+  text-align: right;
+}
+
+/* プレビューエリア */
+.preview-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tb-space-lg);
+}
+
+.preview-canvas {
+  width: 300px;
+  height: 300px;
+  border-radius: var(--tb-radius-lg);
+  overflow: hidden;
+  background: var(--tb-bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-canvas canvas,
+.preview-canvas svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.preview-placeholder {
+  color: var(--tb-text-muted);
+  font-size: var(--tb-font-size-sm);
+}
+
+.download-buttons {
+  display: flex;
+  gap: var(--tb-space-sm);
+  width: 100%;
+}
+
+.download-buttons .tb-btn {
+  flex: 1;
+}
+
+/* 画像アップロードの補助テキスト */
+.upload-or {
+  font-size: var(--tb-font-size-xs);
+  color: var(--tb-text-muted);
+  text-align: center;
+  margin: var(--tb-space-sm) 0;
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+  .preset-grid {
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  }
+
+  .preview-canvas {
+    width: 260px;
+    height: 260px;
+  }
+
+  .download-buttons {
+    flex-direction: column;
+  }
+}

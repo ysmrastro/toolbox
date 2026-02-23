@@ -1,0 +1,43 @@
+:root {
+  /* カラー */
+  --tb-bg-primary: #0d1117;
+  --tb-bg-secondary: #1a1a2e;
+  --tb-bg-tertiary: #161b22;
+  --tb-border: #30363d;
+  --tb-border-hover: #7eb8da;
+  --tb-text-primary: #e6edf3;
+  --tb-text-secondary: #8b949e;
+  --tb-text-muted: #6e7681;
+  --tb-accent: #7eb8da;
+  --tb-accent-hover: #9dccea;
+  --tb-accent-subtle: rgba(126, 184, 218, 0.1);
+  --tb-danger: #f85149;
+  --tb-success: #3fb950;
+
+  /* フォント */
+  --tb-font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+  --tb-font-mono: "SF Mono", "Fira Code", monospace;
+  --tb-font-size-xs: 0.75rem;
+  --tb-font-size-sm: 0.85rem;
+  --tb-font-size-base: 1rem;
+  --tb-font-size-lg: 1.15rem;
+  --tb-font-size-xl: 1.5rem;
+  --tb-font-size-2xl: 2rem;
+
+  /* 間隔 */
+  --tb-space-xs: 0.25rem;
+  --tb-space-sm: 0.5rem;
+  --tb-space-md: 1rem;
+  --tb-space-lg: 1.5rem;
+  --tb-space-xl: 2rem;
+  --tb-space-2xl: 3rem;
+
+  /* 角丸 */
+  --tb-radius-sm: 4px;
+  --tb-radius-md: 6px;
+  --tb-radius-lg: 8px;
+  --tb-radius-xl: 12px;
+
+  /* トランジション */
+  --tb-transition: 0.2s ease;
+}

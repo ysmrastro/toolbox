@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ysmrastro toolbox</title>
+  <link rel="stylesheet" href="shared/css/variables.css">
+  <link rel="stylesheet" href="shared/css/reset.css">
+  <link rel="stylesheet" href="shared/css/components.css">
+  <link rel="stylesheet" href="shared/css/layout.css">
+  <style>
+    .hero {
+      text-align: center;
+      padding: var(--tb-space-2xl) 0;
+    }
+
+    .hero__title {
+      font-size: var(--tb-font-size-2xl);
+      color: var(--tb-accent);
+      margin-bottom: var(--tb-space-sm);
+    }
+
+    .hero__subtitle {
+      font-size: var(--tb-font-size-base);
+      color: var(--tb-text-secondary);
+    }
+
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: var(--tb-space-lg);
+      margin-top: var(--tb-space-xl);
+    }
+
+    .tool-card {
+      display: block;
+      background: var(--tb-bg-secondary);
+      border: 1px solid var(--tb-border);
+      border-radius: var(--tb-radius-xl);
+      padding: var(--tb-space-xl);
+      transition: border-color var(--tb-transition), transform var(--tb-transition);
+    }
+
+    .tool-card:hover {
+      border-color: var(--tb-accent);
+      transform: translateY(-2px);
+      color: inherit;
+    }
+
+    .tool-card__icon {
+      font-size: 2rem;
+      margin-bottom: var(--tb-space-md);
+    }
+
+    .tool-card__title {
+      font-size: var(--tb-font-size-lg);
+      font-weight: 700;
+      color: var(--tb-text-primary);
+      margin-bottom: var(--tb-space-sm);
+    }
+
+    .tool-card__desc {
+      font-size: var(--tb-font-size-sm);
+      color: var(--tb-text-secondary);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <header class="tb-header">
+    <a href="./" class="tb-header__logo">ysmrastro toolbox</a>
+    <nav class="tb-header__nav">
+      <a href="https://ysmrastro.github.io/numanohotori/" target="_blank">numanohotori</a>
+    </nav>
+  </header>
+
+  <div class="tb-container">
+    <section class="hero">
+      <h1 class="hero__title">toolbox</h1>
+      <p class="hero__subtitle">ちょっとしたWebアプリツール集</p>
+    </section>
+
+    <section class="tools-grid">
+      <a href="qr-generator/" class="tool-card">
+        <div class="tool-card__icon">QR</div>
+        <h2 class="tool-card__title">QRコード生成ツール</h2>
+        <p class="tool-card__desc">カスタマイズ可能なQRコード生成。プリセットテーマ・ロゴ対応、リアルタイムプレビュー。PNG/SVG/JPEG でダウンロード。</p>
+      </a>
+    </section>
+  </div>
+</body>
+</html>
