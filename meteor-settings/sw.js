@@ -2,7 +2,7 @@
  * sw.js — オフラインでも使えるようにするための Service Worker
  * 撮影地は電波が届かないことが多いため、初回アクセス後は完全にオフラインで動く。
  */
-const CACHE = 'meteor-settings-v1.1.0';
+const CACHE = 'meteor-settings-v1.2.0';
 
 const ASSETS = [
   './',
@@ -68,6 +68,11 @@ self.addEventListener('install', (e) => {
       .then(() => self.skipWaiting())
       .catch(() => { /* 一部が失敗しても install は続行する */ })
   );
+});
+
+/* 引っぱって更新から待機中の版をすぐ有効にする要求を受ける */
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {

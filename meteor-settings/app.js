@@ -1058,6 +1058,11 @@
     $('aboutSheet').addEventListener('click', (e) => {
       if (e.target.hasAttribute('data-close')) $('aboutSheet').hidden = true;
     });
+    $('btnReload').addEventListener('click', (e) => {
+      e.target.textContent = '確認中…';
+      reloadWithUpdate();
+    });
+
     // PC ではキーボードで閉じられるようにする
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !$('aboutSheet').hidden) $('aboutSheet').hidden = true;
@@ -1066,12 +1071,101 @@
 
   /* ===================== 起動 ===================== */
 
-  /** バージョンと更新日をアプリバーに出す */
+  /** バージョンと更新日時をアプリバーに出す */
   function renderVersion() {
+    const parts = D.appUpdated.split(' ');   // '2026-08-11 08:28'
     $('appVersion').innerHTML =
-      `<div>v${D.appVersion}</div><div>${D.appUpdated}</div>`;
+      `<div>v${D.appVersion}</div><div>${parts[0]}</div>` +
+      (parts[1] ? `<div>${parts[1]}</div>` : '');
     const foot = $('aboutVersion');
     if (foot) foot.textContent = `v${D.appVersion}（${D.appUpdated} 更新）`;
+  }
+
+  /* ===================== 引っぱって更新 =====================
+   * ブラウザ標準の pull-to-refresh は、PWA を standalone で起動すると
+   * 存在しない（iOS）か抑制される。どの環境でも同じ動きにするため自前で実装する。
+   * 更新時は Service Worker の update を先に走らせ、新しい版があれば
+   * それを取り込んでから再読み込みする。
+   */
+  const PTR_TRIGGER = 70;    // これ以上引っぱったら更新する[px]
+  const PTR_MAX = 110;       // 見た目の最大移動量[px]
+
+  /** Service Worker を更新してから再読み込みする */
+  async function reloadWithUpdate() {
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update();
+          // sw.js は install で skipWaiting するので、待機中の版はすぐ有効になる
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+      }
+    } catch (e) { /* 更新確認に失敗しても再読み込みは行う */ }
+    location.reload();
+  }
+
+  function setupPullToRefresh() {
+    const el = $('ptr');
+    const label = $('ptrLabel');
+    let startY = null;
+    let pulling = false;
+    let loading = false;
+
+    const show = (dy) => {
+      const ready = dy >= PTR_TRIGGER;
+      el.classList.add('is-active');
+      el.classList.toggle('is-ready', ready);
+      el.style.transform = `translateY(${Math.min(dy * 0.55, PTR_MAX)}px)`;
+      el.querySelector('.ptr__spinner').style.transform = `rotate(${dy * 2.4}deg)`;
+      label.textContent = ready ? '離して更新' : '引っぱって更新';
+    };
+
+    const reset = () => {
+      el.classList.add('is-releasing');
+      el.classList.remove('is-active', 'is-ready');
+      el.style.transform = 'translateY(-24px)';
+      setTimeout(() => el.classList.remove('is-releasing'), 260);
+      pulling = false;
+      startY = null;
+    };
+
+    document.addEventListener('touchstart', (e) => {
+      if (loading || e.touches.length !== 1) return;
+      // 上端にいるときだけ。スライダー操作やシート表示中は邪魔しない
+      if (window.scrollY > 0) return;
+      if (!$('aboutSheet').hidden) return;
+      if (e.target.closest('input[type="range"], select, .sheet')) return;
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (startY === null || loading) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0 || window.scrollY > 0) {
+        if (pulling) reset();
+        return;
+      }
+      pulling = true;
+      show(dy);
+      // 自前で動かすのでブラウザのゴム引きは止める
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchend', () => {
+      if (startY === null || loading) { startY = null; return; }
+      const dy = parseFloat((el.style.transform.match(/translateY\(([-\d.]+)px\)/) || [0, 0])[1]) / 0.55;
+      if (pulling && dy >= PTR_TRIGGER) {
+        loading = true;
+        el.classList.add('is-loading', 'is-active');
+        el.classList.remove('is-ready');
+        el.style.transform = 'translateY(56px)';
+        label.textContent = '更新中…';
+        reloadWithUpdate();
+      } else {
+        reset();
+      }
+    }, { passive: true });
   }
 
   /** 既定のレンズを名前から解決して state に入れる */
@@ -1095,6 +1189,7 @@
   function init() {
     initSelects();
     renderVersion();
+    setupPullToRefresh();
     load();
     if (state.locIndex == null || state.lat == null || state.lon == null) {
       applyDefaultLocation();

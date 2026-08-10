@@ -38,6 +38,12 @@
 </head>
 <body>
 
+<!-- ============ 引っぱって更新 ============ -->
+<div class="ptr" id="ptr" aria-hidden="true">
+  <div class="ptr__spinner" id="ptrSpinner"></div>
+  <div class="ptr__label" id="ptrLabel">引っぱって更新</div>
+</div>
+
 <div class="app">
 
   <!-- ============ アプリバー ============ -->
@@ -506,7 +512,9 @@
       </ul>
 
       <p class="sheet__foot">
-        <span id="aboutVersion"></span><br>
+        <span id="aboutVersion"></span>
+        <button type="button" class="tb-btn tb-btn--secondary" id="btnReload"
+                style="margin-left:8px;padding:4px 10px;font-size:0.75rem">更新を確認</button><br>
         <a href="https://note.com/brave_godwit4798/n/n938a74b50144" target="_blank" rel="noopener">元記事を読む →</a><br>
         <a href="../" >ysmrastro toolbox</a>
       </p>

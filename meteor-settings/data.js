@@ -18,8 +18,8 @@ const MS_DATA = {};
  *   メジャー → よほどの変更のときだけ
  * リリース時は appUpdated と sw.js の CACHE 名も一緒に更新する。
  */
-MS_DATA.appVersion = '1.1.0';
-MS_DATA.appUpdated = '2026-08-11';
+MS_DATA.appVersion = '1.2.0';
+MS_DATA.appUpdated = '2026-08-11 08:28';
 
 /* ---------------- センサーフォーマット ---------------- */
 MS_DATA.formats = {

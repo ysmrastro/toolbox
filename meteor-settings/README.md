@@ -30,11 +30,27 @@
 | 機能追加 | マイナーを +0.1（パッチは 0 に戻す） |
 | メジャー | よほどの変更のときだけ |
 
+更新日時は `YYYY-MM-DD HH:MM`。アプリバーでは3段（バージョン／日付／時刻）で表示する。
+
 リリース時に更新する3か所:
 
 1. `data.js` の `MS_DATA.appVersion`
 2. `data.js` の `MS_DATA.appUpdated`（更新日）
 3. `sw.js` の `CACHE`（`meteor-settings-vX.Y.Z`）— キャッシュを確実に入れ替えるため
+
+## 引っぱって更新（pull-to-refresh）
+
+ブラウザ標準の pull-to-refresh は、PWA を standalone で起動すると存在しない（iOS）か
+抑制されるため、`app.js` の `setupPullToRefresh()` で自前実装している。
+CSS の `overscroll-behavior-y` は `contain`（`none` ではない）にして、
+ブラウザ標準の動きと二重にならないようにしている。
+
+- 画面上端（`scrollY <= 0`）で下に引っぱるとインジケーターが出る
+- 70px 以上引っぱって離すと更新。それ未満なら元に戻る
+- スライダー操作中とⓘシート表示中は反応しない
+- 更新時は Service Worker の `update()` を先に走らせ、待機中の版があれば
+  `SKIP_WAITING` を送って取り込んでから `location.reload()` する
+- タッチのないPCでは使えないため、ⓘシート末尾に「更新を確認」ボタンを置いている
 
 ## 出典とクレジット
 
