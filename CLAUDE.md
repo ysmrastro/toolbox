@@ -24,7 +24,7 @@ toolbox/
 │   ├── app.js
 │   ├── presets.js
 │   └── logos/              # プリセットロゴSVG
-└── meteor-settings/        # 流星撮影セッティング（PWA・トップページ未掲載）
+└── meteor-settings/        # 流星撮影セッティング（PWA）
     ├── index.html
     ├── style.css
     ├── data.js             # カメラ/レンズ/流星群/観測地データ
@@ -38,7 +38,7 @@ toolbox/
 
 **meteor-settings について**: 計算は friend_camera 氏の note 記事（著者の許諾済み）に基づく。
 前提・確度・検証結果は `meteor-settings/README.md` に集約してある。
-著者レビュー中のためトップページの導線には**まだ載せていない**（直リンクのみ）。
+著者の確認済みで、トップページからも導線を張っている。
 
 ## 共通CSS
 
