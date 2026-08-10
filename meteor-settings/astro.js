@@ -42,6 +42,22 @@ const MS_ASTRO = (function () {
     return { altitude: alt * DEG, azimuth: norm360(az * DEG) };
   }
 
+  /** 地平座標の2点間の角距離 [度]（カメラの向きと放射点の離角に使う） */
+  function angularSeparation(az1, alt1, az2, alt2) {
+    const a1 = alt1 * RAD;
+    const a2 = alt2 * RAD;
+    const dAz = (az1 - az2) * RAD;
+    const c = Math.sin(a1) * Math.sin(a2) + Math.cos(a1) * Math.cos(a2) * Math.cos(dAz);
+    return Math.acos(Math.max(-1, Math.min(1, c))) * DEG;
+  }
+
+  /** 方位角 [度] を16方位の名前にする */
+  const COMPASS = ['北', '北北東', '北東', '東北東', '東', '東南東', '南東', '南南東',
+    '南', '南南西', '南西', '西南西', '西', '西北西', '北西', '北北西'];
+  function compassName(azDeg) {
+    return COMPASS[Math.round(norm360(azDeg) / 22.5) % 16];
+  }
+
   /** 黄道座標 → 赤道座標 */
   function eclipticToEquatorial(lambdaDeg, betaDeg, date) {
     const jd = julianDay(date);
@@ -189,6 +205,8 @@ const MS_ASTRO = (function () {
     julianDay: julianDay,
     gmst: gmst,
     equatorialToHorizontal: equatorialToHorizontal,
+    angularSeparation: angularSeparation,
+    compassName: compassName,
     eclipticToEquatorial: eclipticToEquatorial,
     sunPosition: sunPosition,
     moonInfo: moonInfo,

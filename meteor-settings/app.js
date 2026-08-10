@@ -35,7 +35,8 @@
     skyAuto: true,        // 地点変更時に光害地図から自動で空の暗さを取り込むか
     moonId: 'auto',
     durTarget: 2.0,
-    elong: 60,
+    camAz: null,        // カメラの方位（null なら放射点から45°離した向きを自動採用）
+    camAlt: 60,         // カメラの高度
     articleMode: false,
   };
 
@@ -127,13 +128,49 @@
     return { sky: state.skyBase + delta, delta: delta };
   }
 
-  function buildCfg(snap, sky) {
-    const sh = snap.sh;
-    // 放射点が地平線下でも計算は成立させ、警告で伝える（高度は 5° を下限にクランプ）
-    const altForOmega = Math.max(snap.rad.altitude, 5);
-    const omega = E.angularVelocity(sh.velocity, state.elong, altForOmega);
+  /** カメラの向きから、放射点との離角や大気の効果を求める */
+  function cameraGeometry(snap, zenithSky) {
+    const radAz = snap.rad.isSporadic ? 0 : snap.rad.azimuth;
+    const radAlt = snap.rad.isSporadic ? 45 : snap.rad.altitude;
+    const az = state.camAz == null ? defaultCamAz(snap) : state.camAz;
+    const alt = state.camAlt;
+
+    // 散在流星は放射点を持たないので、記事の基準と同じ離角60°で扱う
+    const sep = snap.rad.isSporadic
+      ? E.REF.elong
+      : A.angularSeparation(az, alt, radAz, radAlt);
+
+    // 放射点の真上を狙うと角速度がゼロに近づいて発散するため下限を設ける
+    const elong = Math.max(sep, 10);
 
     return {
+      az: az,
+      alt: alt,
+      separation: sep,
+      elong: elong,
+      airmass: E.airmass(alt),
+      skyOffset: E.skyOffsetForAltitude(zenithSky, alt),
+      skyHere: E.skyAtAltitude(zenithSky, alt),
+      extinction: E.meteorExtinction(alt),
+    };
+  }
+
+  /** 放射点から方位で45°離した向き（初期値） */
+  function defaultCamAz(snap) {
+    if (snap.rad.isSporadic || snap.rad.azimuth == null) return 180;
+    return Math.round(((snap.rad.azimuth + 45) % 360) / 5) * 5 % 360;
+  }
+
+  function buildCfg(snap, sky) {
+    const sh = snap.sh;
+    const geo = cameraGeometry(snap, sky);
+    // 式③の「高度」は放射点ではなくカメラの向きの高度（流星は高度100kmで光るため
+    // 視線距離が 100/sin(高度) になる）
+    const omega = E.angularVelocity(sh.velocity, geo.elong, geo.alt);
+
+    return {
+      geo: geo,
+      camAlt: geo.alt,
       camera: {
         pixelPitch: state.pixelPitch,
         megapixels: state.megapixels,
@@ -144,7 +181,7 @@
       focal: state.focal,
       fnum: state.fnum,
       trailFactor: trailQuality().factor,
-      sky: sky,
+      sky: sky + geo.skyOffset,
       omegaDeg: omega,
       exposure: 8,
       gap: state.gap,
@@ -262,7 +299,8 @@
     $('lon').value = state.lon;
     $('sky').value = state.skyBase;
     $('moonSelect').value = state.moonId;
-    $('elong').value = state.elong;
+    $('camAz').value = state.camAz == null ? 180 : state.camAz;
+    $('camAlt').value = state.camAlt;
     $('articleMode').checked = state.articleMode;
     $('datetime').value = toLocalInput(currentDate());
 
@@ -283,7 +321,7 @@
     });
 
     $('skyValue').textContent = state.skyBase.toFixed(2);
-    $('elongValue').textContent = state.elong;
+    $('camAltValue').textContent = state.camAlt;
     $('purposeDesc').textContent = purpose().desc;
   }
 
@@ -351,6 +389,24 @@
       if (best.best) report += `／放射点が最も高いのは <b>${timeFmt(best.best.time)}</b>（${fmt(best.best.altitude, 0)}°）`;
     }
     $('astroReport').innerHTML = report;
+
+    // カメラの向き
+    const geo = res.cfg.geo;
+    $('camAz').value = geo.az;
+    $('camAzValue').textContent = Math.round(geo.az) + '°';
+    $('camAzName').textContent = A.compassName(geo.az);
+    $('camAltValue').textContent = geo.alt;
+    const clamped = geo.separation < geo.elong - 0.01;
+    $('camReport').innerHTML =
+      `放射点からの離角 <b>${fmt(geo.separation, 0)}°</b>` +
+      (clamped ? `（計算には下限の ${geo.elong}° を使用）` : '') +
+      `／流星の角速度 <b>${fmt(res.cfg.omegaDeg, 1)} °/s</b><br>` +
+      `大気の厚み <b>${fmt(geo.airmass, 2)}</b> 倍（天頂比）<br>` +
+      `この向きの空の明るさ <b>${fmt(geo.skyHere, 2)}</b> 等/平方秒` +
+      `（天頂より ${fmt(geo.skyHere - res.skyInfo.sky, 2)}等）<br>` +
+      `流星自身の減光 <b>${signed(-geo.extinction, 2)}</b> 等（基準の高度38°比）` +
+      `<p class="hint">高度による空の明るさと減光は近似値です。大気光や透明度は夜ごとに変わり、` +
+      `方位による明るさの差（街の方向かどうか）は天頂輝度の地図からは求められないため含めていません。</p>`;
 
     const eff = res.skyInfo;
     $('effectiveSky').textContent = `${eff.sky.toFixed(2)} 等/平方秒` +
@@ -486,6 +542,12 @@
     if (ev.uncut < 0.4) {
       add('warn', `狙っている ${state.durTarget}秒 の流星は ${Math.round((1 - ev.uncut) * 100)}% の確率でコマの境目で途切れます。コマ間隔を詰めるか露出を延ばすと改善します。`);
     }
+    if (res.cfg.geo.separation < 15) {
+      add('warn', `カメラの向きが放射点に近すぎます（離角 ${fmt(res.cfg.geo.separation, 0)}°）。流星は点に近い短い痕跡しか残りません。`);
+    }
+    if (res.cfg.geo.alt < 25) {
+      add('warn', `カメラの高度が ${res.cfg.geo.alt}° と低く、空が明るくなるうえ流星も ${fmt(res.cfg.geo.extinction, 2)}等 減光します。`);
+    }
     if (ev.aperture < 12) {
       add('bad', `有効口径が ${fmt(ev.aperture, 1)}mm で、記事の基準（12mm以上）を下回ります。明るいレンズか長い焦点距離が必要です。`);
     }
@@ -553,9 +615,17 @@
     test('空が1等暗い場所へ移動する', { sky: base.sky + 1.0 });
     test('露出を半分にする', { exposure: Math.max(res.rec.exposure / 2, 0.3) },
       '長い火球が途切れる確率が上がり、日周運動の余裕も使い切れません');
+    const geo = res.cfg.geo;
     test('放射点の近く（離角を半分）を狙う', {
-      omegaDeg: E.angularVelocity(res.snap.sh.velocity, state.elong / 2, Math.max(res.snap.rad.altitude, 5)),
+      omegaDeg: E.angularVelocity(res.snap.sh.velocity, Math.max(geo.elong / 2, 10), geo.alt),
     }, '放射点付近は流星が短く写り、見た目の迫力は落ちます');
+    if (geo.alt < 90) {
+      test('カメラを天頂に向ける', {
+        omegaDeg: E.angularVelocity(res.snap.sh.velocity, geo.elong, 90),
+        sky: base.sky - geo.skyOffset + E.skyOffsetForAltitude(res.skyInfo.sky, 90),
+        camAlt: 90,
+      }, '空が最も暗く流星の減光も最小。ただし角速度は最大になります');
+    }
     test('ISO を1段上げる', { iso: res.rec.iso * 2 },
       `火球の白飛び限界が 0.76等 悪化します（記事の中心的な指摘）`);
 
@@ -571,7 +641,13 @@
       ['有効口径 (焦点距離÷F値)', `${fmt(ev.aperture, 2)} mm`],
       ['1画素の角サイズ（式①）', `${fmt(ev.pixelAngle, 2)} 秒角`],
       ['1画素の滞在時間（式②）', `${(ev.dwellTime * 1000).toFixed(3)} ms`],
+      ['カメラの方位', `${fmt(res.cfg.geo.az, 0)}° ${A.compassName(res.cfg.geo.az)}`],
+      ['カメラの高度', `${fmt(res.cfg.geo.alt, 0)}°`],
+      ['放射点からの離角', `${fmt(res.cfg.geo.separation, 1)}°`],
       ['流星の角速度（式③）', `${fmt(res.cfg.omegaDeg, 2)} °/s`],
+      ['大気の厚み（天頂比）', `${fmt(res.cfg.geo.airmass, 2)} 倍`],
+      ['この向きの空の明るさ', `${fmt(res.cfg.geo.skyHere, 2)} 等/□"`],
+      ['流星自身の減光', `${signed(-res.cfg.geo.extinction, 2)} 等`],
       ['トレイル幅', `${fmt(ev.trailArcsec, 1)} 秒角`],
       ['NPF則の露出上限', `${fmt(ev.npf, 2)} 秒`],
       ['計算に使う空の明るさ', `${fmt(res.cfg.sky, 2)} 等/□"`],
@@ -894,9 +970,39 @@
       refresh();
     });
 
-    $('elong').addEventListener('input', (e) => {
-      state.elong = Number(e.target.value);
-      $('elongValue').textContent = state.elong;
+    $('camAz').addEventListener('input', (e) => {
+      state.camAz = Number(e.target.value);
+      refresh();
+    });
+
+    $('camAlt').addEventListener('input', (e) => {
+      state.camAlt = Number(e.target.value);
+      $('camAltValue').textContent = state.camAlt;
+      refresh();
+    });
+
+    $('camPresets').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cam]');
+      if (!b) return;
+      const snap = astroSnapshot();
+      const radAz = snap.rad.isSporadic || snap.rad.azimuth == null ? 180 : snap.rad.azimuth;
+      const radAlt = snap.rad.isSporadic ? 45 : snap.rad.altitude;
+      if (b.dataset.cam === 'zenith') {
+        state.camAlt = 90;
+      } else if (b.dataset.cam === 'radiant') {
+        state.camAz = Math.round(radAz / 5) * 5 % 360;
+        state.camAlt = Math.min(90, Math.max(10, Math.round(radAlt / 5) * 5));
+      } else {
+        // 放射点から45°離す。高度に余裕があれば上へ、無ければ方位でずらす
+        if (radAlt + 45 <= 90) {
+          state.camAz = Math.round(radAz / 5) * 5 % 360;
+          state.camAlt = Math.min(90, Math.round((radAlt + 45) / 5) * 5);
+        } else {
+          state.camAz = Math.round(((radAz + 45) % 360) / 5) * 5 % 360;
+          state.camAlt = Math.min(90, Math.max(10, Math.round(radAlt / 5) * 5));
+        }
+      }
+      syncInputs();
       refresh();
     });
 

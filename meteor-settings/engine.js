@@ -50,6 +50,14 @@
     rnGain: 4.74,
     rnFloor: 1.20,
     omegaDeg: 18,       // ペルセウス座の典型角速度
+    /* 記事の ω=18°/s は「離角60°・カメラの高度38°」の幾何に相当する。
+       式③ ω = (v/100)·57.3·sin(離角)·sin(高度) の「高度」は放射点ではなく
+       流星が見える位置＝カメラの向きの高度である（流星は高度100kmで光り、
+       視線距離が 100/sin(高度) になるため）。この基準geometryを
+       方位・高度による補正の原点に使う。 */
+    elong: 60,
+    camAlt: 37.94,      // asin(18 / ((59/100)·57.3·sin60°)) = 37.94°
+    extinctionK: 0.20,  // 大気減光係数 [等/airmass]（晴れた低地の目安）
     sky: 21.0,
     limMag: 1.63,       // 空 21.0等 のときの到達等級（アンカー）
     fireballMag: -4.25, // 空 21.0等・ISO640 での白飛び限界（アンカー）
@@ -94,6 +102,55 @@
     const alt = Math.max(altitudeDeg, 0);
     return (velocityKms / 100) * 57.3 *
       Math.sin(elongationDeg * RAD) * Math.sin(alt * RAD);
+  }
+
+  /* ===================== カメラを向ける方向による補正 =====================
+   * いずれも近似。空の明るさの地図は「天頂の輝度」なので、そこから
+   * 「その方向・その高度の輝度」を推定する必要がある。
+   *   - 自然光（高度約90kmの大気光）と人工光（高度約2kmでの散乱）を別成分として扱う
+   *   - 各成分の経路長を van Rhijn 関数で求め、大気減光をかけて合成する
+   * 方位（どちらを向くか）による差は、天頂輝度の地図だけからは求められないため
+   * 扱っていない。同じ高度なら方位によらず同じ値になる。
+   */
+
+  /** 大気の厚み（Kasten-Young の近似） */
+  function airmass(altDeg) {
+    const alt = Math.max(altDeg, 1);
+    const z = 90 - alt;
+    return 1 / (Math.cos(z * RAD) + 0.50572 * Math.pow(96.07995 - z, -1.6364));
+  }
+
+  /** 発光層が高度 h km にあるときの経路長の比（van Rhijn 関数） */
+  function vanRhijn(altDeg, layerKm) {
+    const EARTH_R = 6371;
+    const z = (90 - Math.max(altDeg, 1)) * RAD;
+    const s = Math.pow(EARTH_R / (EARTH_R + layerKm), 2) * Math.pow(Math.sin(z), 2);
+    return 1 / Math.sqrt(Math.max(1e-9, 1 - s));
+  }
+
+  /**
+   * 天頂の空の明るさから、指定した高度を向いたときの空の明るさを推定する [等/平方秒]
+   * @param {number} zenithSky 天頂の空の明るさ（自然光＋人工光）
+   * @param {number} altDeg    カメラを向ける高度
+   */
+  function skyAtAltitude(zenithSky, altDeg) {
+    const NATURAL = 22.0;                 // 自然光の天頂輝度（光害地図の換算と同じ前提）
+    // 天頂の値から人工光／自然光の比を逆算する
+    const lpi = Math.max(0, Math.pow(10, 0.4 * (NATURAL - zenithSky)) - 1);
+    const ext = Math.pow(10, -0.4 * REF.extinctionK * (airmass(altDeg) - 1));
+    const fNatural = vanRhijn(altDeg, 90) * ext;   // 大気光は高層
+    const fArtificial = vanRhijn(altDeg, 2) * ext; // 人工光の散乱は低層
+    return NATURAL - 2.5 * Math.log10(fNatural + lpi * fArtificial);
+  }
+
+  /** 流星自身が大気減光で暗くなる量 [等]（基準geometryとの差） */
+  function meteorExtinction(altDeg) {
+    return REF.extinctionK * (airmass(altDeg) - airmass(REF.camAlt));
+  }
+
+  /** 空の明るさの補正量 [等]（基準geometryとの差。負なら明るくなる） */
+  function skyOffsetForAltitude(zenithSky, altDeg) {
+    return skyAtAltitude(zenithSky, altDeg) - skyAtAltitude(zenithSky, REF.camAlt);
   }
 
   /** NPF則（簡易式）による日周運動の露出上限 [秒] */
@@ -222,11 +279,15 @@
       exposure: cfg.exposure,
     };
 
+    // 流星自身の大気減光（基準geometryとの差）。低い方を向くと流星も暗くなる
+    const ext = cfg.camAlt != null ? meteorExtinction(cfg.camAlt) : 0;
+
     // cfg.articleMode: true なら読み出しノイズを無視した記事どおりの式⑤を使う
-    const limMagArticle = limitingMagnitudeArticle(common);
-    const limMagFull = limitingMagnitude(common);
+    const limMagArticle = limitingMagnitudeArticle(common) - ext;
+    const limMagFull = limitingMagnitude(common) - ext;
     const limMag = cfg.articleMode ? limMagArticle : limMagFull;
-    const fbMag = fireballLimit(common);
+    // 減光ぶんだけ火球は「より明るくないと飽和しない」＝白飛び限界は余裕が増える
+    const fbMag = fireballLimit(common) - ext;
     const fov = fieldOfView(cfg.focal, cfg.sensorW, cfg.sensorH);
 
     return {
@@ -235,6 +296,8 @@
       dwellTime: dwellTime(pixelPitch, cfg.focal, cfg.omegaDeg),
       npf: npfLimit(cfg.fnum, pixelPitch, cfg.focal),
       trailArcsec: trailArcsec,
+      airmass: cfg.camAlt != null ? airmass(cfg.camAlt) : 1,
+      meteorExtinction: ext,
       bkgElectrons: bkg,
       readNoise: rn,
       satElectrons: sat,
@@ -320,6 +383,11 @@
     dwellTime: dwellTime,
     angularVelocity: angularVelocity,
     npfLimit: npfLimit,
+    airmass: airmass,
+    vanRhijn: vanRhijn,
+    skyAtAltitude: skyAtAltitude,
+    skyOffsetForAltitude: skyOffsetForAltitude,
+    meteorExtinction: meteorExtinction,
     backgroundElectrons: backgroundElectrons,
     readNoiseAt: readNoiseAt,
     saturationElectrons: saturationElectrons,

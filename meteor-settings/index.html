@@ -202,13 +202,35 @@
       </div>
 
       <div class="card">
-        <h2 class="card__title">放射点からの離角</h2>
-        <p class="card__desc">放射点の近くに出た流星はゆっくり動き、離れるほど速く動きます（式③）。</p>
-        <div class="slider-head">
-          <span class="slider-head__value" id="elongValue">—</span>
-          <span class="slider-head__unit">度</span>
+        <h2 class="card__title">カメラを向ける方向</h2>
+        <p class="card__desc">
+          放射点からの離角（＝流星の角速度）と、大気の厚みによる空の明るさ・流星の減光が
+          この向きで決まります。
+        </p>
+        <div class="field-row">
+          <div>
+            <div class="slider-head">
+              <span class="slider-head__value" id="camAzValue">—</span>
+              <span class="slider-head__unit" id="camAzName"></span>
+            </div>
+            <input class="tb-range" type="range" id="camAz" min="0" max="355" step="5">
+            <div class="slider-scale"><span>北</span><span>東</span><span>南</span><span>西</span><span>北</span></div>
+          </div>
+          <div>
+            <div class="slider-head">
+              <span class="slider-head__value" id="camAltValue">—</span>
+              <span class="slider-head__unit">度（高度）</span>
+            </div>
+            <input class="tb-range" type="range" id="camAlt" min="10" max="90" step="5">
+            <div class="slider-scale"><span>低空</span><span>天頂</span></div>
+          </div>
         </div>
-        <input class="tb-range" type="range" id="elong" min="10" max="90" step="5">
+        <div class="chips" id="camPresets">
+          <button type="button" class="chip" data-cam="zenith">天頂へ</button>
+          <button type="button" class="chip" data-cam="radiant">放射点の方向へ</button>
+          <button type="button" class="chip" data-cam="off45">放射点から45°離す</button>
+        </div>
+        <div class="sky-report" id="camReport"></div>
       </div>
 
     </section>
@@ -377,6 +399,31 @@
         地図は16段階の階調ですが、暗い空（21〜22等）では1段が 0.03〜0.26等 と細かく、
         到達等級への影響は 0.1等 未満です。都市部では1段が約0.6等になります。
         対象範囲は日本周辺（北緯20〜46度、東経122〜154度）のみです。
+      </p>
+
+      <h3>カメラを向ける方向の扱い</h3>
+      <p>
+        「カメラを向ける方向」で指定した方位と高度から、次の3つを求めています。
+      </p>
+      <ul>
+        <li><strong>放射点からの離角</strong>：カメラの向きと放射点の角距離。純粋な幾何計算なので誤差はありません。
+          式③の「高度角」は放射点ではなく<strong>カメラを向ける高度</strong>です
+          （流星は高度約100kmで光るため、視線距離が 100/sin(高度) になる）。
+          記事の ω=18°/s は「離角60°・カメラ高度38°」の幾何に相当し、これを補正の原点にしています。</li>
+        <li><strong>空の明るさ</strong>（<em>近似値</em>）：自然光（高度約90kmの大気光）と人工光（高度約2kmでの散乱）を
+          別成分として扱い、それぞれの経路長を van Rhijn 関数で求めて大気減光をかけて合成しています。
+          天頂を向いたときより、高度45°で約0.28等、高度30°で約0.52等 明るくなります。</li>
+        <li><strong>流星自身の減光</strong>（<em>近似値</em>）：大気減光係数 0.20等/airmass（晴れた低地の目安）で
+          計算しています。高度45°で約0.08等、高度30°で約0.20等 暗くなります。</li>
+      </ul>
+      <p>
+        <strong>方位（どちらを向くか）による明るさの差は含めていません。</strong>
+        光害地図は天頂輝度なので、「街の方向を向いたときに空がどれだけ明るいか」は地点の値からは求められません。
+        周囲の光源分布から推定する試作もしましたが、地形の遮蔽を無視するため外れる地点があり、
+        数値として足し込むのは避けました。同じ高度なら方位によらず同じ空の明るさになります。
+      </p>
+      <p>
+        大気光の強さや透明度は夜ごとに変わるため、これらの補正は目安として扱ってください。
       </p>
 
       <h3>基準構成と検証</h3>

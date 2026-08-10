@@ -82,6 +82,24 @@ check('ISO1段上昇で失う火球保護', ev.fireballMag - v({ iso: 1280 }).fi
 check('読み出しノイズ(ISO640)', E.readNoiseAt(a7rv, 640), 1.41, 0.01, 'e-');
 check('背景ショットノイズ支配（>1で支配）', ev.noiseDominance, 7.7, 1.0, '倍');
 
+console.log('\n=== 基準geometry（離角60°・カメラ高度38°）の整合 ===');
+check('式③で ω=18°/s になるか', E.angularVelocity(per.velocity, E.REF.elong, E.REF.camAlt), 18.0, 0.02, '°/s');
+check('基準高度での空の明るさ補正', E.skyOffsetForAltitude(21.0, E.REF.camAlt), 0.0, 0.001, '等');
+check('基準高度での流星の減光', E.meteorExtinction(E.REF.camAlt), 0.0, 0.001, '等');
+check('天頂の大気の厚み', E.airmass(90), 1.0, 0.001, '倍');
+check('高度30°の大気の厚み', E.airmass(30), 2.0, 0.01, '倍');
+
+console.log('\n=== カメラの高度による補正（近似モデル） ===');
+console.log('  高度  大気の厚み  空の明るさ(暗夜21.6等)  空の明るさ(郊外18.9等)  流星の減光');
+[90, 60, 45, 38, 30, 20, 10].forEach((alt) => {
+  const dark = E.skyAtAltitude(21.56, alt);
+  const town = E.skyAtAltitude(18.69, alt);
+  console.log(`  ${String(alt).padStart(3)}°   ${E.airmass(alt).toFixed(2)}      ` +
+    `${dark.toFixed(2)}等 (${(dark - 21.56).toFixed(2)})        ` +
+    `${town.toFixed(2)}等 (${(town - 18.69).toFixed(2)})       ` +
+    `${(E.REF.extinctionK * (E.airmass(alt) - 1)).toFixed(2)}等`);
+});
+
 console.log('\n=== 記事の定性的な主張の確認 ===');
 check('火球限界は空の明るさにほぼ無依存', v({ sky: 20.0 }).fireballMag - ev.fireballMag, 0.0, 0.05, '等');
 check('火球限界は露出時間にほぼ無依存', v({ exposure: 16 }).fireballMag - ev.fireballMag, 0.0, 0.05, '等');
