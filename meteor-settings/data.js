@@ -61,20 +61,53 @@ MS_DATA.cameras.forEach((c) => {
   }
 });
 
-/* ---------------- レンズプリセット（焦点距離とF値は常に手で上書き可能） ---------------- */
+/* ---------------- レンズプリセット ----------------
+ * 焦点距離とF値は選択後も手で上書きできる。
+ * ズームは星景で使う広角端の値を登録している。
+ */
 MS_DATA.lenses = [
-  { name: 'SIGMA 20mm F1.4 DG DN Art', focal: 20, fnum: 1.4, note: '記事の基準レンズ' },
-  { name: 'SIGMA 14mm F1.4 DG DN Art', focal: 14, fnum: 1.4 },
-  { name: 'SIGMA 24mm F1.4 DG DN Art', focal: 24, fnum: 1.4 },
-  { name: 'SIGMA 35mm F1.2 DG DN Art', focal: 35, fnum: 1.2 },
-  { name: 'Sony FE 14mm F1.8 GM',      focal: 14, fnum: 1.8 },
-  { name: 'Sony FE 20mm F1.8 G',       focal: 20, fnum: 1.8 },
-  { name: 'Sony FE 24mm F1.4 GM',      focal: 24, fnum: 1.4 },
-  { name: 'Sony FE 35mm F1.4 GM',      focal: 35, fnum: 1.4 },
-  { name: 'Sony FE 50mm F1.4 GM',      focal: 50, fnum: 1.4 },
-  { name: 'Samyang 14mm F2.8',         focal: 14, fnum: 2.8 },
-  { name: '標準ズーム 24mm F2.8',       focal: 24, fnum: 2.8 },
-  { name: '標準ズーム 24mm F4',         focal: 24, fnum: 4.0 },
+  /* ソニーE / SIGMA */
+  { mount: 'ソニー E / SIGMA', name: 'SIGMA 20mm F1.4 DG DN Art', focal: 20, fnum: 1.4, note: '記事の基準レンズ' },
+  { mount: 'ソニー E / SIGMA', name: 'SIGMA 14mm F1.4 DG DN Art', focal: 14, fnum: 1.4 },
+  { mount: 'ソニー E / SIGMA', name: 'SIGMA 24mm F1.4 DG DN Art', focal: 24, fnum: 1.4 },
+  { mount: 'ソニー E / SIGMA', name: 'SIGMA 35mm F1.2 DG DN Art', focal: 35, fnum: 1.2 },
+  { mount: 'ソニー E / SIGMA', name: 'Sony FE 14mm F1.8 GM',      focal: 14, fnum: 1.8 },
+  { mount: 'ソニー E / SIGMA', name: 'Sony FE 20mm F1.8 G',       focal: 20, fnum: 1.8 },
+  { mount: 'ソニー E / SIGMA', name: 'Sony FE 24mm F1.4 GM',      focal: 24, fnum: 1.4 },
+  { mount: 'ソニー E / SIGMA', name: 'Sony FE 35mm F1.4 GM',      focal: 35, fnum: 1.4 },
+  { mount: 'ソニー E / SIGMA', name: 'Sony FE 50mm F1.4 GM',      focal: 50, fnum: 1.4 },
+  { mount: 'ソニー E / SIGMA', name: 'Samyang 14mm F2.8',         focal: 14, fnum: 2.8 },
+
+  /* ニコン Z（フルサイズ・現行） */
+  { mount: 'ニコン Z', name: 'NIKKOR Z 20mm f/1.8 S',        focal: 20, fnum: 1.8 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 24mm f/1.8 S',        focal: 24, fnum: 1.8 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 26mm f/2.8',          focal: 26, fnum: 2.8 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 28mm f/2.8',          focal: 28, fnum: 2.8 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 35mm f/1.2 S',        focal: 35, fnum: 1.2 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 35mm f/1.4',          focal: 35, fnum: 1.4 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 35mm f/1.8 S',        focal: 35, fnum: 1.8 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 14-24mm f/2.8 S @14mm', focal: 14, fnum: 2.8 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 14-30mm f/4 S @14mm',   focal: 14, fnum: 4.0 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 17-28mm f/2.8 @17mm',   focal: 17, fnum: 2.8 },
+  { mount: 'ニコン Z', name: 'NIKKOR Z 24-70mm f/2.8 S @24mm', focal: 24, fnum: 2.8 },
+
+  /* キヤノン RF（フルサイズ・現行） */
+  { mount: 'キヤノン RF', name: 'RF 14mm F1.4 L VCM',            focal: 14, fnum: 1.4 },
+  { mount: 'キヤノン RF', name: 'RF 16mm F2.8 STM',              focal: 16, fnum: 2.8 },
+  { mount: 'キヤノン RF', name: 'RF 20mm F1.4 L VCM',            focal: 20, fnum: 1.4 },
+  { mount: 'キヤノン RF', name: 'RF 24mm F1.4 L VCM',            focal: 24, fnum: 1.4 },
+  { mount: 'キヤノン RF', name: 'RF 24mm F1.8 MACRO IS STM',     focal: 24, fnum: 1.8 },
+  { mount: 'キヤノン RF', name: 'RF 28mm F2.8 STM',              focal: 28, fnum: 2.8 },
+  { mount: 'キヤノン RF', name: 'RF 35mm F1.4 L VCM',            focal: 35, fnum: 1.4 },
+  { mount: 'キヤノン RF', name: 'RF 35mm F1.8 MACRO IS STM',     focal: 35, fnum: 1.8 },
+  { mount: 'キヤノン RF', name: 'RF 10-20mm F4 L IS STM @10mm',  focal: 10, fnum: 4.0 },
+  { mount: 'キヤノン RF', name: 'RF 14-35mm F4 L IS USM @14mm',  focal: 14, fnum: 4.0 },
+  { mount: 'キヤノン RF', name: 'RF 15-35mm F2.8 L IS USM @15mm', focal: 15, fnum: 2.8 },
+  { mount: 'キヤノン RF', name: 'RF 16-28mm F2.8 IS STM @16mm',  focal: 16, fnum: 2.8 },
+
+  /* 汎用 */
+  { mount: 'その他', name: '標準ズーム 24mm F2.8', focal: 24, fnum: 2.8 },
+  { mount: 'その他', name: '標準ズーム 24mm F4',   focal: 24, fnum: 4.0 },
 ];
 
 /* ---------------- 星像（トレイル幅）の品質係数 ---------------- */

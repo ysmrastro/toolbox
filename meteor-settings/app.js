@@ -174,9 +174,17 @@
     $('cameraSelect').innerHTML = D.cameras
       .map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
 
+    // レンズはマウントごとに optgroup でまとめる
+    const lensGroups = [];
+    D.lenses.forEach((l, i) => {
+      const mount = l.mount || 'その他';
+      let g = lensGroups.find((x) => x.mount === mount);
+      if (!g) { g = { mount: mount, items: [] }; lensGroups.push(g); }
+      g.items.push(`<option value="${i}">${l.name}</option>`);
+    });
     $('lensSelect').innerHTML =
       '<option value="-1">レンズを選ぶ（任意）</option>' +
-      D.lenses.map((l, i) => `<option value="${i}">${l.name}</option>`).join('');
+      lensGroups.map((g) => `<optgroup label="${g.mount}">${g.items.join('')}</optgroup>`).join('');
 
     $('showerSelect').innerHTML = D.showers
       .map((s) => `<option value="${s.id}">${s.name}</option>`).join('');

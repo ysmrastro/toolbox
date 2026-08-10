@@ -845,40 +845,24 @@ input[type="number"], input[type="datetime-local"], select { font-size: 16px; }
 @media (min-width: 1100px) {
   :root { --ms-content-w: 1220px; }
 
-  /* 結果カラムが常に見えるのでサマリーとタブは不要 */
-  .summary, .tabbar { display: none; }
+  /* タブは不要。推奨値は上部のサマリーバーで常時見せる */
+  .tabbar { display: none; }
 
+  /* 入力（機材＋条件）を1つのグリッド項目にまとめる。
+     結果カラムを2行にまたがらせると、結果が長いぶんだけ左カラムの行が
+     引き伸ばされて巨大な空白ができるため、行をまたがせない構造にする。
+     スクロールコンテキストもページ1つに保ち、カラム内スクロールは作らない
+     （マウス位置でページが動かなくなり、カラム末尾でスクロールが止まるため）。 */
   .pages {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 420px;
     gap: var(--tb-space-lg);
     align-items: start;
-    padding: calc(var(--ms-appbar-h) + var(--ms-safe-top) + var(--tb-space-lg))
+    padding: calc(var(--ms-appbar-h) + var(--ms-summary-h) + var(--ms-safe-top) + var(--tb-space-md))
              0 var(--tb-space-2xl);
   }
 
-  #page-gear   { grid-column: 1; grid-row: 1; }
-  #page-cond   { grid-column: 1; grid-row: 2; }
-
-  /* 結果は右カラムに固定し、単独でスクロールさせる */
-  #page-result {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    position: sticky;
-    top: calc(var(--ms-appbar-h) + var(--ms-safe-top) + var(--tb-space-lg));
-    max-height: calc(100vh - var(--ms-appbar-h) - var(--ms-safe-top) - var(--tb-space-xl));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-right: 4px;
-  }
-
-  #page-result::-webkit-scrollbar { width: 8px; }
-  #page-result::-webkit-scrollbar-track { background: transparent; }
-  #page-result::-webkit-scrollbar-thumb {
-    background: var(--tb-border);
-    border-radius: 999px;
-  }
-  #page-result::-webkit-scrollbar-thumb:hover { background: var(--tb-text-muted); }
+  .pages__inputs { min-width: 0; }
 
   .page__heading {
     display: block;
@@ -936,10 +920,11 @@ input[type="number"], input[type="datetime-local"], select { font-size: 16px; }
 
   .pages { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 440px; }
 
-  #page-gear   { grid-column: 1; grid-row: 1; }
-  #page-cond   { grid-column: 2; grid-row: 1; }
-  #page-result { grid-column: 3; grid-row: 1; }
+  /* 3カラムでは入力ラッパーを透過させ、機材と条件を独立したカラムにする */
+  .pages__inputs { display: contents; }
+  #page-gear { min-width: 0; }
+  #page-cond { min-width: 0; }
 
-  /* 3カラムでは各カラムが狭くなるので段組を解除する */
+  /* 各カラムが狭くなるので段組を解除する */
   #page-gear, #page-cond { columns: auto; }
 }
