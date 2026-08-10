@@ -11,6 +11,7 @@
   --ms-safe-top: env(safe-area-inset-top, 0px);
   --ms-warn: #d9a03c;
   --ms-panel: #12182399;
+  --ms-content-w: 480px;   /* 中身の最大幅。ブレークポイントごとに切り替える */
 }
 
 html, body {
@@ -25,7 +26,7 @@ body {
 
 /* 端末以外（PC）では中央に細長く置いて「アプリらしさ」を保つ */
 .app {
-  max-width: 480px;
+  max-width: var(--ms-content-w);
   margin: 0 auto;
   min-height: 100%;
   position: relative;
@@ -34,11 +35,16 @@ body {
     var(--tb-bg-primary);
 }
 
-@media (min-width: 520px) {
+@media (min-width: 520px) and (max-width: 1099px) {
   .app {
     border-left: 1px solid var(--tb-border);
     border-right: 1px solid var(--tb-border);
   }
+}
+
+/* タブレット縦（iPad 820px 等）は1カラムのまま横幅を広げる */
+@media (min-width: 700px) and (max-width: 1099px) {
+  :root { --ms-content-w: 680px; }
 }
 
 /* ---------------- アプリバー ---------------- */
@@ -59,11 +65,10 @@ body {
   border-bottom: 1px solid var(--tb-border);
 }
 
-@media (min-width: 520px) {
-  .appbar, .summary, .tabbar {
-    max-width: 480px;
-    margin: 0 auto;
-  }
+/* 固定バーは画面全幅。中身だけを --ms-content-w に合わせて中央へ寄せる
+   （100vw ではなく 100% を使い、スクロールバー幅で横あふれしないようにする） */
+.appbar, .summary, .tabbar {
+  padding-inline: max(var(--tb-space-md), calc((100% - var(--ms-content-w)) / 2));
 }
 
 .appbar__title {
@@ -143,8 +148,14 @@ body {
   padding-right: var(--tb-space-md);
 }
 
-.page { display: none; }
-.page.active { display: block; animation: fade 0.18s ease; }
+/* 狭い画面ではタブで1ページずつ表示する。広い画面では下部で全ページを並べる */
+@media (max-width: 1099px) {
+  .page { display: none; }
+  .page.active { display: block; animation: fade 0.18s ease; }
+}
+
+/* カラム見出し（タブがある狭い画面では不要） */
+.page__heading { display: none; }
 
 @keyframes fade {
   from { opacity: 0; transform: translateY(4px); }
@@ -825,4 +836,110 @@ input[type="number"], input[type="datetime-local"], select { font-size: 16px; }
   padding-top: var(--tb-space-md);
   border-top: 1px solid var(--tb-border);
   font-size: var(--tb-font-size-xs);
+}
+
+/* =========================================================
+   PC・タブレット横向き（1100px以上）
+   タブを廃して入力と結果を同時に表示し、結果カラムを追従させる
+   ========================================================= */
+@media (min-width: 1100px) {
+  :root { --ms-content-w: 1220px; }
+
+  /* 結果カラムが常に見えるのでサマリーとタブは不要 */
+  .summary, .tabbar { display: none; }
+
+  .pages {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: var(--tb-space-lg);
+    align-items: start;
+    padding: calc(var(--ms-appbar-h) + var(--ms-safe-top) + var(--tb-space-lg))
+             0 var(--tb-space-2xl);
+  }
+
+  #page-gear   { grid-column: 1; grid-row: 1; }
+  #page-cond   { grid-column: 1; grid-row: 2; }
+
+  /* 結果は右カラムに固定し、単独でスクロールさせる */
+  #page-result {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: calc(var(--ms-appbar-h) + var(--ms-safe-top) + var(--tb-space-lg));
+    max-height: calc(100vh - var(--ms-appbar-h) - var(--ms-safe-top) - var(--tb-space-xl));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+
+  #page-result::-webkit-scrollbar { width: 8px; }
+  #page-result::-webkit-scrollbar-track { background: transparent; }
+  #page-result::-webkit-scrollbar-thumb {
+    background: var(--tb-border);
+    border-radius: 999px;
+  }
+  #page-result::-webkit-scrollbar-thumb:hover { background: var(--tb-text-muted); }
+
+  .page__heading {
+    display: block;
+    font-size: var(--tb-font-size-base);
+    font-weight: 700;
+    color: var(--tb-text-secondary);
+    letter-spacing: 0.06em;
+    margin-bottom: var(--tb-space-sm);
+    padding-bottom: var(--tb-space-xs);
+    border-bottom: 1px solid var(--tb-border);
+  }
+
+  /* 入力カラムは横幅があるのでカードを2列に並べる */
+  /* 入力カラムは2段組にする。段組なら行の高さが揃わず隙間が空かない */
+  #page-gear, #page-cond {
+    columns: 2;
+    column-gap: var(--tb-space-md);
+  }
+
+  #page-gear > .card, #page-cond > .card { break-inside: avoid; }
+  #page-gear > .page__heading, #page-cond > .page__heading { column-span: all; }
+
+  /* マウス操作向けのホバー表現 */
+  .chip:hover { border-color: var(--tb-border-hover); color: var(--tb-text-primary); }
+  .chip.active:hover { color: var(--tb-accent); }
+  .segmented__item:hover { color: var(--tb-text-primary); }
+  .purpose:hover { border-color: var(--tb-border-hover); }
+  .card { transition: border-color var(--tb-transition); }
+
+  /* 前提シートは下からのシートではなく中央のダイアログにする */
+  .sheet__panel {
+    top: 50%;
+    bottom: auto;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    max-width: 760px;
+    width: calc(100% - 2 * var(--tb-space-xl));
+    max-height: 82vh;
+    border-radius: var(--tb-radius-xl);
+    animation: dialogIn 0.2s ease;
+  }
+
+  .sheet__body { padding-bottom: var(--tb-space-xl); }
+}
+
+@keyframes dialogIn {
+  from { transform: translate(-50%, -48%); opacity: 0; }
+  to { transform: translate(-50%, -50%); opacity: 1; }
+}
+
+/* 大画面（1500px以上）は 機材 / 条件 / 結果 の3カラム */
+@media (min-width: 1500px) {
+  :root { --ms-content-w: 1560px; }
+
+  .pages { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 440px; }
+
+  #page-gear   { grid-column: 1; grid-row: 1; }
+  #page-cond   { grid-column: 2; grid-row: 1; }
+  #page-result { grid-column: 3; grid-row: 1; }
+
+  /* 3カラムでは各カラムが狭くなるので段組を解除する */
+  #page-gear, #page-cond { columns: auto; }
 }

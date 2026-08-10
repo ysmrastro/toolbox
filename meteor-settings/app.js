@@ -902,6 +902,10 @@
     $('aboutSheet').addEventListener('click', (e) => {
       if (e.target.hasAttribute('data-close')) $('aboutSheet').hidden = true;
     });
+    // PC ではキーボードで閉じられるようにする
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !$('aboutSheet').hidden) $('aboutSheet').hidden = true;
+    });
   }
 
   /* ===================== 起動 ===================== */
