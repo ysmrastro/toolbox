@@ -350,7 +350,12 @@
    */
   function recommendExposure(cfg, purpose) {
     const npf = npfLimit(cfg.fnum, cfg.camera.pixelPitch, cfg.focal);
-    const candidates = MS_DATA.shutterSteps.filter((t) => t <= npf + 1e-9);
+    /* 赤道儀で追尾する場合、日周運動で星が伸びる制約（NPF則）は外れる。
+       代わりに追尾精度やバッテリーなどの実務的な上限をユーザーが与える。
+       なお流星は移動天体なので、露出を延ばしても流星の信号は増えず背景だけ増える。
+       到達等級は -1.25log10(露出比) で悪化し続けるため「長ければ良い」わけではない。 */
+    const cap = cfg.tracked ? (cfg.maxExposure || 30) : npf;
+    const candidates = MS_DATA.shutterSteps.filter((t) => t <= cap + 1e-9);
     if (candidates.length === 0) candidates.push(MS_DATA.shutterSteps[0]);
 
     let best = null;
@@ -366,6 +371,8 @@
       if (!best || score > best.score) best = { score: score, exposure: t, iso: iso, ev: ev };
     });
     best.npf = npf;
+    best.cap = cap;
+    best.tracked = !!cfg.tracked;
     return best;
   }
 

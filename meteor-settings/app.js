@@ -21,10 +21,12 @@
     sensorH: 23.9,
     focal: 20,
     fnum: 1.4,
-    lensIndex: 0,
+    lensIndex: null,    // init で MS_DATA.defaultLensName から解決する
     trailId: 'sharp',
     gap: 1.0,
     hours: 5,
+    tracked: false,     // 赤道儀で追尾するか
+    maxExposure: 30,    // 追尾時の露出上限［秒］
     purposeId: 'fireball',
     showerId: 'per',
     datetime: null,
@@ -192,6 +194,8 @@
       sensorW: state.sensorW,
       sensorH: state.sensorH,
       fireballDuration: state.durTarget,
+      tracked: state.tracked,
+      maxExposure: state.maxExposure,
       articleMode: state.articleMode,
     };
   }
@@ -293,6 +297,9 @@
     $('fnum').value = state.fnum;
     $('gap').value = state.gap;
     $('hours').value = state.hours;
+    $('tracked').checked = state.tracked;
+    $('maxExposure').value = state.maxExposure;
+    $('maxExposureField').hidden = !state.tracked;
     $('showerSelect').value = state.showerId;
     $('locationSelect').value = String(state.locIndex);
     $('lat').value = state.lat;
@@ -349,6 +356,24 @@
     else if (ap >= 12) note = '記事の基準（12mm以上）をぎりぎり満たします。';
     else note = '記事の基準（12mm以上）を下回ります。より暗い空か明るいレンズが必要です。';
     $('apertureNote').textContent = note;
+
+    $('trackedHint').textContent = state.tracked
+      ? '追尾すると日周運動で星が伸びないため、NPF則による露出の上限が外れます。上限は追尾精度やバッテリーなどの実務的な都合で決めてください。'
+      : '固定撮影では NPF則（星が点に写る限界）が露出の上限になります。赤道儀を使う場合はオンにしてください。';
+
+    const ev = res.ev;
+    const rec = res.rec;
+    if (state.tracked) {
+      $('trackedReport').innerHTML =
+        `露出の上限 <b>${state.maxExposure}秒</b>（追尾しない場合は NPF則で <b>${fmt(ev.npf, 2)}秒</b>）<br>` +
+        `選ばれた露出 <b>${rec.exposure}秒</b>／到達等級 <b>${signed(ev.limMag)}</b>等` +
+        `<p class="hint">流星は移動天体なので、露出を延ばしても流星の信号は増えず背景だけ増えます。` +
+        `到達等級は露出2倍ごとに 0.38等 悪化するため、追尾しても「長ければ良い」わけではありません。` +
+        `長い露出が有利なのは、コマの切れ目で火球が途切れる確率が下がる点だけです。</p>`;
+    } else {
+      $('trackedReport').innerHTML =
+        `NPF則の露出上限 <b>${fmt(ev.npf, 2)}秒</b>／選ばれた露出 <b>${rec.exposure}秒</b>`;
+    }
   }
 
   /* ===================== 描画：条件タブ ===================== */
@@ -429,7 +454,9 @@
     $('heroPurpose').textContent = `${p.icon} ${p.label} / ${sh.name}`;
 
     const heroNotes = [];
-    heroNotes.push(`NPF則の上限は ${fmt(ev.npf, 2)}秒。日周運動で星が伸びない範囲でこれを選んでいます。`);
+    heroNotes.push(state.tracked
+      ? `赤道儀で追尾するため NPF則の上限（${fmt(ev.npf, 2)}秒）は外し、指定の上限 ${state.maxExposure}秒 の範囲で選んでいます。`
+      : `NPF則の上限は ${fmt(ev.npf, 2)}秒。日周運動で星が伸びない範囲でこれを選んでいます。`);
     heroNotes.push(`ISO は「到達等級の損失が ${p.isoTolerance}等 未満に収まる最も低い値」として選びました。ISO を上げても到達等級はほぼ変わらず、火球の白飛び余裕だけが 1段ごとに 0.76等 失われます。`);
     heroNotes.push(`絞りは開放が最適です（1段開けるごとに +0.38等）。`);
     $('heroNote').innerHTML = heroNotes.join('<br>');
@@ -527,7 +554,13 @@
     if (res.snap.moon.altitude > 0 && res.snap.moon.illumination > 0.25) {
       add('warn', `月が高度 ${fmt(res.snap.moon.altitude, 1)}°・輝面比 ${Math.round(res.snap.moon.illumination * 100)}% で出ています。`);
     }
-    if (res.rec.exposure > ev.npf + 0.01) {
+    if (state.tracked) {
+      if (res.rec.exposure > ev.npf + 0.01) {
+        add('ok', `露出 ${res.rec.exposure}秒 は固定撮影の上限（NPF則 ${fmt(ev.npf, 2)}秒）を超えていますが、追尾するため星は点に写ります。`);
+      }
+      add('warn', '追尾すると地上の風景は流れます。星景として前景を止めたい場合は固定撮影にするか、別に前景用のコマを撮ってください。');
+      add('warn', `極軸合わせと追尾精度を確認してください。${res.cfg.focal}mm で ${res.rec.exposure}秒 なら要求は緩めですが、ずれると星が伸びます。`);
+    } else if (res.rec.exposure > ev.npf + 0.01) {
       add('bad', `露出 ${res.rec.exposure}秒 は NPF則の上限 ${fmt(ev.npf, 2)}秒 を超えています。星が線になります。`);
     }
     if (ev.noiseDominance < 2) {
@@ -650,6 +683,7 @@
       ['流星自身の減光', `${signed(-res.cfg.geo.extinction, 2)} 等`],
       ['トレイル幅', `${fmt(ev.trailArcsec, 1)} 秒角`],
       ['NPF則の露出上限', `${fmt(ev.npf, 2)} 秒`],
+      ['露出の上限として使った値', state.tracked ? `${state.maxExposure} 秒（追尾）` : `${fmt(ev.npf, 2)} 秒（固定）`],
       ['計算に使う空の明るさ', `${fmt(res.cfg.sky, 2)} 等/□"`],
       ['背景電子数 / 画素', `${fmt(ev.bkgElectrons, 1)} e-`],
       ['背景ショットノイズ', `${fmt(ev.shotNoise, 2)} e-`],
@@ -848,6 +882,14 @@
     numField('gap', 'gap');
     numField('hours', 'hours');
 
+    $('tracked').addEventListener('change', (e) => {
+      state.tracked = e.target.checked;
+      $('maxExposureField').hidden = !state.tracked;
+      refresh();
+    });
+
+    numField('maxExposure', 'maxExposure');
+
     $('fnumChips').addEventListener('click', (e) => {
       const b = e.target.closest('[data-fnum]');
       if (!b) return;
@@ -1023,6 +1065,15 @@
   }
 
   /* ===================== 起動 ===================== */
+  /** 既定のレンズを名前から解決して state に入れる */
+  function applyDefaultLens() {
+    const i = D.lenses.findIndex((l) => l.name === D.defaultLensName);
+    const idx = i >= 0 ? i : 0;
+    state.lensIndex = idx;
+    state.focal = D.lenses[idx].focal;
+    state.fnum = D.lenses[idx].fnum;
+  }
+
   /** 既定の観測地を名前から解決して state に入れる */
   function applyDefaultLocation() {
     const i = D.locations.findIndex((l) => l.name === D.defaultLocationName);
@@ -1043,6 +1094,15 @@
       const l = D.locations[state.locIndex];
       const same = l && Math.abs(l.lat - state.lat) < 0.001 && Math.abs(l.lon - state.lon) < 0.001;
       if (!same) state.locIndex = -1;
+    }
+    if (state.lensIndex == null) {
+      applyDefaultLens();
+    } else if (state.lensIndex >= 0) {
+      // プリセットの並びが変わっても保存された焦点距離とF値を正とする。
+      // 添字が指すレンズと食い違う場合は選択を外して誤った製品名を出さない
+      const l = D.lenses[state.lensIndex];
+      const same = l && Math.abs(l.focal - state.focal) < 0.01 && Math.abs(l.fnum - state.fnum) < 0.01;
+      if (!same) state.lensIndex = -1;
     }
     // 保存値にカメラのセンサー特性が無い場合はプリセットから補う
     if (state.rnGain === undefined || state.fwcSource === undefined) {

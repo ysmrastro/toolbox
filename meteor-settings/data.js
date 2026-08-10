@@ -66,17 +66,12 @@ MS_DATA.cameras.forEach((c) => {
  * ズームは星景で使う広角端の値を登録している。
  */
 MS_DATA.lenses = [
-  /* ソニーE / SIGMA */
-  { mount: 'ソニー E / SIGMA', name: 'SIGMA 20mm F1.4 DG DN Art', focal: 20, fnum: 1.4, note: '記事の基準レンズ' },
-  { mount: 'ソニー E / SIGMA', name: 'SIGMA 14mm F1.4 DG DN Art', focal: 14, fnum: 1.4 },
-  { mount: 'ソニー E / SIGMA', name: 'SIGMA 24mm F1.4 DG DN Art', focal: 24, fnum: 1.4 },
-  { mount: 'ソニー E / SIGMA', name: 'SIGMA 35mm F1.2 DG DN Art', focal: 35, fnum: 1.2 },
-  { mount: 'ソニー E / SIGMA', name: 'Sony FE 14mm F1.8 GM',      focal: 14, fnum: 1.8 },
-  { mount: 'ソニー E / SIGMA', name: 'Sony FE 20mm F1.8 G',       focal: 20, fnum: 1.8 },
-  { mount: 'ソニー E / SIGMA', name: 'Sony FE 24mm F1.4 GM',      focal: 24, fnum: 1.4 },
-  { mount: 'ソニー E / SIGMA', name: 'Sony FE 35mm F1.4 GM',      focal: 35, fnum: 1.4 },
-  { mount: 'ソニー E / SIGMA', name: 'Sony FE 50mm F1.4 GM',      focal: 50, fnum: 1.4 },
-  { mount: 'ソニー E / SIGMA', name: 'Samyang 14mm F2.8',         focal: 14, fnum: 2.8 },
+  /* ソニー E（純正・フルサイズ） */
+  { mount: 'ソニー E', name: 'Sony FE 14mm F1.8 GM', focal: 14, fnum: 1.8 },
+  { mount: 'ソニー E', name: 'Sony FE 20mm F1.8 G',  focal: 20, fnum: 1.8 },
+  { mount: 'ソニー E', name: 'Sony FE 24mm F1.4 GM', focal: 24, fnum: 1.4 },
+  { mount: 'ソニー E', name: 'Sony FE 35mm F1.4 GM', focal: 35, fnum: 1.4 },
+  { mount: 'ソニー E', name: 'Sony FE 50mm F1.4 GM', focal: 50, fnum: 1.4 },
 
   /* ニコン Z（フルサイズ・現行） */
   { mount: 'ニコン Z', name: 'NIKKOR Z 20mm f/1.8 S',        focal: 20, fnum: 1.8 },
@@ -105,6 +100,12 @@ MS_DATA.lenses = [
   { mount: 'キヤノン RF', name: 'RF 15-35mm F2.8 L IS USM @15mm', focal: 15, fnum: 2.8 },
   { mount: 'キヤノン RF', name: 'RF 16-28mm F2.8 IS STM @16mm',  focal: 16, fnum: 2.8 },
 
+  /* シグマ（Eマウント / Lマウント） */
+  { mount: 'シグマ', name: 'SIGMA 20mm F1.4 DG DN Art', focal: 20, fnum: 1.4, note: '記事の基準レンズ' },
+  { mount: 'シグマ', name: 'SIGMA 14mm F1.4 DG DN Art', focal: 14, fnum: 1.4 },
+  { mount: 'シグマ', name: 'SIGMA 24mm F1.4 DG DN Art', focal: 24, fnum: 1.4 },
+  { mount: 'シグマ', name: 'SIGMA 35mm F1.2 DG DN Art', focal: 35, fnum: 1.2 },
+
   /* タムロン（ソニーE / ニコンZ・現行） */
   { mount: 'タムロン', name: 'TAMRON 20mm F/2.8 Di III OSD M1:2',    focal: 20, fnum: 2.8 },
   { mount: 'タムロン', name: 'TAMRON 24mm F/2.8 Di III OSD M1:2',    focal: 24, fnum: 2.8 },
@@ -115,10 +116,15 @@ MS_DATA.lenses = [
   { mount: 'タムロン', name: 'TAMRON 17-50mm F/4 Di III VXD @17mm',  focal: 17, fnum: 4.0 },
   { mount: 'タムロン', name: 'TAMRON 11-20mm F/2.8 Di III-A RXD @11mm（APS-C）', focal: 11, fnum: 2.8 },
 
-  /* 汎用 */
+  /* その他 */
+  { mount: 'その他', name: 'Samyang 14mm F2.8',    focal: 14, fnum: 2.8 },
   { mount: 'その他', name: '標準ズーム 24mm F2.8', focal: 24, fnum: 2.8 },
   { mount: 'その他', name: '標準ズーム 24mm F4',   focal: 24, fnum: 4.0 },
 ];
+
+/* 既定のレンズ（名前で引くのでプリセットの並び替えに影響されない）。
+   記事の基準構成 α7R V + SIGMA 20mm F1.4 に合わせる */
+MS_DATA.defaultLensName = 'SIGMA 20mm F1.4 DG DN Art';
 
 /* ---------------- 星像（トレイル幅）の品質係数 ---------------- */
 /* 1.00 = 記事の実測「中央 1.73px」相当。1.63 = 記事の実測「周辺 2.82px」相当 */
@@ -261,7 +267,8 @@ MS_DATA.locations = [
 MS_DATA.defaultLocationName = '小石原川ダム（朝倉市）';
 
 /* ---------------- 実用的なシャッター速度の刻み ---------------- */
-MS_DATA.shutterSteps = [0.5, 0.6, 0.8, 1, 1.3, 1.6, 2, 2.5, 3, 4, 5, 6, 8, 10, 13, 15, 20, 25, 30];
+/* 赤道儀で追尾する場合は30秒より長い設定も使うため 120秒まで用意する */
+MS_DATA.shutterSteps = [0.5, 0.6, 0.8, 1, 1.3, 1.6, 2, 2.5, 3, 4, 5, 6, 8, 10, 13, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120];
 
 /* ---------------- 標準ISO（1/3段刻み） ---------------- */
 MS_DATA.isoSteps = [100, 125, 160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200, 4000, 5000, 6400];

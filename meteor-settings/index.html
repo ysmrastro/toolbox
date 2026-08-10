@@ -145,6 +145,21 @@
         </label>
       </div>
 
+      <div class="card">
+        <h2 class="card__title">赤道儀</h2>
+        <label class="switch">
+          <input type="checkbox" id="tracked">
+          <span class="switch__body"></span>
+          <span class="switch__text">赤道儀で追尾する</span>
+        </label>
+        <p class="hint" id="trackedHint"></p>
+        <label class="field" id="maxExposureField" hidden>
+          <span class="field__label">追尾時の露出上限 [秒]</span>
+          <input class="tb-input" type="number" id="maxExposure" step="5" min="5" max="120">
+        </label>
+        <div class="sky-report" id="trackedReport"></div>
+      </div>
+
     </section>
 
     <!-- ---------- 条件 ---------- -->
