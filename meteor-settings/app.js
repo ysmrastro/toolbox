@@ -648,7 +648,9 @@
       const v = parseFloat(e.target.value);
       if (!isFinite(v)) return;
       state.sensorW = v;
-      state.sensorH = v * state.sensorAspect;
+      // 旧バージョンの保存データにアスペクト比が無い場合は現在値から求める
+      const aspect = state.sensorAspect || (state.sensorH / state.sensorW) || (23.9 / 35.9);
+      state.sensorH = v * aspect;
       refresh();
     });
 
