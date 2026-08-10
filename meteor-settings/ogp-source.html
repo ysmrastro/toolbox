@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<!--
+  ogp.png の生成元。1200×630 でスクリーンショットを撮って ogp.png として保存する。
+
+  再生成する手順（Playwright がある場合）:
+    python3 - <<'EOF'
+    import asyncio
+    from playwright.async_api import async_playwright
+    async def main():
+        async with async_playwright() as p:
+            b = await p.chromium.launch()
+            pg = await b.new_page(viewport={'width':1200,'height':630})
+            await pg.goto('http://localhost:8899/meteor-settings/ogp-source.html')
+            await pg.wait_for_timeout(500)
+            await pg.screenshot(path='ogp.png')
+            await b.close()
+    asyncio.run(main())
+    EOF
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>OGP image source</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+    color: #e6edf3;
+    background:
+      radial-gradient(900px 520px at 78% 8%, rgba(126,184,218,0.20), transparent 68%),
+      radial-gradient(700px 420px at 8% 96%, rgba(126,184,218,0.09), transparent 70%),
+      linear-gradient(150deg, #131b2e 0%, #0d1117 55%, #0b0f16 100%);
+    position: relative;
+  }
+
+  /* 流星の軌跡 */
+  .trail {
+    position: absolute;
+    top: -40px; right: 60px;
+    width: 520px; height: 520px;
+  }
+
+  /* 星 */
+  .star { position: absolute; background: #e6edf3; border-radius: 50%; }
+
+  .wrap {
+    position: absolute;
+    left: 76px; top: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 26px;
+    z-index: 2;
+  }
+
+  .eyebrow {
+    font-size: 21px;
+    letter-spacing: 0.22em;
+    color: #7eb8da;
+    font-weight: 700;
+  }
+
+  h1 {
+    font-size: 74px;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1.12;
+  }
+
+  .lead {
+    font-size: 25px;
+    line-height: 1.65;
+    color: #b9c6d2;
+    max-width: 660px;
+  }
+
+  .values {
+    display: flex;
+    gap: 18px;
+    margin-top: 6px;
+  }
+
+  .v {
+    background: rgba(26,26,46,0.85);
+    border: 1px solid rgba(126,184,218,0.38);
+    border-radius: 14px;
+    padding: 14px 26px;
+    text-align: center;
+    min-width: 132px;
+  }
+
+  .v b {
+    display: block;
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 38px;
+    font-weight: 700;
+    color: #9dccea;
+    line-height: 1.05;
+  }
+
+  .v span {
+    display: block;
+    font-size: 14px;
+    letter-spacing: 0.14em;
+    color: #8b949e;
+    margin-top: 5px;
+  }
+
+  .foot {
+    position: absolute;
+    left: 76px; bottom: 44px;
+    font-size: 19px;
+    color: #6e7681;
+    letter-spacing: 0.04em;
+    z-index: 2;
+  }
+</style>
+</head>
+<body>
+
+<svg class="trail" viewBox="0 0 520 520">
+  <defs>
+    <linearGradient id="t" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#7eb8da" stop-opacity="0"/>
+      <stop offset="55%"  stop-color="#9dccea" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="1"/>
+    </linearGradient>
+    <radialGradient id="g">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#9dccea" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M60 46 L372 358" stroke="url(#t)" stroke-width="15" stroke-linecap="round" fill="none"/>
+  <circle cx="372" cy="358" r="72" fill="url(#g)"/>
+  <circle cx="372" cy="358" r="12" fill="#ffffff"/>
+</svg>
+
+<div id="stars"></div>
+
+<div class="wrap">
+  <div class="eyebrow">METEOR PHOTOGRAPHY CALCULATOR</div>
+  <h1>流星撮影セッティング</h1>
+  <p class="lead">機材構成と流星群・撮影目的から、露出時間・F値・ISO を理論で算出。<br>写せる暗さと火球の白飛び限界まで表示します。</p>
+  <div class="values">
+    <div class="v"><b>8秒</b><span>シャッター</span></div>
+    <div class="v"><b>F1.4</b><span>絞り</span></div>
+    <div class="v"><b>640</b><span>ISO</span></div>
+  </div>
+</div>
+
+<div class="foot">ysmrastro.github.io/toolbox/meteor-settings/</div>
+
+<script>
+  /* 星を散らす（座標は固定値で再現性を保つ） */
+  const pts = [[118,64,2.4,.8],[212,128,1.7,.55],[336,72,2.1,.7],[470,178,1.5,.5],
+    [58,232,2.0,.6],[168,352,1.6,.5],[92,470,2.3,.75],[262,486,1.7,.55],
+    [402,520,2.0,.6],[556,84,1.6,.45],[640,300,2.2,.7],[724,140,1.5,.4],
+    [812,470,1.9,.55],[900,220,1.6,.45],[1010,96,2.1,.6],[1104,392,1.8,.5],
+    [1152,196,1.5,.4],[980,540,2.0,.55],[700,566,1.6,.45],[452,236,1.4,.35]];
+  const box = document.getElementById('stars');
+  pts.forEach(([x, y, r, o]) => {
+    const d = document.createElement('div');
+    d.className = 'star';
+    d.style.cssText = `left:${x}px;top:${y}px;width:${r * 2}px;height:${r * 2}px;opacity:${o}`;
+    box.appendChild(d);
+  });
+</script>
+</body>
+</html>

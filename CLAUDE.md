@@ -56,6 +56,22 @@ toolbox/
 2. `index.html` で `shared/css/*.css` をインポート
 3. ツール固有のCSS/JSを配置
 4. トップページ `index.html` にカードを追加
+5. **OGP/Twitterカードのメタタグと `ogp.png` を用意する**（下記）
+
+## SNS共有用のOGP
+
+X などにリンクを貼ってもサムネイルが出ないのは `og:image` が無いため。各ページに
+OGP/Twitterカードのメタタグを置き、1200×630 の `ogp.png` を同じディレクトリに置く。
+
+- **`og:image` は絶対URLで書く**（相対パスでは反映されない）
+- `twitter:card` は `summary_large_image`
+- 画像の生成元は `ogp-source.html`（各ディレクトリ）。1200×630 でスクリーンショットを撮る:
+  ```bash
+  python3 -m http.server 8899        # リポジトリのルートで
+  # Playwright で ogp-source.html を 1200x630 で撮影し ogp.png として保存
+  ```
+- X はカード情報をURL単位でキャッシュするため、タグを追加した直後は
+  `?v=2` のようなクエリを付けて投稿すると新しいカードが読まれる
 
 ## 開発コマンド
 
