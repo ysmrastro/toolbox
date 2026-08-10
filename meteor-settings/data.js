@@ -105,6 +105,16 @@ MS_DATA.lenses = [
   { mount: 'キヤノン RF', name: 'RF 15-35mm F2.8 L IS USM @15mm', focal: 15, fnum: 2.8 },
   { mount: 'キヤノン RF', name: 'RF 16-28mm F2.8 IS STM @16mm',  focal: 16, fnum: 2.8 },
 
+  /* タムロン（ソニーE / ニコンZ・現行） */
+  { mount: 'タムロン', name: 'TAMRON 20mm F/2.8 Di III OSD M1:2',    focal: 20, fnum: 2.8 },
+  { mount: 'タムロン', name: 'TAMRON 24mm F/2.8 Di III OSD M1:2',    focal: 24, fnum: 2.8 },
+  { mount: 'タムロン', name: 'TAMRON 35mm F/2.8 Di III OSD M1:2',    focal: 35, fnum: 2.8 },
+  { mount: 'タムロン', name: 'TAMRON 12-20mm F/2.8 Di III VXD @12mm', focal: 12, fnum: 2.8 },
+  { mount: 'タムロン', name: 'TAMRON 16-30mm F/2.8 Di III VXD G2 @16mm', focal: 16, fnum: 2.8 },
+  { mount: 'タムロン', name: 'TAMRON 20-40mm F/2.8 Di III VXD @20mm', focal: 20, fnum: 2.8 },
+  { mount: 'タムロン', name: 'TAMRON 17-50mm F/4 Di III VXD @17mm',  focal: 17, fnum: 4.0 },
+  { mount: 'タムロン', name: 'TAMRON 11-20mm F/2.8 Di III-A RXD @11mm（APS-C）', focal: 11, fnum: 2.8 },
+
   /* 汎用 */
   { mount: 'その他', name: '標準ズーム 24mm F2.8', focal: 24, fnum: 2.8 },
   { mount: 'その他', name: '標準ズーム 24mm F4',   focal: 24, fnum: 4.0 },
@@ -179,10 +189,21 @@ MS_DATA.locations = [
   { region: '主要都市', name: '広島',   lat: 34.39, lon: 132.46 },
   { region: '主要都市', name: '福岡',   lat: 33.59, lon: 130.40 },
 
-  /* 本州の観測地 */
-  { region: '本州',     name: '野辺山',        lat: 35.94, lon: 138.48 },
-  { region: '本州',     name: '美ヶ原',        lat: 36.23, lon: 138.11 },
-  { region: '本州',     name: '西臼塚（富士）', lat: 35.30, lon: 138.75 },
+  /* 本州 — 長野・山梨 */
+  { region: '本州（長野・山梨）', name: '野辺山',                       lat: 35.94,   lon: 138.48 },
+  { region: '本州（長野・山梨）', name: '美ヶ原',                       lat: 36.23,   lon: 138.11 },
+  { region: '本州（長野・山梨）', name: '小川天文台（小川村）',           lat: 36.6596, lon: 137.9870 },
+  { region: '本州（長野・山梨）', name: 'レストハウスふるさと（小海町）', lat: 36.0642, lon: 138.3927 },
+  { region: '本州（長野・山梨）', name: '霧ヶ峰 富士見台（諏訪市）',      lat: 36.0927, lon: 138.1851 },
+  { region: '本州（長野・山梨）', name: 'まるやち湖（原村）',             lat: 35.9735, lon: 138.2638 },
+  { region: '本州（長野・山梨）', name: 'みずがき湖（北杜市）',           lat: 35.8611, lon: 138.4992 },
+
+  /* 本州 — 静岡以西 */
+  { region: '本州（静岡・以西）', name: '西臼塚（富士）',                       lat: 35.30,   lon: 138.75 },
+  { region: '本州（静岡・以西）', name: '天城高原ゴルフコース駐車場（伊豆市）', lat: 34.8717, lon: 139.0239 },
+  { region: '本州（静岡・以西）', name: '全国育樹祭記念広場（豊田市）',         lat: 35.1582, lon: 137.1959 },
+  { region: '本州（静岡・以西）', name: 'すさみ町（和歌山）',                   lat: 33.5508, lon: 135.4947 },
+  { region: '本州（静岡・以西）', name: '八塔寺ふるさと村（備前市）',           lat: 34.9174, lon: 134.2540 },
 
   /* 九州 — 福岡 */
   { region: '九州（福岡・佐賀）', name: '星の文化館（八女市星野村）', lat: 33.2439, lon: 130.7600 },
@@ -235,6 +256,9 @@ MS_DATA.locations = [
   { region: '沖縄', name: '石垣島（市街）', lat: 24.34, lon: 124.16 },
   { region: '沖縄', name: '石垣島 平久保',  lat: 24.60, lon: 124.30 },
 ];
+
+/* 既定の観測地（名前で引くのでプリセットの並び替えに影響されない） */
+MS_DATA.defaultLocationName = '小石原川ダム（朝倉市）';
 
 /* ---------------- 実用的なシャッター速度の刻み ---------------- */
 MS_DATA.shutterSteps = [0.5, 0.6, 0.8, 1, 1.3, 1.6, 2, 2.5, 3, 4, 5, 6, 8, 10, 13, 15, 20, 25, 30];

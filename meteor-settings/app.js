@@ -28,9 +28,9 @@
     purposeId: 'fireball',
     showerId: 'per',
     datetime: null,
-    locIndex: 0,
-    lat: 35.69,
-    lon: 139.69,
+    locIndex: null,     // init で MS_DATA.defaultLocationName から解決する
+    lat: null,
+    lon: null,
     skyBase: 21.0,
     skyAuto: true,        // 地点変更時に光害地図から自動で空の暗さを取り込むか
     moonId: 'auto',
@@ -1023,9 +1023,27 @@
   }
 
   /* ===================== 起動 ===================== */
+  /** 既定の観測地を名前から解決して state に入れる */
+  function applyDefaultLocation() {
+    const i = D.locations.findIndex((l) => l.name === D.defaultLocationName);
+    const idx = i >= 0 ? i : 0;
+    state.locIndex = idx;
+    state.lat = D.locations[idx].lat;
+    state.lon = D.locations[idx].lon;
+  }
+
   function init() {
     initSelects();
     load();
+    if (state.locIndex == null || state.lat == null || state.lon == null) {
+      applyDefaultLocation();
+    } else {
+      // プリセットの並びが変わっても保存された座標を正とする。
+      // 添字が指す地点と座標が食い違う場合は「手入力」扱いにして誤った地名を出さない
+      const l = D.locations[state.locIndex];
+      const same = l && Math.abs(l.lat - state.lat) < 0.001 && Math.abs(l.lon - state.lon) < 0.001;
+      if (!same) state.locIndex = -1;
+    }
     // 保存値にカメラのセンサー特性が無い場合はプリセットから補う
     if (state.rnGain === undefined || state.fwcSource === undefined) {
       applyCameraPreset(state.cameraId);
