@@ -2,7 +2,7 @@
  * sw.js — オフラインでも使えるようにするための Service Worker
  * 撮影地は電波が届かないことが多いため、初回アクセス後は完全にオフラインで動く。
  */
-const CACHE = 'meteor-settings-v2';
+const CACHE = 'meteor-settings-v1.1.0';
 
 const ASSETS = [
   './',

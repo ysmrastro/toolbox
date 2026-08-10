@@ -83,6 +83,23 @@ body {
 
 .appbar__icon { font-size: 1.1rem; }
 
+.appbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+}
+
+/* バージョンと更新日（控えめに小さく） */
+.appbar__version {
+  text-align: right;
+  font-family: var(--tb-font-mono);
+  font-size: 0.58rem;
+  line-height: 1.35;
+  color: var(--tb-text-muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 .appbar__action {
   width: 36px;
   height: 36px;

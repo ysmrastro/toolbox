@@ -46,7 +46,10 @@
       <span class="appbar__icon">☄️</span>
       <span>流星撮影セッティング</span>
     </div>
-    <button type="button" class="appbar__action" id="btnAbout" aria-label="計算の前提と出典">ⓘ</button>
+    <div class="appbar__right">
+      <div class="appbar__version" id="appVersion"></div>
+      <button type="button" class="appbar__action" id="btnAbout" aria-label="計算の前提と出典">ⓘ</button>
+    </div>
   </header>
 
   <!-- ============ 常時表示のサマリー ============ -->
@@ -503,6 +506,7 @@
       </ul>
 
       <p class="sheet__foot">
+        <span id="aboutVersion"></span><br>
         <a href="https://note.com/brave_godwit4798/n/n938a74b50144" target="_blank" rel="noopener">元記事を読む →</a><br>
         <a href="../" >ysmrastro toolbox</a>
       </p>

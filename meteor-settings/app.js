@@ -1065,6 +1065,15 @@
   }
 
   /* ===================== 起動 ===================== */
+
+  /** バージョンと更新日をアプリバーに出す */
+  function renderVersion() {
+    $('appVersion').innerHTML =
+      `<div>v${D.appVersion}</div><div>${D.appUpdated}</div>`;
+    const foot = $('aboutVersion');
+    if (foot) foot.textContent = `v${D.appVersion}（${D.appUpdated} 更新）`;
+  }
+
   /** 既定のレンズを名前から解決して state に入れる */
   function applyDefaultLens() {
     const i = D.lenses.findIndex((l) => l.name === D.defaultLensName);
@@ -1085,6 +1094,7 @@
 
   function init() {
     initSelects();
+    renderVersion();
     load();
     if (state.locIndex == null || state.lat == null || state.lon == null) {
       applyDefaultLocation();
