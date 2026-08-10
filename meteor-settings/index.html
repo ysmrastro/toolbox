@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="機材構成と流星群・撮影目的から、理論に基づいた流星撮影の露出・F値・ISOを算出します。">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="流星セッティング">
+  <title>流星撮影セッティング</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="../shared/css/variables.css">
+  <link rel="stylesheet" href="../shared/css/reset.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ アプリバー ============ -->
+  <header class="appbar">
+    <div class="appbar__title">
+      <span class="appbar__icon">☄️</span>
+      <span>流星撮影セッティング</span>
+    </div>
+    <button type="button" class="appbar__action" id="btnAbout" aria-label="計算の前提と出典">ⓘ</button>
+  </header>
+
+  <!-- ============ 常時表示のサマリー ============ -->
+  <div class="summary" id="summary">
+    <div class="summary__item">
+      <div class="summary__value" id="sumShutter">—</div>
+      <div class="summary__label">シャッター</div>
+    </div>
+    <div class="summary__sep"></div>
+    <div class="summary__item">
+      <div class="summary__value" id="sumFnum">—</div>
+      <div class="summary__label">絞り</div>
+    </div>
+    <div class="summary__sep"></div>
+    <div class="summary__item">
+      <div class="summary__value" id="sumIso">—</div>
+      <div class="summary__label">ISO</div>
+    </div>
+  </div>
+
+  <!-- ============ 本体 ============ -->
+  <main class="pages" id="pages">
+
+    <!-- ---------- 機材 ---------- -->
+    <section class="page" id="page-gear">
+
+      <div class="card">
+        <h2 class="card__title">カメラ</h2>
+        <select class="tb-select" id="cameraSelect"></select>
+        <div class="specs" id="cameraSpecs"></div>
+        <details class="advanced">
+          <summary>センサーの値を手で調整する</summary>
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">画素ピッチ [µm]</span>
+              <input class="tb-input" type="number" id="pixelPitch" step="0.001" min="1" max="20">
+            </label>
+            <label class="field">
+              <span class="field__label">有効画素数 [MP]</span>
+              <input class="tb-input" type="number" id="megapixels" step="0.1" min="1" max="200">
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span class="field__label">飽和電子数 (ISO100) [e-]</span>
+              <input class="tb-input" type="number" id="fwcBase" step="100" min="1000" max="500000">
+            </label>
+            <label class="field">
+              <span class="field__label">センサー幅 [mm]</span>
+              <input class="tb-input" type="number" id="sensorW" step="0.1" min="5" max="60">
+            </label>
+          </div>
+          <p class="hint" id="fwcHint"></p>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">レンズ</h2>
+        <select class="tb-select" id="lensSelect"></select>
+        <div class="field-row field-row--tight">
+          <label class="field">
+            <span class="field__label">焦点距離 [mm]</span>
+            <input class="tb-input" type="number" id="focal" step="1" min="8" max="600">
+          </label>
+          <label class="field">
+            <span class="field__label">F値（撮影時）</span>
+            <input class="tb-input" type="number" id="fnum" step="0.1" min="0.9" max="16">
+          </label>
+        </div>
+        <div class="chips" id="fnumChips"></div>
+        <div class="metric-inline">
+          <span>有効口径</span>
+          <strong id="apertureOut">—</strong>
+          <span class="metric-inline__note" id="apertureNote"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">ピント・星像</h2>
+        <p class="card__desc">トレイル幅が2倍になると S/N は半分（絞り2段ぶん）失われます。記事で最も効く要素です。</p>
+        <div class="segmented segmented--vertical" id="trailSeg"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">インターバル撮影</h2>
+        <label class="field">
+          <span class="field__label">コマ間隔（撮影後の待ち時間）[秒]</span>
+          <input class="tb-input" type="number" id="gap" step="0.1" min="0" max="10">
+        </label>
+        <label class="field">
+          <span class="field__label">撮影を続ける時間 [時間]</span>
+          <input class="tb-input" type="number" id="hours" step="0.5" min="0.5" max="12">
+        </label>
+      </div>
+
+    </section>
+
+    <!-- ---------- 条件 ---------- -->
+    <section class="page" id="page-cond">
+
+      <div class="card">
+        <h2 class="card__title">撮影目的</h2>
+        <div class="purpose-grid" id="purposeGrid"></div>
+        <p class="card__desc" id="purposeDesc"></p>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">流星群</h2>
+        <select class="tb-select" id="showerSelect"></select>
+        <div class="shower-info" id="showerInfo"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">日時と場所</h2>
+        <label class="field">
+          <span class="field__label">撮影日時（現地時刻）</span>
+          <input class="tb-input" type="datetime-local" id="datetime">
+        </label>
+        <div class="chips">
+          <button type="button" class="chip" id="btnPeak">次の極大の夜へ</button>
+          <button type="button" class="chip" id="btnBest">放射点が最も高い時刻へ</button>
+        </div>
+        <label class="field">
+          <span class="field__label">観測地</span>
+          <select class="tb-select" id="locationSelect"></select>
+        </label>
+        <div class="field-row field-row--tight">
+          <label class="field">
+            <span class="field__label">緯度</span>
+            <input class="tb-input" type="number" id="lat" step="0.01" min="-90" max="90">
+          </label>
+          <label class="field">
+            <span class="field__label">経度</span>
+            <input class="tb-input" type="number" id="lon" step="0.01" min="-180" max="180">
+          </label>
+        </div>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnGeo">現在地を使う</button>
+        <div class="sky-report" id="astroReport"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">空の暗さ</h2>
+        <div class="slider-head">
+          <span class="slider-head__value" id="skyValue">—</span>
+          <span class="slider-head__unit">等/平方秒</span>
+        </div>
+        <input class="tb-range" type="range" id="sky" min="18" max="22" step="0.05">
+        <div class="slider-scale"><span>都市</span><span>郊外</span><span>暗夜</span></div>
+        <div class="chips" id="skyChips"></div>
+        <label class="field">
+          <span class="field__label">月明かりの補正</span>
+          <select class="tb-select" id="moonSelect"></select>
+        </label>
+        <div class="metric-inline">
+          <span>計算に使う空の明るさ</span>
+          <strong id="effectiveSky">—</strong>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">狙う火球の継続時間</h2>
+        <p class="card__desc">この長さの流星が1コマの中で途切れずに収まる確率を評価します。</p>
+        <div class="segmented" id="durSeg"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">放射点からの離角</h2>
+        <p class="card__desc">放射点の近くに出た流星はゆっくり動き、離れるほど速く動きます（式③）。</p>
+        <div class="slider-head">
+          <span class="slider-head__value" id="elongValue">—</span>
+          <span class="slider-head__unit">度</span>
+        </div>
+        <input class="tb-range" type="range" id="elong" min="10" max="90" step="5">
+      </div>
+
+    </section>
+
+    <!-- ---------- 結果 ---------- -->
+    <section class="page" id="page-result">
+
+      <div class="card card--hero">
+        <div class="hero-purpose" id="heroPurpose"></div>
+        <div class="hero-values">
+          <div class="hero-value">
+            <div class="hero-value__num" id="resShutter">—</div>
+            <div class="hero-value__label">秒</div>
+          </div>
+          <div class="hero-value">
+            <div class="hero-value__num" id="resFnum">—</div>
+            <div class="hero-value__label">絞り</div>
+          </div>
+          <div class="hero-value">
+            <div class="hero-value__num" id="resIso">—</div>
+            <div class="hero-value__label">ISO</div>
+          </div>
+        </div>
+        <div class="hero-note" id="heroNote"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">写せる暗さ（到達等級）</h2>
+        <div class="big-metric">
+          <span class="big-metric__value" id="resLimMag">—</span>
+          <span class="big-metric__unit">等</span>
+        </div>
+        <div class="verdict" id="limVerdict"></div>
+        <div class="magbar" id="magbar"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">火球を白飛びさせない限界</h2>
+        <div class="big-metric">
+          <span class="big-metric__value" id="resFireball">—</span>
+          <span class="big-metric__unit">等</span>
+        </div>
+        <div class="verdict" id="fireballVerdict"></div>
+        <div class="metric-inline">
+          <span>飽和までの余裕</span><strong id="resHeadroom">—</strong>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">1コマに収まる確率</h2>
+        <div class="big-metric">
+          <span class="big-metric__value" id="resUncut">—</span>
+          <span class="big-metric__unit">%</span>
+        </div>
+        <div class="progress"><div class="progress__bar" id="uncutBar"></div></div>
+        <div class="verdict" id="uncutVerdict"></div>
+      </div>
+
+      <div class="card" id="warnCard">
+        <h2 class="card__title">この設定の注意点</h2>
+        <ul class="warn-list" id="warnList"></ul>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">撮影前チェックリスト</h2>
+        <ul class="warn-list" id="checkList"></ul>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">あと1手で変わる量</h2>
+        <p class="card__desc">現在の構成から1項目だけ変えたときの到達等級の変化です。</p>
+        <ul class="whatif" id="whatifList"></ul>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">計算の内訳</h2>
+        <table class="detail" id="detailTable"></table>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">記録枚数と容量</h2>
+        <table class="detail" id="storageTable"></table>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">記事の数値との突き合わせ</h2>
+        <p class="card__desc">
+          記事の基準構成（α7R V + SIGMA 20mm F1.4 / 8秒 / ISO 640 / 空 21.0等 / 角速度 18°/s /
+          画面中央の星像）を、上の入力とは無関係に固定値で計算した結果です。
+          記事に書かれている数値と一致することを確認できます。
+        </p>
+        <table class="detail" id="verifyTable"></table>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">計算モード</h2>
+        <label class="switch">
+          <input type="checkbox" id="articleMode">
+          <span class="switch__body"></span>
+          <span class="switch__text">記事の式のみで計算する（読み出しノイズを無視）</span>
+        </label>
+        <p class="hint">オフのときは、記事の式④に読み出しノイズを加えた式で計算します。露出8秒前後では差はほぼゼロですが、短秒設定では記事の式が到達等級を過大評価します。</p>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ============ ボトムナビ ============ -->
+  <nav class="tabbar" id="tabbar">
+    <button type="button" class="tabbar__item active" data-page="page-gear">
+      <span class="tabbar__icon">📷</span><span class="tabbar__label">機材</span>
+    </button>
+    <button type="button" class="tabbar__item" data-page="page-cond">
+      <span class="tabbar__icon">🌌</span><span class="tabbar__label">条件</span>
+    </button>
+    <button type="button" class="tabbar__item" data-page="page-result">
+      <span class="tabbar__icon">📋</span><span class="tabbar__label">結果</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- ============ 前提と出典のシート ============ -->
+<div class="sheet" id="aboutSheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <div class="sheet__panel">
+    <div class="sheet__head">
+      <h2>計算の前提と出典</h2>
+      <button type="button" class="sheet__close" data-close aria-label="閉じる">✕</button>
+    </div>
+    <div class="sheet__body">
+      <h3>出典</h3>
+      <p>
+        このツールの計算は、<strong>friend_camera</strong> 氏の記事
+        <a href="https://note.com/brave_godwit4798/n/n938a74b50144" target="_blank" rel="noopener">
+          「流れ星の撮り方｜F値とISOを『理論』で決めるペルセウス座流星群の撮影設定ガイド」</a>
+        の付録A（8つの計算式）と本文の各表をそのまま実装したものです。
+        <strong>著者の許諾を得て公開しています。</strong>
+        理論・数値の考案はすべて原著者によるもので、本ツールはその計算を機材構成・流星群・撮影目的に
+        一般化して自動化したものです。
+      </p>
+
+      <h3>基準構成と検証</h3>
+      <p>
+        α7R V + SIGMA 20mm F1.4 / 8秒 / ISO 640 / 空 21.0等 を基準構成としてキャリブレーションしています。
+        この基準で記事の数値（NPF則 8.08秒、到達等級 +1.63等、火球の白飛び限界 −4.25等、
+        2秒火球が途切れない確率 67%、ISO 1段で失う火球保護 0.76等、条件補正表の全項目）を
+        再現することを確認済みです。
+      </p>
+
+      <h3>記事から確定できず、こちらで決めた前提</h3>
+      <ul>
+        <li><strong>到達等級の絶対値</strong>：記事の「20mm F1.4 でペルセウス座平均(+1.63等)に到達するには空 21.0等が必要」を
+          アンカーにしました。この前提で空 21.5等では +1.88等となり、記事の「+1.90等」とほぼ一致します。</li>
+        <li><strong>トレイル幅</strong>：焦点距離を変えても秒角でのトレイル幅は変えていません。これにより
+          記事の「焦点距離2倍で +0.75等」がそのまま再現されます。ピント精度の影響は係数で与えます。</li>
+        <li><strong>読み出しノイズ</strong>：記事の式④は背景ノイズ支配を仮定しているため、短秒設定で
+          過大評価になります。既定では読み出しノイズを含む式で計算し、「記事の式のみ」に切り替えられます。</li>
+        <li><strong>推奨ISO</strong>：「到達等級の損失が許容値未満に収まる最も低いISO」を選びます。
+          火球狙い（許容 0.02等）では基準構成で ISO 640 が選ばれ、記事の推奨値と一致します。</li>
+        <li><strong>推奨露出</strong>：NPF則（簡易式）を上限に、目的別のスコア
+          （火球狙い＝稼働率×途切れない確率／本数狙い＝r^到達等級×稼働率）を最大化します。</li>
+      </ul>
+
+      <h3>データの確度</h3>
+      <ul>
+        <li><strong>画素ピッチ</strong>：メーカー公表スペックから算出（正確）。</li>
+        <li><strong>飽和電子数</strong>：α7R V のみ記事の実測値。他機種は α7R V の実測値
+          （2540 e-/µm²）を外挿した<strong>推定値</strong>です。誤差1段で火球の白飛び限界が
+          ±0.75等ずれますが、<strong>到達等級・推奨露出には影響しません</strong>。
+          正確な値がわかる場合は「センサーの値を手で調整する」から入力してください。</li>
+        <li><strong>流星群データ</strong>：放射点・対地速度・ZHR・光度分布指数は IMO の Working List 相当の値。
+          平均光度は、記事のペルセウス座 +1.63等 を基準に一定量オフセットして揃えた便宜的な値です。</li>
+        <li><strong>遭遇本数</strong>：絶対本数は較正できないため、基準構成を 100 とした<strong>相対指数</strong>のみ表示します。</li>
+        <li><strong>天文計算</strong>：ライブラリを使わない低精度計算（太陽 ±0.01°、月 ±0.3°）。設定判断には十分です。</li>
+      </ul>
+
+      <h3>撮影前に必ず切るもの（記事の実装チェックリスト）</h3>
+      <ul>
+        <li>長秒時ノイズ低減（撮影時間が半減するため致命的）</li>
+        <li>高感度ノイズ低減</li>
+        <li>周辺光量補正</li>
+      </ul>
+
+      <p class="sheet__foot">
+        <a href="https://note.com/brave_godwit4798/n/n938a74b50144" target="_blank" rel="noopener">元記事を読む →</a><br>
+        <a href="../" >ysmrastro toolbox</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="astro.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

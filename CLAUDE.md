@@ -18,13 +18,27 @@ toolbox/
 │   ├── reset.css           # リセットCSS
 │   ├── components.css      # 共通UIコンポーネント（tb-プレフィクス）
 │   └── layout.css          # 共通レイアウト
-└── qr-generator/           # QRコード生成ツール
+├── qr-generator/           # QRコード生成ツール
+│   ├── index.html
+│   ├── style.css
+│   ├── app.js
+│   ├── presets.js
+│   └── logos/              # プリセットロゴSVG
+└── meteor-settings/        # 流星撮影セッティング（PWA・トップページ未掲載）
     ├── index.html
     ├── style.css
+    ├── data.js             # カメラ/レンズ/流星群/観測地データ
+    ├── astro.js            # 放射点高度・太陽高度・月齢
+    ├── engine.js           # note記事の付録A 8式の実装
     ├── app.js
-    ├── presets.js
-    └── logos/              # プリセットロゴSVG
+    ├── selftest.js         # 記事の数値を再現するかの検証（node で実行）
+    ├── manifest.json / sw.js
+    └── README.md           # 出典・前提・データ確度の詳細
 ```
+
+**meteor-settings について**: 計算は friend_camera 氏の note 記事（著者の許諾済み）に基づく。
+前提・確度・検証結果は `meteor-settings/README.md` に集約してある。
+著者レビュー中のためトップページの導線には**まだ載せていない**（直リンクのみ）。
 
 ## 共通CSS
 
