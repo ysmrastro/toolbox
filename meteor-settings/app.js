@@ -181,9 +181,17 @@
     $('showerSelect').innerHTML = D.showers
       .map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
 
+    // 観測地は地域ごとに optgroup でまとめる
+    const groups = [];
+    D.locations.forEach((l, i) => {
+      const region = l.region || 'その他';
+      let g = groups.find((x) => x.region === region);
+      if (!g) { g = { region: region, items: [] }; groups.push(g); }
+      g.items.push(`<option value="${i}">${l.name}</option>`);
+    });
     $('locationSelect').innerHTML =
-      D.locations.map((l, i) => `<option value="${i}">${l.name}</option>`).join('') +
-      '<option value="-1">手入力</option>';
+      groups.map((g) => `<optgroup label="${g.region}">${g.items.join('')}</optgroup>`).join('') +
+      '<optgroup label="任意の座標"><option value="-1">手入力</option></optgroup>';
 
     $('moonSelect').innerHTML =
       '<option value="auto">自動（日時と場所から計算）</option>' +
