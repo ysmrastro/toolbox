@@ -619,6 +619,66 @@ input[type="number"], input[type="datetime-local"], select { font-size: 16px; }
 
 .sky-report b { color: var(--tb-text-primary); font-family: var(--tb-font-mono); font-weight: 700; }
 
+/* ---------------- 光害地図の読み取り結果 ---------------- */
+.lp-lookup { margin-bottom: var(--tb-space-sm); }
+
+.lp-result {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+  background: var(--tb-bg-tertiary);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  padding: var(--tb-space-sm);
+}
+
+.lp-swatch {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--tb-radius-sm);
+  border: 1px solid var(--tb-border);
+}
+
+.lp-result__body { flex: 1; min-width: 0; }
+
+.lp-result__main {
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+}
+
+.lp-result__main strong {
+  font-family: var(--tb-font-mono);
+  font-size: 1.2rem;
+  color: var(--tb-accent);
+}
+
+.lp-zone {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 2px 7px;
+  margin-left: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--tb-border);
+  color: var(--tb-text-muted);
+}
+
+.lp-result__sub {
+  font-size: var(--tb-font-size-xs);
+  color: var(--tb-text-muted);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.lp-applied {
+  flex: none;
+  font-size: 0.65rem;
+  color: var(--tb-success);
+  border: 1px solid var(--tb-success);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
 /* ---------------- スイッチ ---------------- */
 .switch { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; pointer-events: none; }

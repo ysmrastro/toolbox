@@ -32,6 +32,7 @@
     lat: 35.69,
     lon: 139.69,
     skyBase: 21.0,
+    skyAuto: true,        // 地点変更時に光害地図から自動で空の暗さを取り込むか
     moonId: 'auto',
     durTarget: 2.0,
     elong: 60,
@@ -596,12 +597,96 @@
     return res.ev.encounterIndex / refIndexCache * 100;
   }
 
+  /* ===================== 光害地図からの取得 ===================== */
+  let lpState = { status: 'idle', lat: null, lon: null, data: null };
+
+  function renderLpLookup() {
+    const el = $('lpLookup');
+    const d = lpState.data;
+    if (lpState.status === 'loading') {
+      el.innerHTML = '<p class="hint">光害地図を読み込み中…</p>';
+      return;
+    }
+    if (lpState.status === 'idle' || !d) {
+      el.innerHTML = '<p class="hint">この地点の夜空の明るさを光害地図（2025年）から読み取れます。</p>';
+      return;
+    }
+    if (d.outside) {
+      el.innerHTML = '<p class="hint">この地点は同梱している光害地図の範囲（日本周辺）の外です。スライダーで手動設定してください。</p>';
+      return;
+    }
+    if (d.error) {
+      el.innerHTML = '<p class="hint">光害地図を読み込めませんでした。スライダーで手動設定してください。</p>';
+      return;
+    }
+    const col = MS_LP.PALETTE[d.index];
+    const applied = Math.abs(state.skyBase - d.sqm) < 0.03;
+    el.innerHTML = `
+      <div class="lp-result">
+        <span class="lp-swatch" style="background:rgb(${col[0]},${col[1]},${col[2]})"></span>
+        <div class="lp-result__body">
+          <div class="lp-result__main">
+            <strong>${d.sqm.toFixed(2)}</strong> 等/平方秒
+            <span class="lp-zone">光害ゾーン ${d.zone}</span>
+          </div>
+          <div class="lp-result__sub">
+            この階調の範囲 ${d.range.bright.toFixed(2)}〜${d.range.dark.toFixed(2)}等
+            ／人工光は自然光の ${d.lpi < 1 ? d.lpi.toFixed(2) : Math.round(d.lpi)} 倍
+            ${d.missing ? '（外洋のため最暗として扱っています）' : ''}
+          </div>
+        </div>
+        ${applied ? '<span class="lp-applied">反映中</span>'
+          : '<button type="button" class="chip" id="btnLpApply">反映</button>'}
+      </div>
+      <p class="hint">
+        天頂の人工光輝度のモデル計算値です（Bortleスケールではありません）。
+        出典: David Lorenz 光害アトラス2025 / NOAA VIIRS。
+      </p>`;
+    const apply = $('btnLpApply');
+    if (apply) {
+      apply.addEventListener('click', () => {
+        state.skyBase = Math.round(d.sqm * 20) / 20;   // スライダーの刻み(0.05)に合わせる
+        state.skyAuto = true;
+        syncInputs();
+        refresh();
+      });
+    }
+  }
+
+  /** 光害地図を引く。applyResult が true なら空の暗さに反映する */
+  function fetchLightPollution(applyResult) {
+    const lat = state.lat;
+    const lon = state.lon;
+    lpState = { status: 'loading', lat: lat, lon: lon, data: null };
+    renderLpLookup();
+    MS_LP.lookup(lat, lon).then((d) => {
+      // 取得中に地点が変わっていたら破棄する
+      if (state.lat !== lat || state.lon !== lon) return;
+      lpState = { status: 'done', lat: lat, lon: lon, data: d };
+      if (applyResult && d && d.sqm !== undefined) {
+        state.skyBase = Math.round(d.sqm * 20) / 20;
+        state.skyAuto = true;
+        syncInputs();
+        refresh();
+      } else {
+        renderLpLookup();
+      }
+    });
+  }
+
+  /** 地点が変わったときの処理 */
+  function onLocationChanged() {
+    if (state.skyAuto) fetchLightPollution(true);
+    else fetchLightPollution(false);
+  }
+
   /* ===================== 再計算と再描画 ===================== */
   function refresh() {
     const res = compute();
     renderGear(res);
     renderCond(res);
     renderResult(res);
+    renderLpLookup();
     save();
   }
 
@@ -728,10 +813,21 @@
       if (l) { state.lat = l.lat; state.lon = l.lon; }
       syncInputs();
       refresh();
+      onLocationChanged();
     });
 
     numField('lat', 'lat', () => { state.locIndex = -1; $('locationSelect').value = '-1'; });
     numField('lon', 'lon', () => { state.locIndex = -1; $('locationSelect').value = '-1'; });
+    // 緯度経度の手入力は連続して変わるので、入力が落ち着いてから引く
+    let latlonTimer = null;
+    ['lat', 'lon'].forEach((id) => {
+      $(id).addEventListener('input', () => {
+        clearTimeout(latlonTimer);
+        latlonTimer = setTimeout(onLocationChanged, 600);
+      });
+    });
+
+    $('btnLp').addEventListener('click', () => fetchLightPollution(true));
 
     $('btnGeo').addEventListener('click', () => {
       if (!navigator.geolocation) { alert('この端末では現在地を取得できません。'); return; }
@@ -743,6 +839,7 @@
         $('btnGeo').textContent = '現在地を使う';
         syncInputs();
         refresh();
+        onLocationChanged();
       }, () => {
         $('btnGeo').textContent = '現在地を使う';
         alert('現在地を取得できませんでした。緯度経度を手で入力してください。');
@@ -751,6 +848,7 @@
 
     $('sky').addEventListener('input', (e) => {
       state.skyBase = parseFloat(e.target.value);
+      state.skyAuto = false;   // 手動で動かしたら自動反映をやめる
       $('skyValue').textContent = state.skyBase.toFixed(2);
       document.querySelectorAll('[data-sky]').forEach((el) => {
         el.classList.toggle('active', Math.abs(Number(el.dataset.sky) - state.skyBase) < 0.001);
@@ -762,6 +860,7 @@
       const b = e.target.closest('[data-sky]');
       if (!b) return;
       state.skyBase = Number(b.dataset.sky);
+      state.skyAuto = false;
       syncInputs();
       refresh();
     });
@@ -810,6 +909,8 @@
     bind();
     document.querySelector('.page').classList.add('active');
     refresh();
+    // 初回は表示だけ更新し、空の暗さの自動反映は skyAuto に従う
+    fetchLightPollution(state.skyAuto === true);
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => { /* オフライン対応は任意 */ });

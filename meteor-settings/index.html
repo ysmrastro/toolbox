@@ -170,12 +170,16 @@
 
       <div class="card">
         <h2 class="card__title">空の暗さ</h2>
+        <div class="lp-lookup" id="lpLookup"></div>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnLp">
+          光害地図からこの地点の値を取得
+        </button>
         <div class="slider-head">
           <span class="slider-head__value" id="skyValue">—</span>
           <span class="slider-head__unit">等/平方秒</span>
         </div>
-        <input class="tb-range" type="range" id="sky" min="18" max="22" step="0.05">
-        <div class="slider-scale"><span>都市</span><span>郊外</span><span>暗夜</span></div>
+        <input class="tb-range" type="range" id="sky" min="16.5" max="22" step="0.05">
+        <div class="slider-scale"><span>都市中心</span><span>郊外</span><span>暗夜</span></div>
         <div class="chips" id="skyChips"></div>
         <label class="field">
           <span class="field__label">月明かりの補正</span>
@@ -344,6 +348,30 @@
         一般化して自動化したものです。
       </p>
 
+      <h3>空の暗さのデータ出典</h3>
+      <p>
+        「光害地図からこの地点の値を取得」で表示される値は、
+        <strong>David Lorenz</strong> 氏の
+        <a href="https://djlorenz.github.io/astronomy/lp/" target="_blank" rel="noopener">
+          World Atlas of the Artificial Night Sky Brightness（2025年版）</a>
+        から日本周辺を切り出して同梱したものです。
+        元となる夜間光データは NOAA VIIRS の年平均雲なし夜間光
+        （Earth Observation Group, Colorado School of Mines）です。
+      </p>
+      <p>
+        <strong>この値は「天頂（真上）の人工光による輝度」のモデル計算値で、Bortle スケールではありません。</strong>
+        Bortle スケールは地平線から天頂までの全天を目視で評価する主観的な指標であり、天頂輝度とは別物です。
+        原著者もこの2つを混同しないよう求めています。
+      </p>
+      <p>
+        自然の夜空の天頂輝度を 22.0 等/平方秒 と仮定して
+        <code>空の明るさ = 22.0 − 2.5·log₁₀(1 + 人工光/自然光)</code> で換算しています。
+        実際の自然光は大気光の変動で夜ごとに変わるため、数値は目安です。
+        地図は16段階の階調ですが、暗い空（21〜22等）では1段が 0.03〜0.26等 と細かく、
+        到達等級への影響は 0.1等 未満です。都市部では1段が約0.6等になります。
+        対象範囲は日本周辺（北緯20〜46度、東経122〜154度）のみです。
+      </p>
+
       <h3>基準構成と検証</h3>
       <p>
         α7R V + SIGMA 20mm F1.4 / 8秒 / ISO 640 / 空 21.0等 を基準構成としてキャリブレーションしています。
@@ -397,6 +425,7 @@
 <script src="data.js"></script>
 <script src="astro.js"></script>
 <script src="engine.js"></script>
+<script src="lightpollution.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
