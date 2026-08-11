@@ -9,16 +9,121 @@
   --ms-tabbar-h: 58px;
   --ms-safe-bottom: env(safe-area-inset-bottom, 0px);
   --ms-safe-top: env(safe-area-inset-top, 0px);
-  --ms-warn: #d9a03c;
-  --ms-panel: #12182399;
   --ms-content-w: 480px;   /* 中身の最大幅。ブレークポイントごとに切り替える */
+}
+
+/* =========================================================
+   表示テーマ
+   ダークを既定とし、<html data-theme="light|astro"> で上書きする。
+   色は必ずここのトークン経由で参照する（個別の指定に生の色を書くと
+   テーマを足したときに1箇所だけ取り残される）。
+   ========================================================= */
+:root {
+  --ms-warn: #d9a03c;
+  --ms-bar-bg: rgba(13, 17, 23, 0.86);
+  --ms-summary-bg: rgba(26, 26, 46, 0.92);
+  --ms-tabbar-bg: rgba(13, 17, 23, 0.92);
+  --ms-glow: rgba(126, 184, 218, 0.09);
+  --ms-hero-bg: linear-gradient(160deg, #1b2440, #141a2b 60%, #12182a);
+  --ms-hero-border: rgba(126, 184, 218, 0.35);
+  --ms-hero-rule: rgba(126, 184, 218, 0.2);
+  --ms-ring: rgba(126, 184, 218, 0.4);
+  --ms-magbar: linear-gradient(90deg, #2a3550, #4c6a8c, #9dccea);
+  --ms-magbar-fill: linear-gradient(90deg, rgba(126, 184, 218, 0.25), rgba(126, 184, 218, 0.65));
+  --ms-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  --ms-backdrop: rgba(0, 0, 0, 0.6);
+  --ms-icon-filter: none;
+}
+
+/* ---- ライト（日中の下見・計画向け） ---- */
+:root[data-theme="light"] {
+  --tb-bg-primary: #f4f7fa;
+  --tb-bg-secondary: #ffffff;
+  --tb-bg-tertiary: #eceff5;
+  --tb-border: #d2dae4;
+  --tb-border-hover: #2b6d99;
+  --tb-text-primary: #16202b;
+  --tb-text-secondary: #4c5a69;
+  --tb-text-muted: #6c7a89;
+  --tb-accent: #1a6693;
+  --tb-accent-hover: #124f74;
+  --tb-accent-subtle: rgba(26, 102, 147, 0.1);
+  --tb-danger: #c0281f;
+  --tb-success: #1c7530;
+
+  --ms-warn: #96650a;
+  --ms-bar-bg: rgba(255, 255, 255, 0.88);
+  --ms-summary-bg: rgba(236, 239, 245, 0.94);
+  --ms-tabbar-bg: rgba(255, 255, 255, 0.94);
+  --ms-glow: rgba(26, 102, 147, 0.08);
+  --ms-hero-bg: linear-gradient(160deg, #e6eff7, #f2f6fb 60%, #edf3f9);
+  --ms-hero-border: rgba(26, 102, 147, 0.35);
+  --ms-hero-rule: rgba(26, 102, 147, 0.2);
+  --ms-ring: rgba(26, 102, 147, 0.35);
+  --ms-magbar: linear-gradient(90deg, #c2cfdd, #6f93b4, #1a6693);
+  --ms-magbar-fill: linear-gradient(90deg, rgba(26, 102, 147, 0.2), rgba(26, 102, 147, 0.55));
+  --ms-shadow: 0 2px 10px rgba(20, 40, 60, 0.16);
+  --ms-backdrop: rgba(20, 30, 42, 0.45);
+}
+
+/* ---- アストロ（暗所での目の順応を保つ赤系） ---- */
+:root[data-theme="astro"] {
+  --tb-bg-primary: #090403;
+  --tb-bg-secondary: #170a08;
+  --tb-bg-tertiary: #100605;
+  --tb-border: #47201a;
+  --tb-border-hover: #ff7a58;
+  --tb-text-primary: #ff9c7e;
+  --tb-text-secondary: #cd6c52;
+  --tb-text-muted: #984936;
+  --tb-accent: #ff6a45;
+  --tb-accent-hover: #ff8f6d;
+  --tb-accent-subtle: rgba(255, 106, 69, 0.12);
+  /* 赤単色でも判別できるよう、危険は濃く・良好は明るくして輝度で差をつける */
+  --tb-danger: #ff3a22;
+  --tb-success: #ffb694;
+
+  --ms-warn: #e0762c;
+  --ms-bar-bg: rgba(9, 4, 3, 0.9);
+  --ms-summary-bg: rgba(23, 10, 8, 0.94);
+  --ms-tabbar-bg: rgba(9, 4, 3, 0.94);
+  --ms-glow: rgba(255, 106, 69, 0.07);
+  --ms-hero-bg: linear-gradient(160deg, #2a0f09, #1c0906 60%, #170705);
+  --ms-hero-border: rgba(255, 106, 69, 0.35);
+  --ms-hero-rule: rgba(255, 106, 69, 0.2);
+  --ms-ring: rgba(255, 106, 69, 0.4);
+  --ms-magbar: linear-gradient(90deg, #3a1109, #8a3418, #ff8f6d);
+  --ms-magbar-fill: linear-gradient(90deg, rgba(255, 106, 69, 0.25), rgba(255, 106, 69, 0.7));
+  --ms-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+  --ms-backdrop: rgba(0, 0, 0, 0.72);
+  /* 絵文字はフルカラーなので赤単色に寄せる。
+     先に暗くしてから彩度を上げること。明るい色は赤にならず橙〜黄に転ぶ。
+     sepia 後の色相は約35°なので hue-rotate は -35deg が赤。行き過ぎるとピンクになる。 */
+  --ms-icon-filter: brightness(0.45) grayscale(1) sepia(1) saturate(8) hue-rotate(-35deg);
+}
+
+/* セレクトの▼は共通CSSでグレー固定なので、赤系のときだけ差し替える */
+:root[data-theme="astro"] .tb-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23cd6c52' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+}
+
+/* 日付ピッカーや数値スピナーなどネイティブ部品の明暗も揃える
+   （夜間にカレンダーが白く光るのを防ぐ） */
+:root[data-theme="dark"],
+:root[data-theme="astro"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+
+:root[data-theme="astro"] .appbar__icon,
+:root[data-theme="astro"] .tabbar__icon,
+:root[data-theme="astro"] .purpose__icon {
+  filter: var(--ms-icon-filter);
 }
 
 html, body {
   height: 100%;
   /* 自前の「引っぱって更新」と二重に動かないよう、ブラウザ標準のPTRは抑える。
      PWA を standalone で起動するとブラウザ標準のPTRは元々存在しないため、
-     どの環境でも同じ動きにするために自前実装を使う（app.js の setupPullToRefresh）。 */
+     どの環境でも同じ動きにするために自前実装を使う（app.js の setupGestures）。 */
   overscroll-behavior-y: contain;
 }
 
@@ -34,7 +139,7 @@ body {
   min-height: 100%;
   position: relative;
   background:
-    radial-gradient(1200px 500px at 50% -10%, rgba(126, 184, 218, 0.09), transparent 70%),
+    radial-gradient(1200px 500px at 50% -10%, var(--ms-glow), transparent 70%),
     var(--tb-bg-primary);
 }
 
@@ -77,7 +182,7 @@ body {
   border: 2px solid var(--tb-border);
   border-top-color: var(--tb-accent);
   background: var(--tb-bg-primary);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--ms-shadow);
 }
 
 .ptr.is-ready .ptr__spinner { border-top-color: var(--tb-success); }
@@ -93,7 +198,7 @@ body {
   padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--ms-shadow);
 }
 
 /* ---------------- アプリバー ---------------- */
@@ -108,7 +213,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(13, 17, 23, 0.86);
+  background: var(--ms-bar-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--tb-border);
@@ -162,6 +267,9 @@ body {
 
 .appbar__action:active { background: var(--tb-bg-secondary); }
 
+/* 設定ボタンは広い画面のときだけ出す（狭い画面ではボトムナビに置いてある） */
+.appbar__action--wide { display: none; }
+
 /* ---------------- サマリーストリップ ---------------- */
 .summary {
   position: fixed;
@@ -175,7 +283,7 @@ body {
   justify-content: space-around;
   gap: var(--tb-space-sm);
   padding: 0 var(--tb-space-md);
-  background: rgba(26, 26, 46, 0.92);
+  background: var(--ms-summary-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--tb-border);
@@ -218,6 +326,19 @@ body {
 @media (max-width: 1099px) {
   .page { display: none; }
   .page.active { display: block; animation: fade 0.18s ease; }
+  /* 左右スワイプで来たときは進んだ向きに合わせて滑らせる */
+  .page.active.from-right { animation: slideFromRight 0.2s ease; }
+  .page.active.from-left  { animation: slideFromLeft 0.2s ease; }
+}
+
+@keyframes slideFromRight {
+  from { opacity: 0; transform: translateX(18px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes slideFromLeft {
+  from { opacity: 0; transform: translateX(-18px); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* カラム見出し（タブがある狭い画面では不要） */
@@ -254,8 +375,8 @@ body {
 }
 
 .card--hero {
-  background: linear-gradient(160deg, #1b2440, #141a2b 60%, #12182a);
-  border-color: rgba(126, 184, 218, 0.35);
+  background: var(--ms-hero-bg);
+  border-color: var(--ms-hero-border);
 }
 
 /* ---------------- 入力 ---------------- */
@@ -401,7 +522,7 @@ input[type="number"] { padding-right: 1.9rem; }
   background: var(--tb-accent-subtle);
   color: var(--tb-accent);
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px rgba(126, 184, 218, 0.4);
+  box-shadow: inset 0 0 0 1px var(--ms-ring);
 }
 
 .segmented__sub {
@@ -543,7 +664,7 @@ input[type="number"] { padding-right: 1.9rem; }
 .hero-note {
   margin-top: var(--tb-space-md);
   padding-top: var(--tb-space-sm);
-  border-top: 1px solid rgba(126, 184, 218, 0.2);
+  border-top: 1px solid var(--ms-hero-rule);
   font-size: var(--tb-font-size-xs);
   color: var(--tb-text-secondary);
   line-height: 1.6;
@@ -583,8 +704,14 @@ input[type="number"] { padding-right: 1.9rem; }
   position: relative;
   height: 30px;
   border-radius: var(--tb-radius-md);
-  background: linear-gradient(90deg, #2a3550, #4c6a8c, #9dccea);
+  background: var(--ms-magbar);
   overflow: hidden;
+}
+
+.magbar__fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ms-magbar-fill);
 }
 
 .magbar__marker {
@@ -815,7 +942,7 @@ input[type="number"] { padding-right: 1.9rem; }
   height: calc(var(--ms-tabbar-h) + var(--ms-safe-bottom));
   padding-bottom: var(--ms-safe-bottom);
   display: flex;
-  background: rgba(13, 17, 23, 0.92);
+  background: var(--ms-tabbar-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-top: 1px solid var(--tb-border);
@@ -846,7 +973,7 @@ input[type="number"] { padding-right: 1.9rem; }
 .sheet__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--ms-backdrop);
   backdrop-filter: blur(2px);
 }
 
@@ -931,6 +1058,7 @@ input[type="number"] { padding-right: 1.9rem; }
 
   /* タブは不要。推奨値は上部のサマリーバーで常時見せる */
   .tabbar { display: none; }
+  .appbar__action--wide { display: block; }
 
   /* 入力（機材＋条件）を1つのグリッド項目にまとめる。
      結果カラムを2行にまたがらせると、結果が長いぶんだけ左カラムの行が

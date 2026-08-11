@@ -40,7 +40,11 @@
     camAz: null,        // カメラの方位（null なら放射点から45°離した向きを自動採用）
     camAlt: 60,         // カメラの高度
     articleMode: false,
+    activePage: 'page-gear',   // 開いていたタブ（再読み込み後もここに戻る）
   };
+
+  /* ボトムナビで行き来するページ。設定はシートなのでここには入れない */
+  const PAGES = ['page-gear', 'page-cond', 'page-result'];
 
   const DURATIONS = [
     { value: 0.3, label: '0.3秒', sub: '一般的な流星' },
@@ -62,6 +66,91 @@
       if (!raw) return;
       Object.assign(state, JSON.parse(raw));
     } catch (e) { /* 無視 */ }
+  }
+
+  /* ===================== 表示テーマ =====================
+   * 選択値（auto/dark/light/astro）は入力内容とは別のキーに保存する。
+   * index.html のインライン script が最初の描画より前に同じキーを読んで
+   * <html data-theme> を立てるため、ここは「あとから切り替える」役だけを持つ。
+   */
+  const THEME_KEY = 'ms-theme';
+  /* PWA のステータスバー色。各テーマの --tb-bg-primary と揃えておく */
+  const THEME_COLORS = { dark: '#0d1117', light: '#f4f7fa', astro: '#090403' };
+
+  function themePref() {
+    const v = document.documentElement.getAttribute('data-theme-pref');
+    return D.themes.some((t) => t.id === v) ? v : 'auto';
+  }
+
+  function prefersLight() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+  }
+
+  function applyTheme(pref) {
+    const effective = pref === 'auto' ? (prefersLight() ? 'light' : 'dark') : pref;
+    const root = document.documentElement;
+    root.setAttribute('data-theme', effective);
+    root.setAttribute('data-theme-pref', pref);
+    const meta = $('themeColor');
+    if (meta) meta.setAttribute('content', THEME_COLORS[effective] || THEME_COLORS.dark);
+    try { localStorage.setItem(THEME_KEY, pref); } catch (e) { /* 保存できなくても表示は変わる */ }
+    renderThemeSeg();
+  }
+
+  function renderThemeSeg() {
+    const cur = themePref();
+    $('themeSeg').innerHTML = D.themes.map((t) => `
+      <button type="button" class="segmented__item${t.id === cur ? ' active' : ''}" data-theme="${t.id}">
+        ${t.label}<span class="segmented__sub">${t.sub}</span>
+      </button>`).join('');
+  }
+
+  /* ===================== シート ===================== */
+  const SHEETS = ['aboutSheet', 'settingsSheet'];
+
+  function openSheet(id) {
+    SHEETS.forEach((s) => { $(s).hidden = (s !== id); });
+  }
+
+  function closeSheets() {
+    SHEETS.forEach((s) => { $(s).hidden = true; });
+  }
+
+  function anySheetOpen() {
+    return SHEETS.some((s) => !$(s).hidden);
+  }
+
+  /* ===================== タブ ===================== */
+  /**
+   * タブを切り替える。
+   * @param {string} pageId 表示するページの id
+   * @param {number} [dir]  +1 なら右から、-1 なら左から滑り込ませる（スワイプ用）
+   */
+  function activateTab(pageId, dir) {
+    if (PAGES.indexOf(pageId) < 0) pageId = PAGES[0];
+    document.querySelectorAll('.tabbar__item[data-page]').forEach((b) => {
+      b.classList.toggle('active', b.dataset.page === pageId);
+    });
+    document.querySelectorAll('.page').forEach((p) => {
+      p.classList.remove('active', 'from-right', 'from-left');
+    });
+    const page = $(pageId);
+    page.classList.add('active');
+    if (dir === 1) page.classList.add('from-right');
+    else if (dir === -1) page.classList.add('from-left');
+    state.activePage = pageId;
+    save();
+  }
+
+  /** 相対移動。端では何もしない（戻り値は移動したかどうか） */
+  function stepTab(delta) {
+    const cur = PAGES.indexOf(state.activePage);
+    const from = cur < 0 ? 0 : cur;
+    const next = Math.min(PAGES.length - 1, Math.max(0, from + delta));
+    if (next === from) return false;
+    activateTab(PAGES[next], delta > 0 ? 1 : -1);
+    window.scrollTo({ top: 0 });
+    return true;
   }
 
   /* ===================== ユーティリティ ===================== */
@@ -512,7 +601,7 @@
     const pos = (m) => Math.max(0, Math.min(100, (m - min) / (max - min) * 100));
     $('magbar').innerHTML = `
       <div class="magbar__track">
-        <div style="position:absolute;inset:0;width:${pos(limMag)}%;background:linear-gradient(90deg,rgba(126,184,218,.25),rgba(126,184,218,.65))"></div>
+        <div class="magbar__fill" style="width:${pos(limMag)}%"></div>
         <div class="magbar__marker" style="left:${pos(limMag)}%"></div>
         <div class="magbar__marker magbar__marker--target" style="left:${pos(target)}%"></div>
       </div>
@@ -818,13 +907,11 @@
 
   /* ===================== イベント ===================== */
   function bind() {
-    /* タブ切り替え */
+    /* ボトムナビ（ページを持つ項目はタブ、data-sheet の項目はシートを開く） */
     document.querySelectorAll('.tabbar__item').forEach((btn) => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.tabbar__item').forEach((b) => b.classList.remove('active'));
-        document.querySelectorAll('.page').forEach((p) => p.classList.remove('active'));
-        btn.classList.add('active');
-        $(btn.dataset.page).classList.add('active');
+        if (btn.dataset.sheet) { openSheet(btn.dataset.sheet); return; }
+        activateTab(btn.dataset.page);
         window.scrollTo({ top: 0 });
       });
     });
@@ -1053,19 +1140,47 @@
       refresh();
     });
 
-    /* 前提シート */
-    $('btnAbout').addEventListener('click', () => { $('aboutSheet').hidden = false; });
-    $('aboutSheet').addEventListener('click', (e) => {
-      if (e.target.hasAttribute('data-close')) $('aboutSheet').hidden = true;
+    /* シート（前提と出典・設定） */
+    $('btnAbout').addEventListener('click', () => { openSheet('aboutSheet'); });
+    $('btnSettings').addEventListener('click', () => { openSheet('settingsSheet'); });
+    SHEETS.forEach((id) => {
+      $(id).addEventListener('click', (e) => {
+        if (e.target.hasAttribute('data-close')) closeSheets();
+      });
     });
-    $('btnReload').addEventListener('click', (e) => {
-      e.target.textContent = '確認中…';
+
+    const reloadBtn = (e) => {
+      e.currentTarget.textContent = '確認中…';
       reloadWithUpdate();
+    };
+    $('btnReload').addEventListener('click', reloadBtn);
+    $('btnReload2').addEventListener('click', reloadBtn);
+
+    /* 設定 — テーマ */
+    $('themeSeg').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-theme]');
+      if (!b) return;
+      applyTheme(b.dataset.theme);
+    });
+
+    /* OS のライト／ダーク切り替えに追従する（「端末に合わせる」のときだけ） */
+    if (window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      const onSchemeChange = () => { if (themePref() === 'auto') applyTheme('auto'); };
+      if (mq.addEventListener) mq.addEventListener('change', onSchemeChange);
+      else if (mq.addListener) mq.addListener(onSchemeChange);
+    }
+
+    /* 設定 — 入力内容のリセット（テーマは別キーなので残る） */
+    $('btnResetState').addEventListener('click', () => {
+      if (!window.confirm('入力した機材・条件を初期値に戻します。よろしいですか？')) return;
+      try { localStorage.removeItem(STORE_KEY); } catch (e) { /* 消せなくても再読み込みは行う */ }
+      location.reload();
     });
 
     // PC ではキーボードで閉じられるようにする
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !$('aboutSheet').hidden) $('aboutSheet').hidden = true;
+      if (e.key === 'Escape' && anySheetOpen()) closeSheets();
     });
   }
 
@@ -1079,9 +1194,12 @@
       (parts[1] ? `<div>${parts[1]}</div>` : '');
     const foot = $('aboutVersion');
     if (foot) foot.textContent = `v${D.appVersion}（${D.appUpdated} 更新）`;
+    const s = $('settingsVersion');
+    if (s) s.textContent = `v${D.appVersion} / ${D.appUpdated}`;
   }
 
-  /* ===================== 引っぱって更新 =====================
+  /* ===================== タッチ操作 =====================
+   * 縦（上端から下）＝引っぱって更新、横＝タブ移動。
    * ブラウザ標準の pull-to-refresh は、PWA を standalone で起動すると
    * 存在しない（iOS）か抑制される。どの環境でも同じ動きにするため自前で実装する。
    * 更新時は Service Worker の update を先に走らせ、新しい版があれば
@@ -1089,6 +1207,8 @@
    */
   const PTR_TRIGGER = 70;    // これ以上引っぱったら更新する[px]
   const PTR_MAX = 110;       // 見た目の最大移動量[px]
+  const SWIPE_MIN = 60;      // これ以上の横移動でタブを移す[px]
+  const AXIS_LOCK = 12;      // 縦のジェスチャーか横のジェスチャーかを決める閾値[px]
 
   /** Service Worker を更新してから再読み込みする */
   async function reloadWithUpdate() {
@@ -1105,12 +1225,21 @@
     location.reload();
   }
 
-  function setupPullToRefresh() {
+  function setupGestures() {
     const el = $('ptr');
     const label = $('ptrLabel');
+    const tabbar = $('tabbar');
+    let startX = null;
     let startY = null;
+    let axis = null;       // null（未確定） / 'x' / 'y'
+    let atTop = false;     // 触り始めた時点で上端にいたか
+    let dxNow = 0;
+    let dyNow = 0;
     let pulling = false;
     let loading = false;
+
+    /* 広い画面ではタブを畳んで全ページを並べているので、横スワイプは無効 */
+    const swipeEnabled = () => window.getComputedStyle(tabbar).display !== 'none';
 
     const show = (dy) => {
       const ready = dy >= PTR_TRIGGER;
@@ -1121,50 +1250,90 @@
       label.textContent = ready ? '離して更新' : '引っぱって更新';
     };
 
-    const reset = () => {
+    const hidePtr = () => {
       el.classList.add('is-releasing');
       el.classList.remove('is-active', 'is-ready');
       el.style.transform = 'translateY(-24px)';
       setTimeout(() => el.classList.remove('is-releasing'), 260);
       pulling = false;
+    };
+
+    const clear = () => {
+      startX = null;
       startY = null;
+      axis = null;
+      dxNow = 0;
+      dyNow = 0;
     };
 
     document.addEventListener('touchstart', (e) => {
       if (loading || e.touches.length !== 1) return;
-      // 上端にいるときだけ。スライダー操作やシート表示中は邪魔しない
-      if (window.scrollY > 0) return;
-      if (!$('aboutSheet').hidden) return;
-      if (e.target.closest('input[type="range"], select, .sheet')) return;
+      // シート表示中と、指の動きがそのまま値になる部品（スライダー）の上では何もしない。
+      // select は縦に払っても値が変わらないので除外しない
+      // （機材タブの上端はカメラの select なので、除外すると引っぱって更新ができなくなる）
+      if (anySheetOpen()) return;
+      if (e.target.closest('input[type="range"], textarea, .sheet')) return;
+      startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
+      axis = null;
+      atTop = window.scrollY <= 0;
+      pulling = false;
+      dxNow = 0;
+      dyNow = 0;
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
       if (startY === null || loading) return;
+      const dx = e.touches[0].clientX - startX;
       const dy = e.touches[0].clientY - startY;
-      if (dy <= 0 || window.scrollY > 0) {
-        if (pulling) reset();
+
+      // 最初のわずかな動きで縦か横かを決め、以後は取り違えない
+      if (axis === null) {
+        if (Math.abs(dx) < AXIS_LOCK && Math.abs(dy) < AXIS_LOCK) return;
+        axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        if (axis === 'x' && pulling) hidePtr();
+      }
+
+      if (axis === 'x') {
+        // 横は指を離してから切り替える（追従アニメーションは持たせない）
+        dxNow = dx;
+        return;
+      }
+
+      if (!atTop || dy <= 0 || window.scrollY > 0) {
+        if (pulling) hidePtr();
         return;
       }
       pulling = true;
+      dyNow = dy;
       show(dy);
       // 自前で動かすのでブラウザのゴム引きは止める
       if (e.cancelable) e.preventDefault();
     }, { passive: false });
 
     document.addEventListener('touchend', () => {
-      if (startY === null || loading) { startY = null; return; }
-      const dy = parseFloat((el.style.transform.match(/translateY\(([-\d.]+)px\)/) || [0, 0])[1]) / 0.55;
-      if (pulling && dy >= PTR_TRIGGER) {
+      if (startY === null || loading) { clear(); return; }
+
+      if (axis === 'x' && Math.abs(dxNow) >= SWIPE_MIN && swipeEnabled()) {
+        stepTab(dxNow < 0 ? 1 : -1);   // 左へ払ったら次のタブ、右へ払ったら前のタブ
+      }
+
+      if (pulling && dyNow >= PTR_TRIGGER) {
         loading = true;
         el.classList.add('is-loading', 'is-active');
         el.classList.remove('is-ready');
         el.style.transform = 'translateY(56px)';
         label.textContent = '更新中…';
         reloadWithUpdate();
-      } else {
-        reset();
+      } else if (pulling) {
+        hidePtr();
       }
+      clear();
+    }, { passive: true });
+
+    document.addEventListener('touchcancel', () => {
+      if (pulling) hidePtr();
+      clear();
     }, { passive: true });
   }
 
@@ -1189,7 +1358,8 @@
   function init() {
     initSelects();
     renderVersion();
-    setupPullToRefresh();
+    applyTheme(themePref());   // インライン script が立てた値を正として全体に反映する
+    setupGestures();
     load();
     if (state.locIndex == null || state.lat == null || state.lon == null) {
       applyDefaultLocation();
@@ -1216,7 +1386,7 @@
     if (!state.datetime) state.datetime = nextPeakDate(shower()).toISOString();
     syncInputs();
     bind();
-    document.querySelector('.page').classList.add('active');
+    activateTab(state.activePage);   // 再読み込み後も開いていたタブに戻る
     refresh();
     // 初回は表示だけ更新し、空の暗さの自動反映は skyAuto に従う
     fetchLightPollution(state.skyAuto === true);

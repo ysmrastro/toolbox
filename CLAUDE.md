@@ -50,6 +50,12 @@ toolbox/
 - 夜空テーマカラー: `#0d1117`(背景), `#1a1a2e`(パネル), `#7eb8da`(アクセント)
 - CSS Custom Properties で統一管理（`shared/css/variables.css`）
 
+**meteor-settings の表示テーマ**: ダーク／ライト／アストロ（赤系）を切り替えられる。
+`shared/css/variables.css` は触らず、`meteor-settings/style.css` の
+`:root[data-theme="light|astro"]` で `--tb-*` を上書きしている（他ツールに影響しない）。
+色を足すときは**必ずトークン経由**にする。個別の指定に生の色を書くと、そこだけ
+テーマ切り替えから取り残される（等級バーの塗りで実際に起きた）。
+
 ## 新しいツールの追加パターン
 
 1. `tool-name/` ディレクトリを作成

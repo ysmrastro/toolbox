@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="機材構成と流星群・撮影目的から、理論に基づいた流星撮影の露出・F値・ISOを算出します。">
-  <meta name="theme-color" content="#0d1117">
+  <meta name="theme-color" content="#0d1117" id="themeColor">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="流星セッティング">
@@ -35,6 +35,23 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="style.css">
+
+  <!-- テーマは最初の描画より先に当てる（あとから当てるとダークが一瞬見えてちらつく） -->
+  <script>
+    (function () {
+      var pref = null;
+      try { pref = localStorage.getItem('ms-theme'); } catch (e) { /* プライベートモード等 */ }
+      if (pref !== 'light' && pref !== 'dark' && pref !== 'astro') pref = 'auto';
+      var eff = pref;
+      if (pref === 'auto') {
+        eff = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)
+          ? 'light' : 'dark';
+      }
+      var root = document.documentElement;
+      root.setAttribute('data-theme', eff);
+      root.setAttribute('data-theme-pref', pref);
+    })();
+  </script>
 </head>
 <body>
 
@@ -54,6 +71,9 @@
     </div>
     <div class="appbar__right">
       <div class="appbar__version" id="appVersion"></div>
+      <!-- 広い画面ではボトムナビを隠すので、設定はアプリバーから開く -->
+      <button type="button" class="appbar__action appbar__action--wide" id="btnSettings"
+              aria-label="設定">⚙</button>
       <button type="button" class="appbar__action" id="btnAbout" aria-label="計算の前提と出典">ⓘ</button>
     </div>
   </header>
@@ -396,8 +416,64 @@
     <button type="button" class="tabbar__item" data-page="page-result">
       <span class="tabbar__icon">📋</span><span class="tabbar__label">結果</span>
     </button>
+    <!-- 設定はページではなくシート。左右スワイプの巡回対象にも入れない -->
+    <button type="button" class="tabbar__item" data-sheet="settingsSheet">
+      <span class="tabbar__icon">⚙️</span><span class="tabbar__label">設定</span>
+    </button>
   </nav>
 
+</div>
+
+<!-- ============ 設定シート ============ -->
+<div class="sheet" id="settingsSheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <div class="sheet__panel">
+    <div class="sheet__head">
+      <h2>設定</h2>
+      <button type="button" class="sheet__close" data-close aria-label="閉じる">✕</button>
+    </div>
+    <div class="sheet__body">
+
+      <div class="card">
+        <h2 class="card__title">表示テーマ</h2>
+        <div class="segmented segmented--vertical" id="themeSeg"></div>
+        <p class="hint">
+          アストロは暗所に順応した目を戻さないよう赤系だけで表示します。屋外で使うときはこれか
+          ダークにしてください。
+        </p>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">操作</h2>
+        <ul class="warn-list">
+          <li><span class="warn-list__icon">↔</span><span>画面を左右にスワイプすると 機材 → 条件 → 結果 と移動します。</span></li>
+          <li><span class="warn-list__icon">↓</span><span>いちばん上で下に引っぱると更新を確認して再読み込みします（開いていたタブは維持されます）。</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">保存されている内容</h2>
+        <p class="card__desc">
+          入力した機材・条件とテーマは、この端末のブラウザ内（localStorage）に保存されます。
+          サーバーには何も送信していません。別の端末には引き継がれません。
+        </p>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnResetState">
+          入力内容を初期値に戻す
+        </button>
+        <p class="hint" id="resetHint">テーマの設定は残ります。</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">バージョン</h2>
+        <div class="metric-inline">
+          <span>いま動いている版</span><strong id="settingsVersion">—</strong>
+        </div>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnReload2"
+                style="margin-top:var(--tb-space-sm)">更新を確認して再読み込み</button>
+      </div>
+
+    </div>
+  </div>
 </div>
 
 <!-- ============ 前提と出典のシート ============ -->
