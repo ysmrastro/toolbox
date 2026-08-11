@@ -42,6 +42,21 @@ const MS_ASTRO = (function () {
     return { altitude: alt * DEG, azimuth: norm360(az * DEG) };
   }
 
+  /** 地平座標 → 赤道座標（equatorialToHorizontal の逆。赤道儀の枠の傾きを出すのに使う） */
+  function horizontalToEquatorial(azDeg, altDeg, latDeg, lonDeg, date) {
+    const az = azDeg * RAD;
+    const alt = altDeg * RAD;
+    const lat = latDeg * RAD;
+    const sinDec = Math.sin(alt) * Math.sin(lat) + Math.cos(alt) * Math.cos(lat) * Math.cos(az);
+    const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+    const ha = Math.atan2(
+      -Math.cos(alt) * Math.cos(lat) * Math.sin(az),
+      Math.sin(alt) - Math.sin(lat) * sinDec
+    );
+    const lst = norm360(gmst(date) + lonDeg);
+    return { ra: norm360(lst - ha / RAD), dec: dec * DEG };
+  }
+
   /** 地平座標の2点間の角距離 [度]（カメラの向きと放射点の離角に使う） */
   function angularSeparation(az1, alt1, az2, alt2) {
     const a1 = alt1 * RAD;
@@ -337,6 +352,7 @@ const MS_ASTRO = (function () {
     julianDay: julianDay,
     gmst: gmst,
     equatorialToHorizontal: equatorialToHorizontal,
+    horizontalToEquatorial: horizontalToEquatorial,
     angularSeparation: angularSeparation,
     compassName: compassName,
     eclipticToEquatorial: eclipticToEquatorial,

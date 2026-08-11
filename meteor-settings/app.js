@@ -43,6 +43,7 @@
     articleMode: false,
     activePage: 'page-gear',   // 開いていたタブ（再読み込み後もここに戻る）
     keepAwake: false,          // 現地で画面が消えないようにするか
+    fovPortrait: false,        // 画角プレビューの構図（false=横 / true=縦）
     gearSetName: null,         // 選んでいる機材セットの名前
   };
 
@@ -1139,11 +1140,34 @@
     return pts;
   }
 
+  function renderFovOrient() {
+    document.querySelectorAll('#fovOrient [data-orient]').forEach((b) => {
+      b.classList.toggle('active', (b.dataset.orient === 'port') === !!state.fovPortrait);
+    });
+  }
+
   /** 表示されているときだけ画角プレビューを描く */
   function redrawFov() {
     if (!lastRes) return;
     if ($('fovWrap').clientWidth <= 0) return;
     renderFov(lastRes);
+  }
+
+  /**
+   * 視野中心において「天の北極の方向」が画面の上からどれだけ傾いているか [度]。
+   * 赤道儀に載せたカメラは赤経赤緯に合わせて構えるので、枠がこの角度だけ傾く。
+   *
+   * 解析式（パララクティック角）を書くと符号や象限を間違えやすいので、
+   * 中心から赤緯をわずかに北へずらした点を投影して、その向きから求める。
+   */
+  function frameTiltDeg(az0, alt0, date) {
+    const eq = A.horizontalToEquatorial(az0, alt0, state.lat, state.lon, date);
+    const step = eq.dec > 89.9 ? -0.05 : 0.05;   // 天の北極そのものを向いている場合は南へずらす
+    const hz = A.equatorialToHorizontal(eq.ra, eq.dec + step, state.lat, state.lon, date);
+    const pt = projectSky(hz.azimuth, hz.altitude, az0, alt0);
+    if (pt.behind) return 0;
+    const sign = step > 0 ? 1 : -1;
+    return Math.atan2(sign * pt.x, sign * pt.y) / RAD;
   }
 
   function renderFov(res) {
@@ -1152,10 +1176,39 @@
     const fov = E.fieldOfView(state.focal, state.sensorW, state.sensorH);
     const geo = res.cfg.geo;
 
-    /* 表示サイズはセンサーの縦横比に合わせる（画角そのままの形にする） */
+    const az0 = geo.az;
+    const alt0 = geo.alt;
+    const date = currentDate();
+
+    /* --- 枠（センサーが写す範囲）を作る ---
+       心射投影ではレンズの画角がそのまま長方形になるので、中心を共有する長方形として
+       正確に描ける。縦構図は縦横を入れ替え、赤道儀追尾のときは天の北極が枠の上に
+       来るように傾ける（空は地平線基準のまま動かさない）。 */
+    const portrait = !!state.fovPortrait;
+    const frameW = portrait ? fov.heightDeg : fov.widthDeg;
+    const frameH = portrait ? fov.widthDeg : fov.heightDeg;
+    const tilt = state.tracked ? frameTiltDeg(az0, alt0, date) : 0;
+    const halfFw = Math.tan(frameW / 2 * RAD);
+    const halfFh = Math.tan(frameH / 2 * RAD);
+    const ct = Math.cos(tilt * RAD);
+    const st = Math.sin(tilt * RAD);
+    /* 枠の四隅（接平面上）。傾きぶん回してから使う */
+    const frameCorners = [[-1, 1], [1, 1], [1, -1], [-1, -1]].map(([sx, sy]) => {
+      const x = sx * halfFw;
+      const y = sy * halfFh;
+      return { x: x * ct + y * st, y: -x * st + y * ct };
+    });
+
+    /* 表示範囲は枠がすべて入るように取り、まわりに少し空を見せる */
+    const boundX = Math.max.apply(null, frameCorners.map((c) => Math.abs(c.x)));
+    const boundY = Math.max.apply(null, frameCorners.map((c) => Math.abs(c.y)));
+    const margin = D.fovMargin || 1.35;
+    const halfW = boundX * margin;
+    const halfH = boundY * margin;
+
     const cssW = wrap.clientWidth;
     if (cssW <= 0) return;
-    const cssH = Math.round(cssW * (fov.heightDeg / fov.widthDeg));
+    const cssH = Math.round(cssW * (halfH / halfW));
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     cv.style.width = cssW + 'px';
     cv.style.height = cssH + 'px';
@@ -1166,18 +1219,14 @@
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, cssW, cssH);
 
-    /* 接平面上の座標 → 画面座標。視野の横幅が画面の横幅に収まるようにする */
-    const halfW = Math.tan(fov.widthDeg / 2 * RAD);
+    /* 接平面上の座標 → 画面座標 */
     const scale = (cssW / 2) / halfW;
     const toScreen = (pt) => ({ x: cssW / 2 + pt.x * scale, y: cssH / 2 - pt.y * scale });
+    const framePts = frameCorners.map(toScreen);
 
     const bg = themeColor('--ms-tl-dark', '#101726');
     g.fillStyle = bg;
     g.fillRect(0, 0, cssW, cssH);
-
-    const az0 = geo.az;
-    const alt0 = geo.alt;
-    const date = currentDate();
 
     /* 地平線（高度0°の線）。視野に入るときだけ描く */
     g.strokeStyle = themeColor('--tb-danger', '#f85149');
@@ -1249,7 +1298,10 @@
       const rp = projectSky(rad.azimuth, rad.altitude, az0, alt0);
       if (!rp.behind) {
         const sp = toScreen(rp);
-        radiantInside = sp.x >= 0 && sp.x <= cssW && sp.y >= 0 && sp.y <= cssH;
+        // 枠の座標系に戻して内外を判定する（傾いていても正しく効く）
+        const lx = rp.x * ct - rp.y * st;
+        const ly = rp.x * st + rp.y * ct;
+        radiantInside = Math.abs(lx) <= halfFw && Math.abs(ly) <= halfFh;
         g.strokeStyle = themeColor('--tb-accent', '#7eb8da');
         g.lineWidth = 2;
         g.beginPath();
@@ -1269,19 +1321,76 @@
       }
     }
 
+    /* --- 枠。外側を暗くしてから枠線を引く（写る範囲がひと目で分かるように） --- */
+    g.save();
+    g.beginPath();
+    g.rect(0, 0, cssW, cssH);
+    g.moveTo(framePts[0].x, framePts[0].y);
+    for (let i = framePts.length - 1; i >= 1; i--) g.lineTo(framePts[i].x, framePts[i].y);
+    g.closePath();
+    g.fillStyle = themeColor('--ms-backdrop', 'rgba(0,0,0,0.6)');
+    g.fill('evenodd');
+    g.restore();
+
+    g.strokeStyle = themeColor('--tb-text-primary', '#e6edf3');
+    g.lineWidth = 2;
+    g.beginPath();
+    framePts.forEach((q, i) => { if (i === 0) g.moveTo(q.x, q.y); else g.lineTo(q.x, q.y); });
+    g.closePath();
+    g.stroke();
+
+    /* 枠の上辺の外側に、枠の「上」を指す矢印と説明を置く。
+       追尾では枠が傾くので、画面の上ではなく枠の上を指させる必要がある */
+    const topMid = { x: (framePts[0].x + framePts[1].x) / 2, y: (framePts[0].y + framePts[1].y) / 2 };
+    const dx = topMid.x - cssW / 2;
+    const dy = topMid.y - cssH / 2;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const tip = { x: topMid.x + ux * 13, y: topMid.y + uy * 13 };
+    g.strokeStyle = themeColor('--tb-text-primary', '#e6edf3');
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(topMid.x, topMid.y);
+    g.lineTo(tip.x, tip.y);
+    // 矢じり（進行方向に対して左右へ開く）
+    g.lineTo(tip.x - ux * 5 - uy * 4, tip.y - uy * 5 + ux * 4);
+    g.moveTo(tip.x, tip.y);
+    g.lineTo(tip.x - ux * 5 + uy * 4, tip.y - uy * 5 - ux * 4);
+    g.stroke();
+
+    g.fillStyle = themeColor('--tb-text-primary', '#e6edf3');
+    g.font = `bold 11px ${font}`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    const label = state.tracked ? '天の北極' : '上';
+    const lw = g.measureText(label).width;
+    // 画面の外へ出ないように寄せる
+    const lx = Math.max(lw / 2 + 4, Math.min(cssW - lw / 2 - 4, topMid.x + ux * 26));
+    const ly = Math.max(10, Math.min(cssH - 10, topMid.y + uy * 26));
+    g.fillText(label, lx, ly);
+    g.textAlign = 'left';
+    g.textBaseline = 'alphabetic';
+
     /* 画面の端に方位と高度を書く */
     g.fillStyle = labelColor;
     g.font = `12px ${font}`;
     g.fillText(`${A.compassName(az0)} ${Math.round(az0)}° / 高度 ${Math.round(alt0)}°`, 8, cssH - 8);
     g.textAlign = 'right';
-    g.fillText(`${fmt(fov.widthDeg, 0)}° × ${fmt(fov.heightDeg, 0)}°`, cssW - 8, cssH - 8);
+    g.fillText(`${fmt(frameW, 0)}° × ${fmt(frameH, 0)}°`, cssW - 8, cssH - 8);
     g.textAlign = 'left';
 
     /* 文章の補足 */
     $('fovNote').textContent = `対角 ${fmt(fov.diagDeg, 0)}°。`;
     let r = '';
-    r += `写る範囲 <b>${fmt(fov.widthDeg, 1)}° × ${fmt(fov.heightDeg, 1)}°</b>`;
-    r += `（対角 <b>${fmt(fov.diagDeg, 1)}°</b>）<br>`;
+    r += `写る範囲 <b>${fmt(frameW, 1)}° × ${fmt(frameH, 1)}°</b>`;
+    r += `（${portrait ? '縦構図' : '横構図'}／対角 <b>${fmt(fov.diagDeg, 1)}°</b>）<br>`;
+    if (state.tracked) {
+      r += `赤道儀で追尾するので枠は天の北極を上にして構えます。` +
+        `この向きでは地平線に対して <b>${fmt(Math.abs(tilt), 0)}°</b> 傾きます。<br>`;
+    } else {
+      r += '固定撮影なのでカメラは水平に構えます（枠の辺は地平線と平行）。<br>';
+    }
     if (rad.isSporadic) {
       r += '放射点を持たない群のため、放射点の印は出していません。';
     } else if (radiantInside) {
@@ -1293,6 +1402,7 @@
         '橙色の円が「放射点から45°」の目安です。';
     }
     $('fovReport').innerHTML = r;
+    renderFovOrient();
   }
 
   function renderCond(res) {
@@ -1959,7 +2069,8 @@
     $('tracked').addEventListener('change', (e) => {
       state.tracked = e.target.checked;
       $('maxExposureField').hidden = !state.tracked;
-      refresh();
+      detachGearSet();
+      refresh();   // 画角プレビューの枠の傾きもここで変わる
     });
 
     numField('maxExposure', 'maxExposure');
@@ -2293,6 +2404,16 @@
         try { await navigator.share({ title: '流星撮影セッティング', text: text }); return; } catch (e) { return; }
       }
       showToast('この端末では共有できません。画像は「画像を保存」から、URLは設定からコピーできます');
+    });
+
+    /* 画角プレビューの構図（赤道儀かどうかは機材タブの設定から連動する） */
+    $('fovOrient').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-orient]');
+      if (!b) return;
+      state.fovPortrait = b.dataset.orient === 'port';
+      save();
+      redrawFov();
+      renderFovOrient();
     });
 
     /* 画面を消さない */

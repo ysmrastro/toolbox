@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.6.0">
+  <meta name="app-version" content="1.6.1">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.6.0">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.6.0">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.6.0">
-  <link rel="stylesheet" href="style.css?v=1.6.0">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.6.1">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.6.1">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.6.1">
+  <link rel="stylesheet" href="style.css?v=1.6.1">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -346,6 +346,10 @@
           いまの焦点距離とカメラの向きで写る範囲です。星は5.0等より明るいもの。
           <span id="fovNote"></span>
         </p>
+        <div class="chips" id="fovOrient">
+          <button type="button" class="chip" data-orient="land">横構図</button>
+          <button type="button" class="chip" data-orient="port">縦構図</button>
+        </div>
         <div class="fov" id="fovWrap">
           <canvas id="fovCanvas"></canvas>
         </div>
@@ -749,12 +753,12 @@
   </div>
 </div>
 
-<script src="data.js?v=1.6.0"></script>
-<script src="astro.js?v=1.6.0"></script>
-<script src="engine.js?v=1.6.0"></script>
-<script src="stars.js?v=1.6.0"></script>
-<script src="lightpollution.js?v=1.6.0"></script>
-<script src="app.js?v=1.6.0"></script>
+<script src="data.js?v=1.6.1"></script>
+<script src="astro.js?v=1.6.1"></script>
+<script src="engine.js?v=1.6.1"></script>
+<script src="stars.js?v=1.6.1"></script>
+<script src="lightpollution.js?v=1.6.1"></script>
+<script src="app.js?v=1.6.1"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は
