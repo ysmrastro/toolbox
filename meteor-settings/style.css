@@ -322,32 +322,45 @@ body {
   padding-right: var(--tb-space-md);
 }
 
-/* 狭い画面ではタブで1ページずつ表示する。広い画面では下部で全ページを並べる */
+/* 狭い画面では3ページを横に並べたトラックにして、指の動きに追従させる。
+   広い画面ではトラックを display:contents にして全ページを同時に並べる */
 @media (max-width: 1099px) {
-  .page { display: none; }
-  .page.active { display: block; animation: fade 0.18s ease; }
-  /* 左右スワイプで来たときは進んだ向きに合わせて滑らせる */
-  .page.active.from-right { animation: slideFromRight 0.2s ease; }
-  .page.active.from-left  { animation: slideFromLeft 0.2s ease; }
-}
+  .pages {
+    /* 横の余白はページ側に移す。トラックを画面端まで届かせて、
+       隣のページが画面の縁から現れるようにするため */
+    padding-left: 0;
+    padding-right: 0;
+    /* hidden にすると縦方向に別のスクロールコンテキストができてしまう（clip なら増えない） */
+    overflow-x: clip;
+  }
 
-@keyframes slideFromRight {
-  from { opacity: 0; transform: translateX(18px); }
-  to   { opacity: 1; transform: none; }
-}
+  .track {
+    display: flex;
+    align-items: flex-start;
+    transform: translateX(0);
+  }
 
-@keyframes slideFromLeft {
-  from { opacity: 0; transform: translateX(-18px); }
-  to   { opacity: 1; transform: none; }
+  .page {
+    flex: 0 0 100%;
+    min-width: 0;
+    padding-left: var(--tb-space-md);
+    padding-right: var(--tb-space-md);
+  }
+
+  /* 表示中でないページは畳んでおき、文書の高さを表示中のページに合わせる。
+     `height:0 + overflow:hidden` では中身が文書の高さに算入されたままになるので
+     （スクロールできる範囲が結果タブの長さになってしまう）display:none にする。
+     動かしている間だけ `.is-animating` で3ページを並べる。
+     このため「畳んでいるとき＝トラックの位置は translateX(0)」
+     「並べているとき＝translateX(-i*100%)」と基準位置が変わる（app.js の endTrack / beginTrack）。 */
+  .track:not(.is-animating) .page:not(.active) { display: none; }
+
+  /* 機材と条件のラッパーを透過させ、3ページをトラックの直接の子にする */
+  .pages__inputs { display: contents; }
 }
 
 /* カラム見出し（タブがある狭い画面では不要） */
 .page__heading { display: none; }
-
-@keyframes fade {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: none; }
-}
 
 /* ---------------- カード ---------------- */
 .card {
@@ -1059,6 +1072,9 @@ input[type="number"] { padding-right: 1.9rem; }
   /* タブは不要。推奨値は上部のサマリーバーで常時見せる */
   .tabbar { display: none; }
   .appbar__action--wide { display: block; }
+
+  /* 横スワイプ用のトラックは無効化して、中身をそのままグリッドの子にする */
+  .track { display: contents; }
 
   /* 入力（機材＋条件）を1つのグリッド項目にまとめる。
      結果カラムを2行にまたがらせると、結果が長いぶんだけ左カラムの行が

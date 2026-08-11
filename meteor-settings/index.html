@@ -99,6 +99,10 @@
   <!-- ============ 本体 ============ -->
   <main class="pages" id="pages">
 
+   <!-- 狭い画面では3ページを横に並べたトラックにして指に追従させる。
+        広い画面では display:contents にして、下の2つがそのままグリッドの子になる -->
+   <div class="track" id="track">
+
    <div class="pages__inputs">
 
     <!-- ---------- 機材 ---------- -->
@@ -402,6 +406,8 @@
       </div>
 
     </section>
+
+   </div><!-- /.track -->
 
   </main>
 

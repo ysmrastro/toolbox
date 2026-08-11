@@ -120,37 +120,119 @@
     return SHEETS.some((s) => !$(s).hidden);
   }
 
-  /* ===================== タブ ===================== */
-  /**
-   * タブを切り替える。
-   * @param {string} pageId 表示するページの id
-   * @param {number} [dir]  +1 なら右から、-1 なら左から滑り込ませる（スワイプ用）
+  /* ===================== タブ（横スライド） =====================
+   * 狭い画面では3ページを横並びのトラックに入れ、トラックごと translateX する。
+   * 指の動きにそのまま追従させ、離した時点で近いページへスナップする。
+   *
+   * トラック方式にすると3ページが同時に文書内に存在するため、縦スクロール位置が
+   * 共有されてしまう。そのままだと「下までスクロールした状態で横に払うと、隣も
+   * 同じだけスクロールされた状態で入ってくる」ので、ページごとの位置を覚えておき、
+   * 動かしている間だけ隣のページを translateY でその位置に合わせる。
    */
-  function activateTab(pageId, dir) {
-    if (PAGES.indexOf(pageId) < 0) pageId = PAGES[0];
+  const SNAP_MS = 300;
+  const SNAP_EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+
+  /** ページごとの縦スクロール位置 */
+  const scrollMemo = { 'page-gear': 0, 'page-cond': 0, 'page-result': 0 };
+
+  /** ボトムナビが出ている＝1ページずつ横に動かすモードか */
+  function isTabMode() {
+    return window.getComputedStyle($('tabbar')).display !== 'none';
+  }
+
+  function pageIndex(pageId) {
+    const i = PAGES.indexOf(pageId || state.activePage);
+    return i < 0 ? 0 : i;
+  }
+
+  /** 3ページを並べている（.is-animating）ときに i 番目を画面に置くトラックの位置。
+      畳んでいるときは表示中のページだけが並ぶので translateX(0) が定位置になる */
+  function trackBase(i) {
+    return `translateX(${-i * 100}%)`;
+  }
+
+  function setActive(pageId) {
     document.querySelectorAll('.tabbar__item[data-page]').forEach((b) => {
       b.classList.toggle('active', b.dataset.page === pageId);
     });
-    document.querySelectorAll('.page').forEach((p) => {
-      p.classList.remove('active', 'from-right', 'from-left');
-    });
-    const page = $(pageId);
-    page.classList.add('active');
-    if (dir === 1) page.classList.add('from-right');
-    else if (dir === -1) page.classList.add('from-left');
+    document.querySelectorAll('.page').forEach((p) => p.classList.remove('active'));
+    $(pageId).classList.add('active');
     state.activePage = pageId;
     save();
   }
 
-  /** 相対移動。端では何もしない（戻り値は移動したかどうか） */
-  function stepTab(delta) {
-    const cur = PAGES.indexOf(state.activePage);
-    const from = cur < 0 ? 0 : cur;
-    const next = Math.min(PAGES.length - 1, Math.max(0, from + delta));
-    if (next === from) return false;
-    activateTab(PAGES[next], delta > 0 ? 1 : -1);
-    window.scrollTo({ top: 0 });
-    return true;
+  /** 隣のページを実寸で描画し、縦位置をそれぞれの記憶位置に合わせる */
+  function beginTrack() {
+    const track = $('track');
+    const from = window.scrollY;
+    scrollMemo[state.activePage] = from;
+    track.classList.add('is-animating');
+    track.style.willChange = 'transform';
+    track.style.transition = 'none';
+    track.style.transform = trackBase(pageIndex());
+    PAGES.forEach((id) => {
+      $(id).style.transform = id === state.activePage
+        ? '' : `translateY(${from - (scrollMemo[id] || 0)}px)`;
+    });
+  }
+
+  /** 動かし終わり。隣を畳み、translateY を実際のスクロール位置に置き換える。
+      畳むと表示中のページだけが並ぶので、トラックの位置は translateX(0) に戻す。
+      見た目は動かし終わりの状態と完全に同じになる。 */
+  function endTrack(pageId) {
+    const track = $('track');
+    setActive(pageId);
+    track.classList.remove('is-animating');
+    track.style.transition = 'none';
+    track.style.willChange = '';
+    track.style.transform = 'translateX(0)';
+    PAGES.forEach((id) => { $(id).style.transform = ''; });
+    window.scrollTo(0, scrollMemo[pageId] || 0);
+  }
+
+  /** 指の位置に追従させる（端では抵抗をつけて引っぱり過ぎないようにする） */
+  function dragTrack(dx) {
+    const i = pageIndex();
+    const atEdge = (i === 0 && dx > 0) || (i === PAGES.length - 1 && dx < 0);
+    const d = atEdge ? dx * 0.3 : dx;
+    const track = $('track');
+    track.style.transition = 'none';
+    track.style.transform = `translateX(calc(${-i * 100}% + ${d}px))`;
+  }
+
+  /** 目的のページへスナップさせる */
+  function snapTrack(pageId) {
+    const track = $('track');
+    track.style.transition = `transform ${SNAP_MS}ms ${SNAP_EASE}`;
+    requestAnimationFrame(() => { track.style.transform = trackBase(pageIndex(pageId)); });
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      track.removeEventListener('transitionend', finish);
+      endTrack(pageId);
+    };
+    track.addEventListener('transitionend', finish);
+    // 動く距離が 0 だと transitionend が来ないので保険をかける
+    setTimeout(finish, SNAP_MS + 120);
+  }
+
+  /**
+   * タブを切り替える。
+   * @param {string} pageId    表示するページの id
+   * @param {boolean} animate  true ならスライドさせる（タブのタップ・スワイプ）
+   */
+  function goToTab(pageId, animate) {
+    if (PAGES.indexOf(pageId) < 0) pageId = PAGES[0];
+    if (!isTabMode()) { setActive(pageId); return; }
+    if (!animate) {
+      scrollMemo[state.activePage] = window.scrollY;
+      endTrack(pageId);
+      return;
+    }
+    if (pageId === state.activePage) return;
+    beginTrack();
+    snapTrack(pageId);
   }
 
   /* ===================== ユーティリティ ===================== */
@@ -911,8 +993,7 @@
     document.querySelectorAll('.tabbar__item').forEach((btn) => {
       btn.addEventListener('click', () => {
         if (btn.dataset.sheet) { openSheet(btn.dataset.sheet); return; }
-        activateTab(btn.dataset.page);
-        window.scrollTo({ top: 0 });
+        goToTab(btn.dataset.page, true);
       });
     });
 
@@ -1207,8 +1288,9 @@
    */
   const PTR_TRIGGER = 70;    // これ以上引っぱったら更新する[px]
   const PTR_MAX = 110;       // 見た目の最大移動量[px]
-  const SWIPE_MIN = 60;      // これ以上の横移動でタブを移す[px]
-  const AXIS_LOCK = 12;      // 縦のジェスチャーか横のジェスチャーかを決める閾値[px]
+  const AXIS_LOCK = 10;      // 縦のジェスチャーか横のジェスチャーかを決める閾値[px]
+  const SWIPE_RATIO = 0.28;  // 画面幅のこの割合を超えて動かしたらページを移す
+  const FLICK_SPEED = 0.45;  // 速く払ったときは移動量が小さくても移す[px/ms]
 
   /** Service Worker を更新してから再読み込みする */
   async function reloadWithUpdate() {
@@ -1228,18 +1310,18 @@
   function setupGestures() {
     const el = $('ptr');
     const label = $('ptrLabel');
-    const tabbar = $('tabbar');
     let startX = null;
     let startY = null;
     let axis = null;       // null（未確定） / 'x' / 'y'
     let atTop = false;     // 触り始めた時点で上端にいたか
     let dxNow = 0;
     let dyNow = 0;
+    let lastX = 0;         // 直前の位置と時刻（払う速さを求めるため）
+    let lastT = 0;
+    let vx = 0;            // 横方向の速さ[px/ms]
     let pulling = false;
+    let sliding = false;   // トラックを指で動かしている最中
     let loading = false;
-
-    /* 広い画面ではタブを畳んで全ページを並べているので、横スワイプは無効 */
-    const swipeEnabled = () => window.getComputedStyle(tabbar).display !== 'none';
 
     const show = (dy) => {
       const ready = dy >= PTR_TRIGGER;
@@ -1264,6 +1346,19 @@
       axis = null;
       dxNow = 0;
       dyNow = 0;
+      vx = 0;
+      sliding = false;
+    };
+
+    /** 離した位置と速さから、どのページに落ち着かせるかを決める */
+    const snapTarget = () => {
+      const i = pageIndex();
+      const threshold = window.innerWidth * SWIPE_RATIO;
+      const flick = Math.abs(vx) > FLICK_SPEED && Math.abs(dxNow) > 12;
+      let next = i;
+      if (dxNow < 0 && (-dxNow > threshold || (flick && vx < 0))) next = i + 1;
+      else if (dxNow > 0 && (dxNow > threshold || (flick && vx > 0))) next = i - 1;
+      return PAGES[Math.min(PAGES.length - 1, Math.max(0, next))];
     };
 
     document.addEventListener('touchstart', (e) => {
@@ -1275,28 +1370,47 @@
       if (e.target.closest('input[type="range"], textarea, .sheet')) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
+      lastX = startX;
+      lastT = e.timeStamp;
       axis = null;
       atTop = window.scrollY <= 0;
       pulling = false;
+      sliding = false;
       dxNow = 0;
       dyNow = 0;
+      vx = 0;
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
       if (startY === null || loading) return;
-      const dx = e.touches[0].clientX - startX;
+      const x = e.touches[0].clientX;
+      const dx = x - startX;
       const dy = e.touches[0].clientY - startY;
 
       // 最初のわずかな動きで縦か横かを決め、以後は取り違えない
       if (axis === null) {
         if (Math.abs(dx) < AXIS_LOCK && Math.abs(dy) < AXIS_LOCK) return;
         axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-        if (axis === 'x' && pulling) hidePtr();
+        if (axis === 'x') {
+          if (pulling) hidePtr();
+          if (isTabMode()) { sliding = true; beginTrack(); }
+        }
       }
 
       if (axis === 'x') {
-        // 横は指を離してから切り替える（追従アニメーションは持たせない）
         dxNow = dx;
+        const dt = e.timeStamp - lastT;
+        if (dt > 0) {
+          // 直前の速さを少し残して均す（1フレームのぶれで判定が変わらないように）
+          vx = 0.6 * ((x - lastX) / dt) + 0.4 * vx;
+          lastX = x;
+          lastT = e.timeStamp;
+        }
+        if (sliding) {
+          dragTrack(dx);
+          // 指に追従させている間は縦にスクロールさせない
+          if (e.cancelable) e.preventDefault();
+        }
         return;
       }
 
@@ -1314,9 +1428,7 @@
     document.addEventListener('touchend', () => {
       if (startY === null || loading) { clear(); return; }
 
-      if (axis === 'x' && Math.abs(dxNow) >= SWIPE_MIN && swipeEnabled()) {
-        stepTab(dxNow < 0 ? 1 : -1);   // 左へ払ったら次のタブ、右へ払ったら前のタブ
-      }
+      if (sliding) snapTrack(snapTarget());
 
       if (pulling && dyNow >= PTR_TRIGGER) {
         loading = true;
@@ -1333,8 +1445,19 @@
 
     document.addEventListener('touchcancel', () => {
       if (pulling) hidePtr();
+      if (sliding) snapTrack(state.activePage);
       clear();
     }, { passive: true });
+
+    /* 画面幅が変わってタブ表示と全ページ表示を行き来したとき、
+       付けたままの transform が残らないように整える */
+    window.addEventListener('resize', () => {
+      const track = $('track');
+      PAGES.forEach((id) => { $(id).style.transform = ''; });
+      track.style.transition = 'none';
+      track.classList.remove('is-animating');
+      track.style.transform = isTabMode() ? 'translateX(0)' : '';
+    });
   }
 
   /** 既定のレンズを名前から解決して state に入れる */
@@ -1386,7 +1509,7 @@
     if (!state.datetime) state.datetime = nextPeakDate(shower()).toISOString();
     syncInputs();
     bind();
-    activateTab(state.activePage);   // 再読み込み後も開いていたタブに戻る
+    goToTab(state.activePage, false);   // 再読み込み後も開いていたタブに戻る
     refresh();
     // 初回は表示だけ更新し、空の暗さの自動反映は skyAuto に従う
     fetchLightPollution(state.skyAuto === true);
