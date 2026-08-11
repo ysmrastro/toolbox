@@ -43,6 +43,9 @@
   --ms-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
   --ms-backdrop: rgba(0, 0, 0, 0.6);
   --ms-icon-filter: none;
+  --ms-tl-twilight: #24304a;
+  --ms-tl-dark: #101726;
+  --ms-tl-moon: rgba(226, 232, 240, 0.16);
 }
 
 /* ---- ライト（日中の下見・計画向け） ---- */
@@ -74,6 +77,9 @@
   --ms-magbar-fill: linear-gradient(90deg, rgba(26, 102, 147, 0.2), rgba(26, 102, 147, 0.55));
   --ms-shadow: 0 2px 10px rgba(20, 40, 60, 0.16);
   --ms-backdrop: rgba(20, 30, 42, 0.45);
+  --ms-tl-twilight: #e8eff7;
+  --ms-tl-dark: #b6c8dc;
+  --ms-tl-moon: rgba(255, 255, 255, 0.45);
 }
 
 /* ---- アストロ（暗所での目の順応を保つ赤系） ---- */
@@ -110,6 +116,9 @@
      先に暗くしてから彩度を上げること。明るい色は赤にならず橙〜黄に転ぶ。
      sepia 後の色相は約35°なので hue-rotate は -35deg が赤。行き過ぎるとピンクになる。 */
   --ms-icon-filter: brightness(0.45) grayscale(1) sepia(1) saturate(8) hue-rotate(-35deg);
+  --ms-tl-twilight: #2c1008;
+  --ms-tl-dark: #140705;
+  --ms-tl-moon: rgba(255, 156, 126, 0.14);
 }
 
 /* セレクトの▼は共通CSSでグレー固定なので、赤系のときだけ差し替える */
@@ -1175,3 +1184,232 @@ input[type="number"] { padding-right: 1.9rem; }
   /* 各カラムが狭くなるので段組を解除する */
   #page-gear, #page-cond { columns: auto; }
 }
+
+/* =========================================================
+   撮影計画タイムライン
+   横軸＝日没〜日の出。帯で明るさと月の有無、折れ線で放射点高度を示す
+   ========================================================= */
+.tl { margin-top: var(--tb-space-sm); }
+
+.tl__track {
+  position: relative;
+  height: 5.5rem;
+  border-radius: var(--tb-radius-md);
+  border: 1px solid var(--tb-border);
+  background: var(--ms-tl-twilight);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* 帯の各区間。左位置と幅は JS が % で入れる */
+.tl__seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.tl__seg--dark { background: var(--ms-tl-dark); }
+.tl__seg--moon { background: var(--ms-tl-moon); }
+
+/* 狙い目は下端の太い線で示す（帯の色を重ねすぎると読めなくなる） */
+.tl__seg--golden {
+  top: auto;
+  height: 4px;
+  bottom: 0;
+  background: var(--tb-success);
+}
+
+/* 放射点高度の折れ線。viewBox を引き伸ばして使うので線幅は非スケールにする */
+.tl__curve {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tl__curve polyline {
+  fill: none;
+  stroke: var(--tb-accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.tl__horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--tb-border);
+}
+
+/* いま設定している撮影時刻 */
+.tl__now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--tb-text-primary);
+}
+
+.tl__now::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tb-text-primary);
+}
+
+/* 放射点が最も高くなる時刻 */
+.tl__peak {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ms-warn);
+}
+
+.tl__peak::after {
+  content: '▲';
+  position: absolute;
+  bottom: -2px;
+  left: -5px;
+  font-size: var(--ms-fs-stamp);
+  color: var(--ms-warn);
+  line-height: 1;
+}
+
+.tl__axis {
+  position: relative;
+  height: 1.1rem;
+  margin-top: 2px;
+}
+
+.tl__axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: var(--ms-fs-label);
+  color: var(--tb-text-muted);
+  white-space: nowrap;
+}
+
+.tl__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: var(--tb-space-xs);
+  font-size: var(--ms-fs-label);
+  color: var(--tb-text-secondary);
+}
+
+.tl__legend i {
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+  margin-right: 4px;
+  border-radius: 2px;
+  border: 1px solid var(--tb-border);
+  vertical-align: -1px;
+}
+
+/* ---------------- 短い通知（トースト） ---------------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--ms-tabbar-h) + var(--ms-safe-bottom) + var(--tb-space-md));
+  transform: translateX(-50%);
+  z-index: 60;
+  max-width: calc(100% - 2 * var(--tb-space-md));
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--tb-bg-secondary);
+  border: 1px solid var(--tb-border);
+  box-shadow: var(--ms-shadow);
+  color: var(--tb-text-primary);
+  font-size: var(--tb-font-size-sm);
+  text-align: center;
+  opacity: 1;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.toast.is-out { opacity: 0; transform: translateX(-50%) translateY(8px); }
+
+/* URLは長いので折り返して全体を見せる */
+#shareHint { word-break: break-all; }
+
+/* ---------------- 年間カレンダー ---------------- */
+.cal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--tb-space-sm);
+  width: 100%;
+  text-align: left;
+  padding: var(--tb-space-sm);
+  margin-bottom: 6px;
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  background: var(--tb-bg-tertiary);
+  color: var(--tb-text-secondary);
+  cursor: pointer;
+}
+
+.cal-row:hover { border-color: var(--tb-border-hover); }
+.cal-row:active { background: var(--tb-bg-secondary); }
+
+.cal-row__date {
+  flex: none;
+  width: 3.4rem;
+  text-align: center;
+}
+
+.cal-row__md {
+  font-family: var(--tb-font-mono);
+  font-size: var(--tb-font-size-base);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+}
+
+.cal-row__wd { font-size: var(--ms-fs-label); color: var(--tb-text-muted); }
+
+.cal-row__body { flex: 1; min-width: 0; }
+
+.cal-row__name {
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+  margin-bottom: 2px;
+}
+
+.cal-row__sub {
+  font-size: var(--ms-fs-label);
+  line-height: 1.5;
+  color: var(--tb-text-secondary);
+}
+
+.cal-row__sub b { color: var(--tb-text-primary); font-family: var(--tb-font-mono); }
+
+.cal-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: var(--ms-fs-label);
+  font-weight: 400;
+  border: 1px solid currentColor;
+}
+
+.cal-badge--ok { color: var(--tb-success); }
+.cal-badge--mid { color: var(--tb-accent); }
+.cal-badge--warn { color: var(--ms-warn); }
+.cal-badge--bad { color: var(--tb-danger); }
+
+/* ---------------- 書き出した画像のプレビュー ---------------- */
+.card-preview {
+  margin-top: var(--tb-space-sm);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  overflow: hidden;
+}
+
+.card-preview img { width: 100%; height: auto; display: block; }

@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.4.0">
+  <meta name="app-version" content="1.5.0">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.4.0">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.4.0">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.4.0">
-  <link rel="stylesheet" href="style.css?v=1.4.0">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.5.0">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.5.0">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.5.0">
+  <link rel="stylesheet" href="style.css?v=1.5.0">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -219,6 +219,9 @@
       <div class="card">
         <h2 class="card__title">流星群</h2>
         <select class="tb-select" id="showerSelect"></select>
+        <div class="chips">
+          <button type="button" class="chip" id="btnCalendar">年間カレンダーで選ぶ</button>
+        </div>
         <div class="shower-info" id="showerInfo"></div>
       </div>
 
@@ -247,7 +250,20 @@
           </label>
         </div>
         <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnGeo">現在地を使う</button>
+        <div class="chips">
+          <button type="button" class="chip" id="btnSaveLoc">この地点を保存</button>
+          <button type="button" class="chip" id="btnDeleteLoc" hidden>この地点を削除</button>
+        </div>
         <div class="sky-report" id="astroReport"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">この夜の撮影計画</h2>
+        <p class="card__desc">
+          帯の中をタップするとその時刻に切り替わります。
+        </p>
+        <div class="tl" id="timeline"></div>
+        <div class="sky-report" id="timelineReport"></div>
       </div>
 
       <div class="card">
@@ -370,6 +386,19 @@
         <div class="verdict" id="uncutVerdict"></div>
       </div>
 
+      <div class="card">
+        <h2 class="card__title">画像で書き出す</h2>
+        <p class="card__desc">
+          推奨設定を1枚の画像にします。撮影メモとして残したり、そのまま共有できます。
+        </p>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnCardShare">
+          画像を作って共有
+        </button>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnCardSave"
+                style="margin-top:var(--tb-space-sm)">画像を保存</button>
+        <div class="card-preview" id="cardPreview" hidden></div>
+      </div>
+
       <div class="card" id="warnCard">
         <h2 class="card__title">この設定の注意点</h2>
         <ul class="warn-list" id="warnList"></ul>
@@ -441,6 +470,25 @@
 
 </div>
 
+<!-- ============ 年間カレンダーのシート ============ -->
+<div class="sheet" id="calendarSheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <div class="sheet__panel">
+    <div class="sheet__head">
+      <h2>年間カレンダー</h2>
+      <button type="button" class="sheet__close" data-close aria-label="閉じる">✕</button>
+    </div>
+    <div class="sheet__body">
+      <div class="chips" id="calYears"></div>
+      <p class="hint">
+        いま選んでいる観測地での計算です。行をタップするとその群と極大の夜に切り替わります。
+        「狙える時間」は暗夜で月が出ておらず放射点が地平線上にある長さです。
+      </p>
+      <div id="calList"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ 設定シート ============ -->
 <div class="sheet" id="settingsSheet" hidden>
   <div class="sheet__backdrop" data-close></div>
@@ -475,6 +523,20 @@
           <li><span class="warn-list__icon">↔</span><span>画面を左右にスワイプすると 機材 → 条件 → 結果 と移動します。</span></li>
           <li><span class="warn-list__icon">↓</span><span>いちばん上で下に引っぱると更新を確認して再読み込みします（開いていたタブは維持されます）。</span></li>
         </ul>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">この設定を共有</h2>
+        <p class="card__desc">
+          いまの機材と条件をURLにします。相手がそのURLを開くと同じ設定から始められます。
+          マイ地点の一覧は含まれません（座標だけが渡ります）。
+        </p>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnShare">
+          URLを共有する
+        </button>
+        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnCopyUrl"
+                style="margin-top:var(--tb-space-sm)">URLをコピーする</button>
+        <p class="hint" id="shareHint"></p>
       </div>
 
       <div class="card">
@@ -624,11 +686,11 @@
   </div>
 </div>
 
-<script src="data.js?v=1.4.0"></script>
-<script src="astro.js?v=1.4.0"></script>
-<script src="engine.js?v=1.4.0"></script>
-<script src="lightpollution.js?v=1.4.0"></script>
-<script src="app.js?v=1.4.0"></script>
+<script src="data.js?v=1.5.0"></script>
+<script src="astro.js?v=1.5.0"></script>
+<script src="engine.js?v=1.5.0"></script>
+<script src="lightpollution.js?v=1.5.0"></script>
+<script src="app.js?v=1.5.0"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

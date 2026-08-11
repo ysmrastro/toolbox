@@ -194,6 +194,138 @@ const MS_ASTRO = (function () {
     return { window: win, best: best };
   }
 
+  /**
+   * ある値が閾値をまたぐ時刻を線形補間で求める補助関数。
+   * fn(t) の符号が変わる区間を粗い刻みで探し、その中を内挿する。
+   * @param {number} startMs 走査開始
+   * @param {number} endMs   走査終了
+   * @param {number} stepMs  刻み
+   * @param {function} fn    時刻(Date) → 数値
+   * @param {number} level   この値をまたぐ時刻を探す
+   * @param {number} dir     +1 なら上向き（level を下から上へ）、-1 なら下向き
+   * @returns {Date|null}
+   */
+  function findCrossing(startMs, endMs, stepMs, fn, level, dir) {
+    let prevT = startMs;
+    let prevV = fn(new Date(startMs)) - level;
+    for (let t = startMs + stepMs; t <= endMs; t += stepMs) {
+      const v = fn(new Date(t)) - level;
+      const up = prevV < 0 && v >= 0;
+      const down = prevV > 0 && v <= 0;
+      if ((dir > 0 && up) || (dir < 0 && down)) {
+        // 線形内挿（区間が短いので十分）
+        const ratio = prevV / (prevV - v);
+        return new Date(prevT + (t - prevT) * ratio);
+      }
+      prevT = t;
+      prevV = v;
+    }
+    return null;
+  }
+
+  /**
+   * 指定した夜の撮影計画に必要な時刻をまとめて求める。
+   *
+   * 「その夜」は date の現地日付の 12:00 から翌 12:00 までとする
+   * （深夜1時を指定しても同じ夜として扱われるように）。
+   *
+   * 返り値の時刻はすべて Date か null。null は「その夜には起きない」
+   * （高緯度の白夜や、月が一晩中出ている／出ないケース）。
+   */
+  function nightTimeline(date, lat, lon, shower) {
+    const noon = new Date(date.getTime());
+    noon.setHours(12, 0, 0, 0);
+    // 指定時刻が正午より前なら、前日の正午を起点にする（未明は前の夜の続き）
+    if (date.getTime() < noon.getTime()) noon.setDate(noon.getDate() - 1);
+    const startMs = noon.getTime();
+    const endMs = startMs + 24 * 3600000;
+
+    const sunAlt = (t) => sunPosition(t, lat, lon).altitude;
+    const moonAlt = (t) => moonInfo(t, lat, lon).altitude;
+    const coarse = 5 * 60000;      // 5分刻みで符号の変化を探す
+
+    /* 太陽 — 日没・各薄明の終わり／始まり */
+    const sunset = findCrossing(startMs, endMs, coarse, sunAlt, -0.833, -1);
+    const duskCivil = findCrossing(startMs, endMs, coarse, sunAlt, -6, -1);
+    const duskAstro = findCrossing(startMs, endMs, coarse, sunAlt, -18, -1);
+    const dawnAstro = findCrossing(startMs, endMs, coarse, sunAlt, -18, +1);
+    const dawnCivil = findCrossing(startMs, endMs, coarse, sunAlt, -6, +1);
+    const sunrise = findCrossing(startMs, endMs, coarse, sunAlt, -0.833, +1);
+
+    /* 表示範囲は日没から日の出まで（求まらない場合は 18:00〜翌6:00 で代用） */
+    const from = sunset || new Date(startMs + 6 * 3600000);
+    const to = sunrise || new Date(startMs + 18 * 3600000);
+
+    /* 月 — 表示範囲の中で地平線をまたぐ時刻と、出ている区間 */
+    const moonrise = findCrossing(from.getTime(), to.getTime(), coarse, moonAlt, 0, +1);
+    const moonset = findCrossing(from.getTime(), to.getTime(), coarse, moonAlt, 0, -1);
+    const moonUp = [];
+    {
+      let segStart = moonAlt(from) > 0 ? from : null;
+      let prev = moonAlt(from) > 0;
+      for (let t = from.getTime() + coarse; t <= to.getTime(); t += coarse) {
+        const dt = new Date(t);
+        const up = moonAlt(dt) > 0;
+        if (!prev && up) segStart = dt;
+        if (prev && !up && segStart) { moonUp.push({ from: segStart, to: dt }); segStart = null; }
+        prev = up;
+      }
+      if (segStart) moonUp.push({ from: segStart, to: to });
+    }
+
+    /* 放射点高度の系列とピーク（10分刻み） */
+    const series = [];
+    let peak = null;
+    const seriesStep = 10 * 60000;
+    for (let t = from.getTime(); t <= to.getTime(); t += seriesStep) {
+      const dt = new Date(t);
+      const alt = radiantAltitude(dt, lat, lon, shower).altitude;
+      series.push({ time: dt, altitude: alt });
+      const inDark = (!duskAstro || t >= duskAstro.getTime()) &&
+        (!dawnAstro || t <= dawnAstro.getTime());
+      if (inDark && (!peak || alt > peak.altitude)) peak = { time: dt, altitude: alt };
+    }
+    // 暗夜が無い夜（白夜など）はやむを得ず全区間から採る
+    if (!peak) {
+      series.forEach((s) => { if (!peak || s.altitude > peak.altitude) peak = s; });
+    }
+
+    /* 狙い目 = 天文薄明のあいだ かつ 月が地平線下 かつ 放射点が地平線上 */
+    const golden = [];
+    {
+      const darkFrom = duskAstro ? duskAstro.getTime() : from.getTime();
+      const darkTo = dawnAstro ? dawnAstro.getTime() : to.getTime();
+      const ok = (t) => {
+        const dt = new Date(t);
+        return t >= darkFrom && t <= darkTo && moonAlt(dt) <= 0 &&
+          radiantAltitude(dt, lat, lon, shower).altitude > 0;
+      };
+      let segStart = null;
+      for (let t = from.getTime(); t <= to.getTime(); t += coarse) {
+        const good = ok(t);
+        if (good && segStart === null) segStart = new Date(t);
+        if (!good && segStart !== null) { golden.push({ from: segStart, to: new Date(t) }); segStart = null; }
+      }
+      if (segStart !== null) golden.push({ from: segStart, to: to });
+    }
+
+    /* 夜の代表値としての月の状態（暗夜の中央、なければ範囲の中央） */
+    const midMs = duskAstro && dawnAstro
+      ? (duskAstro.getTime() + dawnAstro.getTime()) / 2
+      : (from.getTime() + to.getTime()) / 2;
+    const moonMid = moonInfo(new Date(midMs), lat, lon);
+
+    return {
+      from: from, to: to,
+      sunset: sunset, duskCivil: duskCivil, duskAstro: duskAstro,
+      dawnAstro: dawnAstro, dawnCivil: dawnCivil, sunrise: sunrise,
+      moonrise: moonrise, moonset: moonset, moonUp: moonUp,
+      moon: moonMid,
+      series: series, peak: peak, golden: golden,
+      goldenMinutes: golden.reduce((a, g) => a + (g.to - g.from) / 60000, 0),
+    };
+  }
+
   /** 月明かりによる空の劣化量 [等/平方秒] の粗い目安 */
   function moonSkyPenalty(moon) {
     if (moon.altitude <= 0) return 0;
@@ -214,6 +346,8 @@ const MS_ASTRO = (function () {
     radiantAltitude: radiantAltitude,
     darkWindow: darkWindow,
     bestObservingTime: bestObservingTime,
+    findCrossing: findCrossing,
+    nightTimeline: nightTimeline,
     moonSkyPenalty: moonSkyPenalty,
   };
 })();

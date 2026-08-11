@@ -18,8 +18,8 @@ const MS_DATA = {};
  *   メジャー → よほどの変更のときだけ
  * リリース時は appUpdated と sw.js の CACHE 名も一緒に更新する。
  */
-MS_DATA.appVersion = '1.4.0';
-MS_DATA.appUpdated = '2026-08-11 11:40';
+MS_DATA.appVersion = '1.5.0';
+MS_DATA.appUpdated = '2026-08-11 13:05';
 
 /* ---------------- 表示テーマ ----------------
  * 選択値は localStorage の 'ms-theme' に単独で保存する。

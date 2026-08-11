@@ -31,6 +31,7 @@
     showerId: 'per',
     datetime: null,
     locIndex: null,     // init で MS_DATA.defaultLocationName から解決する
+    myLocName: null,    // 「マイ地点」を選んでいるときその名前（プリセットとは排他）
     lat: null,
     lon: null,
     skyBase: 21.0,
@@ -42,6 +43,9 @@
     articleMode: false,
     activePage: 'page-gear',   // 開いていたタブ（再読み込み後もここに戻る）
   };
+
+  /* 状態の初期値。共有URLには「初期値と違う項目」だけを載せるために取っておく */
+  const DEFAULTS = JSON.parse(JSON.stringify(state));
 
   /* ボトムナビで行き来するページ。設定はシートなのでここには入れない */
   const PAGES = ['page-gear', 'page-cond', 'page-result'];
@@ -197,7 +201,7 @@
   }
 
   /* ===================== シート ===================== */
-  const SHEETS = ['aboutSheet', 'settingsSheet'];
+  const SHEETS = ['aboutSheet', 'settingsSheet', 'calendarSheet'];
 
   function openSheet(id) {
     SHEETS.forEach((s) => { $(s).hidden = (s !== id); });
@@ -324,6 +328,143 @@
     if (pageId === state.activePage) return;
     beginTrack();
     snapTrack(pageId);
+  }
+
+  /* ===================== 設定の共有（URL） =====================
+   * 入力内容を1つの文字列にして URL のハッシュに載せる。
+   * localStorage は端末をまたげないので、別の端末や友達に渡す手段として用意する。
+   *  - 初期値と同じ項目は載せない（URL を短く保つ）
+   *  - 開いたページの種類やマイ地点の一覧は相手には意味がないので載せない
+   *  - 読み取り側は state に元からあるキーだけを受け付ける（想定外の値を入れない）
+   */
+  const SHARE_SKIP = ['activePage', 'myLocName'];
+
+  function b64urlEncode(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    bytes.forEach((b) => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function b64urlDecode(str) {
+    const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - b64.length % 4) % 4));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  /** カメラのプリセットから決まる項目（手で変えていなければ共有URLに載せない） */
+  const CAMERA_DERIVED = ['pixelPitch', 'megapixels', 'fwcBase', 'fwcSource', 'rnGain',
+    'rnFloor', 'dualGainISO', 'sensorW', 'sensorH', 'sensorAspect', 'cameraNote'];
+
+  function cameraPresetValues(id) {
+    const cam = D.cameras.find((c) => c.id === id);
+    if (!cam) return null;
+    const f = D.formats[cam.format];
+    return {
+      pixelPitch: cam.pixelPitch, megapixels: cam.megapixels, fwcBase: cam.fwcBase,
+      fwcSource: cam.fwcSource, rnGain: cam.rnGain, rnFloor: cam.rnFloor,
+      dualGainISO: cam.dualGainISO, sensorW: f.width, sensorH: f.height,
+      sensorAspect: f.height / f.width, cameraNote: cam.note || '',
+    };
+  }
+
+  /** いまの設定を載せた共有URL */
+  function shareUrl() {
+    const payload = { v: 1 };
+    Object.keys(state).forEach((k) => {
+      if (SHARE_SKIP.indexOf(k) >= 0) return;
+      if (JSON.stringify(state[k]) === JSON.stringify(DEFAULTS[k])) return;
+      payload[k] = state[k];
+    });
+    /* センサーの値がプリセットどおりならカメラIDだけで復元できるので落とす（URLを短くする） */
+    const preset = cameraPresetValues(state.cameraId);
+    if (preset) {
+      CAMERA_DERIVED.forEach((k) => {
+        if (JSON.stringify(state[k]) === JSON.stringify(preset[k])) delete payload[k];
+      });
+    }
+    const base = location.origin + location.pathname;
+    return base + '#s=' + b64urlEncode(JSON.stringify(payload));
+  }
+
+  /** ハッシュから共有設定を読むだけ（state には触らない）。無ければ null */
+  function readSharedPayload() {
+    const m = (location.hash || '').match(/[#&]s=([A-Za-z0-9\-_]+)/);
+    if (!m) return null;
+    try {
+      const obj = JSON.parse(b64urlDecode(m[1]));
+      return (obj && typeof obj === 'object') ? obj : null;
+    } catch (e) { return null; }
+  }
+
+  /**
+   * 共有設定を state に当てる。
+   * state に元からあるキーで、値が数値・真偽・文字列・null のものだけを受け付ける。
+   */
+  function applySharedPayload(obj) {
+    let applied = 0;
+    Object.keys(obj).forEach((k) => {
+      if (k === 'v' || SHARE_SKIP.indexOf(k) >= 0) return;
+      if (!Object.prototype.hasOwnProperty.call(DEFAULTS, k)) return;
+      const v = obj[k];
+      const t = typeof v;
+      if (v === null || t === 'number' || t === 'boolean' || t === 'string') {
+        state[k] = v;
+        applied++;
+      }
+    });
+    return applied > 0;
+  }
+
+  /** 数秒で消える通知（共有URLの読み込みや、コピー結果の知らせに使う） */
+  function showToast(text) {
+    const old = document.getElementById('msToast');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.id = 'msToast';
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(() => { el.classList.add('is-out'); }, 3200);
+    setTimeout(() => { el.remove(); }, 3700);
+  }
+
+  /** ユーザーが入れた文字列を HTML に埋めるための最小限のエスケープ */
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  function escapeAttr(str) { return escapeHtml(str); }
+
+  /* ===================== マイ地点 =====================
+   * 現在地や友達に教わった穴場を名前付きで保存する。
+   * プリセット（data.js）とは別に localStorage に持ち、観測地セレクトの先頭に出す。
+   * 入力内容のリセットでは消さない（別キーにしてある）。
+   */
+  const MY_LOC_KEY = 'ms-my-locations';
+
+  function loadMyLocations() {
+    try {
+      const raw = localStorage.getItem(MY_LOC_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list)
+        ? list.filter((l) => l && l.name && isFinite(l.lat) && isFinite(l.lon))
+        : [];
+    } catch (e) { return []; }
+  }
+
+  function saveMyLocations(list) {
+    try { localStorage.setItem(MY_LOC_KEY, JSON.stringify(list)); } catch (e) { /* 無視 */ }
+  }
+
+  function currentMyLocation() {
+    if (!state.myLocName) return null;
+    return loadMyLocations().find((l) => l.name === state.myLocName) || null;
   }
 
   /* ===================== ユーティリティ ===================== */
@@ -500,7 +641,12 @@
       if (!g) { g = { region: region, items: [] }; groups.push(g); }
       g.items.push(`<option value="${i}">${l.name}</option>`);
     });
-    $('locationSelect').innerHTML =
+    const mine = loadMyLocations();
+    const mineHtml = mine.length
+      ? `<optgroup label="マイ地点">${mine.map((l) =>
+        `<option value="m:${escapeAttr(l.name)}">${escapeHtml(l.name)}</option>`).join('')}</optgroup>`
+      : '';
+    $('locationSelect').innerHTML = mineHtml +
       groups.map((g) => `<optgroup label="${g.region}">${g.items.join('')}</optgroup>`).join('') +
       '<optgroup label="任意の座標"><option value="-1">手入力</option></optgroup>';
 
@@ -563,7 +709,16 @@
     $('maxExposure').value = state.maxExposure;
     $('maxExposureField').hidden = !state.tracked;
     $('showerSelect').value = state.showerId;
-    $('locationSelect').value = String(state.locIndex);
+    $('locationSelect').value = state.myLocName
+      ? 'm:' + state.myLocName
+      : String(state.locIndex);
+    // 保存済みのマイ地点が消えていた場合は手入力扱いに落とす
+    if ($('locationSelect').value === '' && state.myLocName) {
+      state.myLocName = null;
+      state.locIndex = -1;
+      $('locationSelect').value = '-1';
+    }
+    $('btnDeleteLoc').hidden = !state.myLocName;
     $('lat').value = state.lat;
     $('lon').value = state.lon;
     $('sky').value = state.skyBase;
@@ -639,6 +794,215 @@
   }
 
   /* ===================== 描画：条件タブ ===================== */
+  /* ===================== 撮影計画タイムライン =====================
+   * 夜ごとの計算（薄明・月出没・放射点高度の系列）はそれなりに重いので、
+   * 同じ夜・同じ地点・同じ群なら使い回す。
+   */
+  let tlCache = { key: null, value: null };
+
+  /** その時刻が属する「夜」の起点（現地12:00）。未明は前日の夜として扱う */
+  function nightOf(date) {
+    const noon = new Date(date.getTime());
+    noon.setHours(12, 0, 0, 0);
+    if (date.getTime() < noon.getTime()) noon.setDate(noon.getDate() - 1);
+    return noon;
+  }
+
+  function timelineFor(date, lat, lon, sh) {
+    const key = [nightOf(date).toDateString(), lat.toFixed(3), lon.toFixed(3), sh.id].join('|');
+    if (tlCache.key !== key) {
+      tlCache = { key: key, value: A.nightTimeline(date, lat, lon, sh) };
+    }
+    return tlCache.value;
+  }
+
+  function hhmm(d) {
+    if (!d) return '—';
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  function minutesText(min) {
+    const h = Math.floor(min / 60);
+    const m = Math.round(min % 60);
+    return (h ? `${h}時間` : '') + (m || !h ? `${m}分` : '');
+  }
+
+  /** 放射点高度 0〜90° を帯の中の y 位置（%）に写す。0°を下寄りに置いて曲線を見せる */
+  function altToY(alt) {
+    const a = Math.max(0, Math.min(90, alt));
+    return 95 - (a / 90) * (95 - 8);
+  }
+
+  function renderTimeline(res) {
+    const sh = res.snap.sh;
+    const tl = timelineFor(currentDate(), state.lat, state.lon, sh);
+    const span = tl.to.getTime() - tl.from.getTime();
+    const pct = (d) => Math.max(0, Math.min(100, (d.getTime() - tl.from.getTime()) / span * 100));
+    const seg = (cls, a, b) => {
+      if (!a || !b) return '';
+      const l = pct(a);
+      const w = pct(b) - l;
+      return w > 0 ? `<div class="tl__seg ${cls}" style="left:${l}%;width:${w}%"></div>` : '';
+    };
+
+    /* 放射点高度の折れ線 */
+    const points = tl.series
+      .map((s) => `${pct(s.time).toFixed(2)},${altToY(s.altitude).toFixed(2)}`).join(' ');
+
+    /* 時刻目盛り。ラベルが詰まらないよう間隔を夜の長さから決める */
+    const hours = span / 3600000;
+    const step = [1, 2, 3, 4, 6].find((h) => hours / h <= 6) || 6;
+    const ticks = [];
+    const first = new Date(tl.from.getTime());
+    first.setMinutes(0, 0, 0);
+    if (first.getHours() % step !== 0) first.setHours(first.getHours() + (step - first.getHours() % step));
+    for (let t = first.getTime(); t <= tl.to.getTime(); t += step * 3600000) {
+      const d = new Date(t);
+      ticks.push(`<span style="left:${pct(d)}%">${d.getHours()}時</span>`);
+    }
+
+    const now = currentDate();
+    const inRange = now >= tl.from && now <= tl.to;
+
+    $('timeline').innerHTML = `
+      <div class="tl__track" id="tlTrack">
+        ${seg('tl__seg--dark', tl.duskAstro || tl.from, tl.dawnAstro || tl.to)}
+        ${tl.moonUp.map((g) => seg('tl__seg--moon', g.from, g.to)).join('')}
+        <div class="tl__horizon" style="top:${altToY(0)}%"></div>
+        <svg class="tl__curve" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <polyline points="${points}"></polyline>
+        </svg>
+        ${tl.golden.map((g) => seg('tl__seg--golden', g.from, g.to)).join('')}
+        ${tl.peak ? `<div class="tl__peak" style="left:${pct(tl.peak.time)}%"></div>` : ''}
+        ${inRange ? `<div class="tl__now" style="left:${pct(now)}%"></div>` : ''}
+      </div>
+      <div class="tl__axis">${ticks.join('')}</div>
+      <div class="tl__legend">
+        <span><i style="background:var(--ms-tl-twilight)"></i>薄明</span>
+        <span><i style="background:var(--ms-tl-dark)"></i>暗夜</span>
+        <span><i style="background:var(--ms-tl-moon)"></i>月あり</span>
+        <span><i style="background:var(--tb-success)"></i>狙い目</span>
+        <span><i style="background:var(--tb-accent)"></i>放射点高度</span>
+        <span><i style="background:var(--ms-warn)"></i>最高高度</span>
+      </div>`;
+
+    /* 文章での要約 */
+    let r = '';
+    r += `日没 <b>${hhmm(tl.sunset)}</b>／天文薄明終わり <b>${hhmm(tl.duskAstro)}</b>` +
+      `／天文薄明始まり <b>${hhmm(tl.dawnAstro)}</b>／日の出 <b>${hhmm(tl.sunrise)}</b><br>`;
+    if (tl.moonUp.length === 0) {
+      r += `月は一晩中出ません（月齢 <b>${fmt(tl.moon.age, 1)}日</b>）。<br>`;
+    } else {
+      const total = tl.moonUp.reduce((a, g) => a + (g.to - g.from) / 60000, 0);
+      r += `月は <b>${tl.moonUp.map((g) => hhmm(g.from) + '〜' + hhmm(g.to)).join('、')}</b>` +
+        `（計 ${minutesText(total)}）／輝面比 <b>${Math.round(tl.moon.illumination * 100)}%</b>` +
+        `・月齢 <b>${fmt(tl.moon.age, 1)}日</b><br>`;
+    }
+    if (!sh.ra) {
+      r += '放射点を持たない群のため、高度の山はありません。<br>';
+    } else if (tl.peak) {
+      r += `放射点が最も高くなるのは <b>${hhmm(tl.peak.time)}</b>（<b>${fmt(tl.peak.altitude, 0)}°</b>）。<br>`;
+    }
+    if (tl.goldenMinutes > 0) {
+      r += `<b>狙い目は ${tl.golden.map((g) => hhmm(g.from) + '〜' + hhmm(g.to)).join('、')}` +
+        `（計 ${minutesText(tl.goldenMinutes)}）</b>` +
+        '——暗夜で、月が出ておらず、放射点が地平線上にある時間です。';
+    } else {
+      r += '<b>この夜は条件のそろう時間がありません。</b>月・薄明・放射点のいずれかが常に邪魔をしています。';
+    }
+    $('timelineReport').innerHTML = r;
+  }
+
+  /* ===================== 年間カレンダー =====================
+   * 主要群の極大の夜について「月の条件」と「狙える時間」を並べる。
+   * 極大日にどれだけ月が邪魔をするかは年ごとに変わるので、これが分かると
+   * 「今年のペルセウスは当たり年」といった判断ができる。
+   * 15群 × タイムライン計算はそれなりに重いので、年ごとに結果を持っておく。
+   */
+  let calCache = { key: null, rows: null };
+  let calYear = null;
+
+  /** その年の各群の極大の夜を評価する */
+  function calendarRows(year) {
+    const key = [year, state.lat.toFixed(2), state.lon.toFixed(2)].join('|');
+    if (calCache.key === key) return calCache.rows;
+
+    const rows = D.showers.filter((sh) => sh.peak).map((sh) => {
+      const [mm, dd] = sh.peak.split('-').map(Number);
+      // 極大日の未明（01:00）を代表時刻にする。nightTimeline は前日の夜として扱う
+      const night = new Date(year, mm - 1, dd, 1, 0, 0, 0);
+      const tl = A.nightTimeline(night, state.lat, state.lon, sh);
+      return {
+        shower: sh,
+        date: night,
+        timeline: tl,
+        goldenMinutes: tl.goldenMinutes,
+        illumination: tl.moon.illumination,
+        moonAge: tl.moon.age,
+        peakAlt: tl.peak ? tl.peak.altitude : 0,
+        peakTime: tl.peak ? tl.peak.time : null,
+      };
+    });
+    calCache = { key: key, rows: rows };
+    return rows;
+  }
+
+  /**
+   * 月・放射点高度・狙える時間から「当たり年かどうか」を4段階で表す。
+   * 出現数の絶対値は較正できないので、あくまで条件の良し悪しの目安。
+   */
+  function calendarVerdict(row) {
+    const hours = row.goldenMinutes / 60;
+    const alt = row.peakAlt;
+    if (hours <= 0 || alt <= 5) return { rank: 'bad', label: '見込みなし' };
+    // 狙える時間（暗夜×月なし）と放射点の高さの両方が要る
+    const score = Math.min(hours / 5, 1) * Math.min(alt / 50, 1);
+    if (score >= 0.75) return { rank: 'ok', label: '当たり年' };
+    if (score >= 0.4) return { rank: 'mid', label: 'まあまあ' };
+    return { rank: 'warn', label: '条件わるい' };
+  }
+
+  function renderCalendar() {
+    const years = [];
+    const thisYear = new Date().getFullYear();
+    for (let y = thisYear; y <= thisYear + 2; y++) years.push(y);
+    if (calYear === null) calYear = thisYear;
+
+    $('calYears').innerHTML = years.map((y) =>
+      `<button type="button" class="chip${y === calYear ? ' active' : ''}" data-year="${y}">${y}年</button>`
+    ).join('');
+
+    const rows = calendarRows(calYear).slice().sort((a, b) => a.date - b.date);
+    const locName = state.myLocName
+      || (state.locIndex >= 0 && D.locations[state.locIndex] ? D.locations[state.locIndex].name : '手入力の座標');
+
+    $('calList').innerHTML =
+      `<p class="hint">観測地: ${escapeHtml(locName)}（${fmt(state.lat, 2)}, ${fmt(state.lon, 2)}）</p>` +
+      rows.map((r) => {
+        const v = calendarVerdict(r);
+        const md = `${r.date.getMonth() + 1}/${r.date.getDate()}`;
+        return `
+        <button type="button" class="cal-row" data-shower="${r.shower.id}" data-date="${r.date.toISOString()}">
+          <div class="cal-row__date">
+            <div class="cal-row__md">${md}</div>
+            <div class="cal-row__wd">${'日月火水木金土'[r.date.getDay()]}</div>
+          </div>
+          <div class="cal-row__body">
+            <div class="cal-row__name">${escapeHtml(r.shower.name)}
+              <span class="cal-badge cal-badge--${v.rank}">${v.label}</span></div>
+            <div class="cal-row__sub">
+              ZHR ${r.shower.zhr}／放射点 最高 ${fmt(r.peakAlt, 0)}°
+              ${r.peakTime ? '（' + hhmm(r.peakTime) + '）' : ''}
+            </div>
+            <div class="cal-row__sub">
+              月齢 ${fmt(r.moonAge, 1)}日・輝面比 ${Math.round(r.illumination * 100)}%／
+              狙える時間 <b>${r.goldenMinutes > 0 ? minutesText(r.goldenMinutes) : 'なし'}</b>
+            </div>
+          </div>
+        </button>`;
+      }).join('');
+  }
+
   function renderCond(res) {
     const sh = res.snap.sh;
     const tags = [];
@@ -661,8 +1025,8 @@
     const rad = res.snap.rad;
     const sun = res.snap.sun;
     const moon = res.snap.moon;
-    const best = A.bestObservingTime(currentDate(), state.lat, state.lon, sh);
-    const timeFmt = (d) => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '—';
+    // 暗夜とピークはタイムラインの計算結果を使い回す（同じ走査を2回しない）
+    const tl = timelineFor(currentDate(), state.lat, state.lon, sh);
 
     let report = '';
     report += rad.isSporadic
@@ -671,9 +1035,9 @@
     report += `太陽高度 <b>${fmt(sun.altitude, 1)}°</b>`;
     report += sun.altitude > -18 ? '（<span style="color:var(--ms-warn)">薄明中</span>）<br>' : '（天文薄明終了後）<br>';
     report += `月 高度 <b>${fmt(moon.altitude, 1)}°</b>／輝面比 <b>${Math.round(moon.illumination * 100)}%</b>／月齢 <b>${fmt(moon.age, 1)}日</b><br>`;
-    if (best && best.window.begin && best.window.end) {
-      report += `暗夜 <b>${timeFmt(best.window.begin)} 〜 ${timeFmt(best.window.end)}</b>`;
-      if (best.best) report += `／放射点が最も高いのは <b>${timeFmt(best.best.time)}</b>（${fmt(best.best.altitude, 0)}°）`;
+    if (tl.duskAstro && tl.dawnAstro) {
+      report += `暗夜 <b>${hhmm(tl.duskAstro)} 〜 ${hhmm(tl.dawnAstro)}</b>`;
+      if (tl.peak) report += `／放射点が最も高いのは <b>${hhmm(tl.peak.time)}</b>（${fmt(tl.peak.altitude, 0)}°）`;
     }
     $('astroReport').innerHTML = report;
 
@@ -1073,9 +1437,156 @@
     const res = compute();
     renderGear(res);
     renderCond(res);
+    renderTimeline(res);
     renderResult(res);
     renderLpLookup();
     save();
+  }
+
+  /* ===================== 結果カードの画像書き出し =====================
+   * 外部ライブラリを使わず canvas に手で描く。1200×630（SNSのカードと同じ比率）。
+   * 色は画面のテーマから読み取って、見えているものと同じ配色で出す。
+   */
+  const CARD_W = 1200;
+  const CARD_H = 630;
+
+  function themeColor(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+
+  /** 結果カードを描いた canvas を返す */
+  function drawResultCard(res) {
+    const cv = document.createElement('canvas');
+    cv.width = CARD_W;
+    cv.height = CARD_H;
+    const g = cv.getContext('2d');
+
+    const bg = themeColor('--tb-bg-primary', '#0d1117');
+    const panel = themeColor('--tb-bg-secondary', '#1a1a2e');
+    const line = themeColor('--tb-border', '#30363d');
+    const text = themeColor('--tb-text-primary', '#e6edf3');
+    const sub = themeColor('--tb-text-secondary', '#8b949e');
+    const accent = themeColor('--tb-accent', '#7eb8da');
+    const font = '"Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif';
+    const mono = '"SF Mono", "Fira Code", monospace';
+
+    g.fillStyle = bg;
+    g.fillRect(0, 0, CARD_W, CARD_H);
+
+    /* 見出し */
+    g.fillStyle = sub;
+    g.font = `28px ${font}`;
+    g.textBaseline = 'alphabetic';
+    g.fillText('流星撮影セッティング', 60, 78);
+    g.fillStyle = text;
+    g.font = `bold 44px ${font}`;
+    const sh = res.snap.sh;
+    g.fillText(`${purpose().label}／${sh.name}`, 60, 138);
+
+    /* 推奨値の3枠 */
+    const boxY = 178;
+    const boxH = 190;
+    const boxW = 340;
+    const gap = 30;
+    const values = [
+      { label: 'シャッター', value: shutterLabel(res.cfg.exposure) },
+      { label: '絞り', value: 'F' + fmt(res.cfg.fnum, 1) },
+      { label: 'ISO', value: String(res.cfg.iso) },
+    ];
+    values.forEach((v, i) => {
+      const x = 60 + i * (boxW + gap);
+      g.fillStyle = panel;
+      g.strokeStyle = line;
+      g.lineWidth = 2;
+      roundRect(g, x, boxY, boxW, boxH, 18);
+      g.fill();
+      g.stroke();
+      g.fillStyle = accent;
+      g.font = `bold 96px ${mono}`;
+      g.textAlign = 'center';
+      g.fillText(v.value, x + boxW / 2, boxY + 118);
+      g.fillStyle = sub;
+      g.font = `26px ${font}`;
+      g.fillText(v.label, x + boxW / 2, boxY + 160);
+      g.textAlign = 'left';
+    });
+
+    /* 主要な指標 */
+    const items = [
+      ['写せる暗さ', signed(res.ev.limMag, 2) + ' 等'],
+      ['火球の白飛び限界', signed(res.ev.fireballMag, 2) + ' 等'],
+      ['1コマに収まる確率', Math.round(res.ev.uncut * 100) + ' %'],
+      ['空の明るさ', fmt(res.skyInfo.sky, 2) + ' 等/□″'],
+    ];
+    const iy = 430;
+    const iw = (CARD_W - 120 - 3 * 24) / 4;
+    items.forEach(([label, value], i) => {
+      const x = 60 + i * (iw + 24);
+      g.fillStyle = sub;
+      g.font = `24px ${font}`;
+      g.fillText(label, x, iy);
+      g.fillStyle = text;
+      g.font = `bold 40px ${mono}`;
+      g.fillText(value, x, iy + 48);
+    });
+
+    /* 条件（機材・日時・場所） */
+    const locName = state.myLocName
+      || (state.locIndex >= 0 && D.locations[state.locIndex] ? D.locations[state.locIndex].name : '手入力の座標');
+    const cam = D.cameras.find((c) => c.id === state.cameraId);
+    const lens = state.lensIndex >= 0 && D.lenses[state.lensIndex] ? D.lenses[state.lensIndex].name : null;
+    const d = currentDate();
+    const when = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${hhmm(d)}`;
+    const gear = [
+      (cam ? cam.name : '') + (lens ? ' + ' + lens : ` / ${fmt(state.focal, 0)}mm F${fmt(state.fnum, 1)}`),
+      `${when}　${locName}`,
+      `コマ間隔 ${fmt(state.gap, 1)}秒${state.tracked ? '／赤道儀で追尾' : ''}`,
+    ];
+    g.fillStyle = sub;
+    g.font = `24px ${font}`;
+    gear.forEach((t, i) => { g.fillText(t, 60, 522 + i * 32); });
+
+    /* 出典。機材の行と重ならないよう最下段に置く */
+    g.fillStyle = line;
+    g.font = `20px ${font}`;
+    g.textAlign = 'right';
+    g.fillText('理論: friend_camera 氏の note 記事 ／ ysmrastro.github.io/toolbox', CARD_W - 60, 618);
+    g.textAlign = 'left';
+
+    return cv;
+  }
+
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  function cardFileName() {
+    const d = currentDate();
+    const p = (n) => String(n).padStart(2, '0');
+    return `meteor-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.png`;
+  }
+
+  function canvasToBlob(cv) {
+    return new Promise((resolve) => {
+      if (cv.toBlob) cv.toBlob(resolve, 'image/png');
+      else resolve(null);
+    });
+  }
+
+  /** 画像を作ってプレビューに出し、blob を返す */
+  async function buildCardImage() {
+    const cv = drawResultCard(compute());
+    const url = cv.toDataURL('image/png');
+    $('cardPreview').hidden = false;
+    $('cardPreview').innerHTML = `<img src="${url}" alt="推奨設定のカード">`;
+    return { blob: await canvasToBlob(cv), url: url };
   }
 
   /* ===================== イベント ===================== */
@@ -1179,6 +1690,21 @@
       refresh();
     });
 
+    /* タイムラインの帯をタップした位置の時刻に切り替える */
+    $('timeline').addEventListener('click', (e) => {
+      if (!e.target.closest('.tl__track')) return;
+      const track = $('tlTrack');
+      const r = track.getBoundingClientRect();
+      if (r.width <= 0) return;
+      const tl = timelineFor(currentDate(), state.lat, state.lon, shower());
+      const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      const ms = tl.from.getTime() + frac * (tl.to.getTime() - tl.from.getTime());
+      const snapped = new Date(Math.round(ms / (5 * 60000)) * 5 * 60000);   // 5分刻みに丸める
+      state.datetime = snapped.toISOString();
+      syncInputs();
+      refresh();
+    });
+
     $('datetime').addEventListener('change', (e) => {
       const d = new Date(e.target.value);
       if (!isNaN(d.getTime())) state.datetime = d.toISOString();
@@ -1201,16 +1727,31 @@
     });
 
     $('locationSelect').addEventListener('change', (e) => {
-      state.locIndex = Number(e.target.value);
-      const l = D.locations[state.locIndex];
-      if (l) { state.lat = l.lat; state.lon = l.lon; }
+      const v = e.target.value;
+      if (v.indexOf('m:') === 0) {
+        const l = loadMyLocations().find((x) => x.name === v.slice(2));
+        state.myLocName = l ? l.name : null;
+        state.locIndex = -1;
+        if (l) { state.lat = l.lat; state.lon = l.lon; }
+      } else {
+        state.myLocName = null;
+        state.locIndex = Number(v);
+        const l = D.locations[state.locIndex];
+        if (l) { state.lat = l.lat; state.lon = l.lon; }
+      }
       syncInputs();
       refresh();
       onLocationChanged();
     });
 
-    numField('lat', 'lat', () => { state.locIndex = -1; $('locationSelect').value = '-1'; });
-    numField('lon', 'lon', () => { state.locIndex = -1; $('locationSelect').value = '-1'; });
+    const detachLocation = () => {
+      state.locIndex = -1;
+      state.myLocName = null;
+      $('locationSelect').value = '-1';
+      $('btnDeleteLoc').hidden = true;
+    };
+    numField('lat', 'lat', detachLocation);
+    numField('lon', 'lon', detachLocation);
     // 緯度経度の手入力は連続して変わるので、入力が落ち着いてから引く
     let latlonTimer = null;
     ['lat', 'lon'].forEach((id) => {
@@ -1218,6 +1759,35 @@
         clearTimeout(latlonTimer);
         latlonTimer = setTimeout(onLocationChanged, 600);
       });
+    });
+
+    /* マイ地点として保存 */
+    $('btnSaveLoc').addEventListener('click', () => {
+      const suggested = state.myLocName ||
+        (state.locIndex >= 0 && D.locations[state.locIndex] ? D.locations[state.locIndex].name : '') ||
+        `マイ地点${loadMyLocations().length + 1}`;
+      const name = (window.prompt('この地点の名前', suggested) || '').trim();
+      if (!name) return;
+      const list = loadMyLocations().filter((l) => l.name !== name);
+      list.push({ name: name, lat: state.lat, lon: state.lon });
+      saveMyLocations(list);
+      state.myLocName = name;
+      state.locIndex = -1;
+      initSelects();      // セレクトを作り直してから選択を戻す
+      syncInputs();
+      refresh();
+    });
+
+    /* マイ地点を削除 */
+    $('btnDeleteLoc').addEventListener('click', () => {
+      if (!state.myLocName) return;
+      if (!window.confirm(`「${state.myLocName}」を削除します。よろしいですか？`)) return;
+      saveMyLocations(loadMyLocations().filter((l) => l.name !== state.myLocName));
+      state.myLocName = null;
+      state.locIndex = -1;
+      initSelects();
+      syncInputs();
+      refresh();
     });
 
     $('btnLp').addEventListener('click', () => fetchLightPollution(true));
@@ -1229,6 +1799,7 @@
         state.lat = Math.round(pos.coords.latitude * 100) / 100;
         state.lon = Math.round(pos.coords.longitude * 100) / 100;
         state.locIndex = -1;
+        state.myLocName = null;
         $('btnGeo').textContent = '現在地を使う';
         syncInputs();
         refresh();
@@ -1349,6 +1920,89 @@
       if (mq.addEventListener) mq.addEventListener('change', onSchemeChange);
       else if (mq.addListener) mq.addListener(onSchemeChange);
     }
+
+    /* 結果カードの画像 */
+    $('btnCardSave').addEventListener('click', async () => {
+      const img = await buildCardImage();
+      const a = document.createElement('a');
+      a.download = cardFileName();
+      a.href = img.blob ? URL.createObjectURL(img.blob) : img.url;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      if (img.blob) setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      showToast('画像を保存しました');
+    });
+
+    $('btnCardShare').addEventListener('click', async () => {
+      const img = await buildCardImage();
+      const file = img.blob ? new File([img.blob], cardFileName(), { type: 'image/png' }) : null;
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: '流星撮影セッティング' });
+          return;
+        } catch (e) { return; }   // 共有をやめた場合は何もしない
+      }
+      showToast('この端末では共有できないので、画像を長押しで保存してください');
+    });
+
+    /* 年間カレンダー */
+    $('btnCalendar').addEventListener('click', () => {
+      renderCalendar();
+      openSheet('calendarSheet');
+    });
+
+    $('calYears').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-year]');
+      if (!b) return;
+      calYear = Number(b.dataset.year);
+      renderCalendar();
+    });
+
+    $('calList').addEventListener('click', (e) => {
+      const row = e.target.closest('.cal-row');
+      if (!row) return;
+      state.showerId = row.dataset.shower;
+      state.datetime = row.dataset.date;
+      closeSheets();
+      syncInputs();
+      refresh();
+      showToast('この群と極大の夜に切り替えました');
+    });
+
+    /* 設定 — URL で共有 */
+    const putUrl = (url) => { $('shareHint').textContent = url; };
+
+    const copyUrl = async (url) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('URLをコピーしました');
+        return true;
+      } catch (e) {
+        // クリップボードが使えない環境向けの手動フォールバック
+        putUrl(url);
+        showToast('コピーできませんでした。下のURLを長押しで選んでください');
+        return false;
+      }
+    };
+
+    $('btnShare').addEventListener('click', async () => {
+      const url = shareUrl();
+      putUrl(url);
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: '流星撮影セッティング', text: 'この設定で撮ろう', url: url });
+          return;
+        } catch (e) { /* 共有をやめた場合など。コピーに落とす */ }
+      }
+      copyUrl(url);
+    });
+
+    $('btnCopyUrl').addEventListener('click', () => {
+      const url = shareUrl();
+      putUrl(url);
+      copyUrl(url);
+    });
 
     /* 設定 — 入力内容のリセット（テーマは別キーなので残る） */
     $('btnResetState').addEventListener('click', () => {
@@ -1584,6 +2238,20 @@
     applyTextSize(textSizePref()); // 同じく文字サイズ
     setupGestures();
     load();
+    /* 共有URLで開かれた場合は、保存された内容よりURLを優先する。
+       取り込んだらハッシュを外し、次に開いたときは自分の設定に戻るようにする */
+    const sharedPayload = readSharedPayload();
+    let shared = false;
+    if (sharedPayload) {
+      /* カメラIDのプリセットを先に当ててから、URL に明示された値で上書きする。
+         共有URLはプリセットどおりのセンサー値を省いてあるため、この順でないと
+         手で変えたセンサー値がプリセットに戻されてしまう。 */
+      if (typeof sharedPayload.cameraId === 'string') applyCameraPreset(sharedPayload.cameraId);
+      shared = applySharedPayload(sharedPayload);
+      try {
+        history.replaceState(null, '', location.pathname + location.search);
+      } catch (e) { /* 履歴を触れなくても動作に影響はない */ }
+    }
     if (state.locIndex == null || state.lat == null || state.lon == null) {
       applyDefaultLocation();
     } else {
@@ -1602,7 +2270,7 @@
       const same = l && Math.abs(l.focal - state.focal) < 0.01 && Math.abs(l.fnum - state.fnum) < 0.01;
       if (!same) state.lensIndex = -1;
     }
-    // 保存値にカメラのセンサー特性が無い場合はプリセットから補う
+    // 古い保存値にセンサー特性が無い場合はカメラIDからプリセットを当てる
     if (state.rnGain === undefined || state.fwcSource === undefined) {
       applyCameraPreset(state.cameraId);
     }
@@ -1613,6 +2281,8 @@
     refresh();
     // 初回は表示だけ更新し、空の暗さの自動反映は skyAuto に従う
     fetchLightPollution(state.skyAuto === true);
+
+    if (shared) showToast('共有された設定を読み込みました');
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => { /* オフライン対応は任意 */ });
