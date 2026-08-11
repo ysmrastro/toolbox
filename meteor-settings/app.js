@@ -166,6 +166,36 @@
       </button>`).join('');
   }
 
+  /* ===================== 文字サイズ =====================
+   * ルート（html）の font-size を差し替える。文字サイズ・固定バーの高さ・タップ目標を
+   * すべて rem で書いてあるので、ここを変えるだけで全体が同じ比率で伸びる。
+   * ホーム画面から起動（standalone）していると端末の文字サイズ設定が効かないため、
+   * アプリ側に持たせる必要がある。
+   */
+  const TEXT_SIZE_KEY = 'ms-text-size';
+
+  function textSizePref() {
+    const v = document.documentElement.getAttribute('data-text-size');
+    return D.textSizes.some((t) => t.id === v) ? v : D.textSizes[0].id;
+  }
+
+  function applyTextSize(id) {
+    const size = D.textSizes.find((t) => t.id === id) || D.textSizes[0];
+    const root = document.documentElement;
+    root.style.fontSize = size.rootPx + 'px';
+    root.setAttribute('data-text-size', size.id);
+    try { localStorage.setItem(TEXT_SIZE_KEY, size.id); } catch (e) { /* 保存できなくても表示は変わる */ }
+    renderTextSizeSeg();
+  }
+
+  function renderTextSizeSeg() {
+    const cur = textSizePref();
+    $('textSizeSeg').innerHTML = D.textSizes.map((t) => `
+      <button type="button" class="segmented__item${t.id === cur ? ' active' : ''}" data-size="${t.id}">
+        ${t.label}<span class="segmented__sub">${t.sub}</span>
+      </button>`).join('');
+  }
+
   /* ===================== シート ===================== */
   const SHEETS = ['aboutSheet', 'settingsSheet'];
 
@@ -1305,6 +1335,13 @@
       applyTheme(b.dataset.theme);
     });
 
+    /* 設定 — 文字サイズ */
+    $('textSizeSeg').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-size]');
+      if (!b) return;
+      applyTextSize(b.dataset.size);
+    });
+
     /* OS のライト／ダーク切り替えに追従する（「端末に合わせる」のときだけ） */
     if (window.matchMedia) {
       const mq = window.matchMedia('(prefers-color-scheme: light)');
@@ -1543,7 +1580,8 @@
   function boot() {
     initSelects();
     renderVersion();
-    applyTheme(themePref());   // インライン script が立てた値を正として全体に反映する
+    applyTheme(themePref());       // インライン script が立てた値を正として全体に反映する
+    applyTextSize(textSizePref()); // 同じく文字サイズ
     setupGestures();
     load();
     if (state.locIndex == null || state.lat == null || state.lon == null) {

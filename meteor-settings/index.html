@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.3.2">
+  <meta name="app-version" content="1.4.0">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,14 +34,17 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.3.2">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.3.2">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.3.2">
-  <link rel="stylesheet" href="style.css?v=1.3.2">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.4.0">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.4.0">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.4.0">
+  <link rel="stylesheet" href="style.css?v=1.4.0">
 
-  <!-- テーマは最初の描画より先に当てる（あとから当てるとダークが一瞬見えてちらつく） -->
+  <!-- テーマと文字サイズは最初の描画より先に当てる
+       （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
   <script>
     (function () {
+      var root = document.documentElement;
+
       var pref = null;
       try { pref = localStorage.getItem('ms-theme'); } catch (e) { /* プライベートモード等 */ }
       if (pref !== 'light' && pref !== 'dark' && pref !== 'astro') pref = 'auto';
@@ -50,9 +53,14 @@
         eff = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)
           ? 'light' : 'dark';
       }
-      var root = document.documentElement;
       root.setAttribute('data-theme', eff);
       root.setAttribute('data-theme-pref', pref);
+
+      var size = null;
+      try { size = localStorage.getItem('ms-text-size'); } catch (e) { /* 同上 */ }
+      var px = { s: 16, m: 18, l: 20 }[size];
+      if (px) root.style.fontSize = px + 'px';
+      root.setAttribute('data-text-size', px ? size : 's');
     })();
   </script>
 </head>
@@ -453,6 +461,15 @@
       </div>
 
       <div class="card">
+        <h2 class="card__title">文字サイズ</h2>
+        <div class="segmented" id="textSizeSeg"></div>
+        <p class="hint">
+          文字だけでなくボタンやバーの大きさも一緒に変わります。ホーム画面から起動していると
+          端末の文字サイズ設定が効かないため、ここで調整してください。
+        </p>
+      </div>
+
+      <div class="card">
         <h2 class="card__title">操作</h2>
         <ul class="warn-list">
           <li><span class="warn-list__icon">↔</span><span>画面を左右にスワイプすると 機材 → 条件 → 結果 と移動します。</span></li>
@@ -607,11 +624,11 @@
   </div>
 </div>
 
-<script src="data.js?v=1.3.2"></script>
-<script src="astro.js?v=1.3.2"></script>
-<script src="engine.js?v=1.3.2"></script>
-<script src="lightpollution.js?v=1.3.2"></script>
-<script src="app.js?v=1.3.2"></script>
+<script src="data.js?v=1.4.0"></script>
+<script src="astro.js?v=1.4.0"></script>
+<script src="engine.js?v=1.4.0"></script>
+<script src="lightpollution.js?v=1.4.0"></script>
+<script src="app.js?v=1.4.0"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

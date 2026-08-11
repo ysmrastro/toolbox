@@ -18,14 +18,26 @@ const MS_DATA = {};
  *   メジャー → よほどの変更のときだけ
  * リリース時は appUpdated と sw.js の CACHE 名も一緒に更新する。
  */
-MS_DATA.appVersion = '1.3.2';
-MS_DATA.appUpdated = '2026-08-11 10:52';
+MS_DATA.appVersion = '1.4.0';
+MS_DATA.appUpdated = '2026-08-11 11:40';
 
 /* ---------------- 表示テーマ ----------------
  * 選択値は localStorage の 'ms-theme' に単独で保存する。
  * 初回描画前に index.html のインライン script が読んで <html data-theme> を立てるため、
  * 他の設定と同じキーに混ぜず独立させている（読み込みが1回で済み、ちらつかない）。
  */
+/* ---------------- 文字サイズ ----------------
+ * ルート（html）の font-size を差し替える方式。
+ * CSS の文字サイズ・固定バーの高さ・タップ目標をすべて rem で書いてあるため、
+ * ここを変えるだけで全体が同じ比率で伸びる。
+ * px はいずれも偶数の梯子（12/14/16/18/20/24/28/32/36px）に乗る値を選ぶ。
+ */
+MS_DATA.textSizes = [
+  { id: 's', label: '小', sub: '本文 16px', rootPx: 16 },
+  { id: 'm', label: '中', sub: '本文 18px', rootPx: 18 },
+  { id: 'l', label: '大', sub: '本文 20px', rootPx: 20 },
+];
+
 MS_DATA.themes = [
   { id: 'auto',  label: '端末に合わせる', sub: 'OS のライト／ダーク設定に従う' },
   { id: 'dark',  label: 'ダーク',         sub: '既定。夜間の屋外向け' },

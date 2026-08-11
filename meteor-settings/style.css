@@ -4,9 +4,19 @@
    ========================================================= */
 
 :root {
-  --ms-appbar-h: 52px;
-  --ms-summary-h: 62px;
-  --ms-tabbar-h: 58px;
+  /* 固定バーの高さは rem。文字サイズを変えたときに一緒に伸びないと中身がはみ出す */
+  --ms-appbar-h: 3.25rem;     /* 52px */
+  --ms-summary-h: 3.875rem;   /* 62px */
+  --ms-tabbar-h: 3.625rem;    /* 58px */
+
+  /* 文字サイズは偶数の梯子（12/14/16/18/20/24/28/32/36px）に乗せる。
+     共通CSS（shared）の sm/lg は奇数px（13.6/18.4px）なので、このアプリ内だけ揃える。
+     eu-phoria デザイン基準: 主要ユーザー層向けの下限は12px、
+     10px は読了目的でない限定要素（バージョン・タイムスタンプ等）のみ。 */
+  --tb-font-size-sm: 0.875rem;   /* 14px */
+  --tb-font-size-lg: 1.125rem;   /* 18px */
+  --ms-fs-label: 0.75rem;        /* 12px — ラベル・キャプションの下限 */
+  --ms-fs-stamp: 0.625rem;       /* 10px — バージョン表記だけに使う */
   --ms-safe-bottom: env(safe-area-inset-bottom, 0px);
   --ms-safe-top: env(safe-area-inset-top, 0px);
   --ms-content-w: 480px;   /* 中身の最大幅。ブレークポイントごとに切り替える */
@@ -191,7 +201,7 @@ body {
 @keyframes ptrSpin { to { transform: rotate(360deg); } }
 
 .ptr__label {
-  font-size: 0.62rem;
+  font-size: var(--ms-fs-label);
   color: var(--tb-text-secondary);
   background: var(--tb-bg-primary);
   border: 1px solid var(--tb-border);
@@ -229,13 +239,22 @@ body {
   display: flex;
   align-items: center;
   gap: var(--tb-space-sm);
+  min-width: 0;
   font-size: var(--tb-font-size-base);
   font-weight: 700;
   color: var(--tb-text-primary);
   letter-spacing: 0.02em;
 }
 
-.appbar__icon { font-size: 1.1rem; }
+/* 文字サイズを「大」にすると狭い画面でタイトルが2行になり、
+   高さの決まったバーからはみ出すので1行に収めて末尾を省略する */
+.appbar__title > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appbar__icon { font-size: var(--tb-font-size-lg); }
 
 .appbar__right {
   display: flex;
@@ -247,7 +266,7 @@ body {
 .appbar__version {
   text-align: right;
   font-family: var(--tb-font-mono);
-  font-size: 0.56rem;
+  font-size: var(--ms-fs-stamp);
   line-height: 1.3;
   color: var(--tb-text-muted);
   letter-spacing: 0.02em;
@@ -255,8 +274,8 @@ body {
 }
 
 .appbar__action {
-  width: 36px;
-  height: 36px;
+  width: 2.25rem;
+  height: 2.25rem;
   border: 1px solid var(--tb-border);
   border-radius: 50%;
   background: var(--tb-bg-tertiary);
@@ -301,7 +320,7 @@ body {
 }
 
 .summary__label {
-  font-size: 0.65rem;
+  font-size: var(--ms-fs-label);
   color: var(--tb-text-muted);
   letter-spacing: 0.08em;
   margin-top: 2px;
@@ -372,7 +391,7 @@ body {
 }
 
 .card__title {
-  font-size: 0.72rem;
+  font-size: var(--ms-fs-label);
   font-weight: 700;
   color: var(--tb-text-secondary);
   letter-spacing: 0.1em;
@@ -406,12 +425,12 @@ body {
 .field-row--tight { margin-top: var(--tb-space-sm); }
 
 .tb-input, .tb-select {
-  min-height: 44px;
+  min-height: 2.75rem;
   font-size: 1rem;
 }
 
 /* iOS で拡大されないようフォントサイズは 16px 以上を維持 */
-input[type="number"], input[type="datetime-local"], select { font-size: 16px; }
+input[type="number"], input[type="datetime-local"], select { font-size: 1rem; }
 
 /* 日時入力はブラウザによって内部の最小幅を持ち、枠からはみ出すことがある。
    ネイティブ装飾を外して確実に親の幅に収める */
@@ -439,7 +458,7 @@ input[type="number"] { padding-right: 1.9rem; }
 }
 
 .spec-badge {
-  font-size: 0.7rem;
+  font-size: var(--ms-fs-label);
   font-family: var(--tb-font-mono);
   padding: 3px 8px;
   border-radius: 999px;
@@ -485,12 +504,12 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .chip {
   padding: 8px 12px;
-  min-height: 36px;
+  min-height: 2.25rem;
   border: 1px solid var(--tb-border);
   border-radius: 999px;
   background: var(--tb-bg-tertiary);
   color: var(--tb-text-secondary);
-  font-size: 0.78rem;
+  font-size: var(--tb-font-size-sm);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -517,13 +536,13 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .segmented__item {
   flex: 1;
-  min-height: 40px;
+  min-height: 2.5rem;
   padding: 8px 10px;
   border: none;
   border-radius: var(--tb-radius-md);
   background: transparent;
   color: var(--tb-text-secondary);
-  font-size: 0.82rem;
+  font-size: var(--tb-font-size-sm);
   cursor: pointer;
   text-align: center;
   line-height: 1.35;
@@ -540,7 +559,7 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .segmented__sub {
   display: block;
-  font-size: 0.68rem;
+  font-size: var(--ms-fs-label);
   color: var(--tb-text-muted);
   font-weight: 400;
   margin-top: 2px;
@@ -556,7 +575,7 @@ input[type="number"] { padding-right: 1.9rem; }
   padding: var(--tb-space-sm) 4px;
   cursor: pointer;
   text-align: center;
-  min-height: 76px;
+  min-height: 4.75rem;
 }
 
 .purpose.active {
@@ -564,7 +583,7 @@ input[type="number"] { padding-right: 1.9rem; }
   background: var(--tb-accent-subtle);
 }
 
-.purpose__icon { font-size: 1.35rem; display: block; }
+.purpose__icon { font-size: 1.5rem; display: block; }
 
 .purpose__label {
   font-size: 0.75rem;
@@ -593,11 +612,11 @@ input[type="number"] { padding-right: 1.9rem; }
   padding: 8px 10px;
 }
 
-.stat__label { font-size: 0.65rem; color: var(--tb-text-muted); letter-spacing: 0.04em; }
+.stat__label { font-size: var(--ms-fs-label); color: var(--tb-text-muted); letter-spacing: 0.04em; }
 
 .stat__value {
   font-family: var(--tb-font-mono);
-  font-size: 0.95rem;
+  font-size: var(--tb-font-size-base);
   font-weight: 700;
   color: var(--tb-text-primary);
   margin-top: 2px;
@@ -611,7 +630,7 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .tag {
   display: inline-block;
-  font-size: 0.65rem;
+  font-size: var(--ms-fs-label);
   padding: 2px 7px;
   border-radius: 999px;
   margin-right: 4px;
@@ -639,7 +658,7 @@ input[type="number"] { padding-right: 1.9rem; }
 .slider-scale {
   display: flex;
   justify-content: space-between;
-  font-size: 0.65rem;
+  font-size: var(--ms-fs-label);
   color: var(--tb-text-muted);
 }
 
@@ -661,14 +680,14 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .hero-value__num {
   font-family: var(--tb-font-mono);
-  font-size: 1.9rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--tb-text-primary);
   line-height: 1.05;
 }
 
 .hero-value__label {
-  font-size: 0.65rem;
+  font-size: var(--ms-fs-label);
   color: var(--tb-text-muted);
   letter-spacing: 0.1em;
   margin-top: 4px;
@@ -687,7 +706,7 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .big-metric__value {
   font-family: var(--tb-font-mono);
-  font-size: 2.1rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--tb-text-primary);
   line-height: 1;
@@ -740,7 +759,7 @@ input[type="number"] { padding-right: 1.9rem; }
 .magbar__labels {
   display: flex;
   justify-content: space-between;
-  font-size: 0.62rem;
+  font-size: var(--ms-fs-label);
   color: var(--tb-text-muted);
   margin-top: 3px;
 }
@@ -884,13 +903,13 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .lp-result__main strong {
   font-family: var(--tb-font-mono);
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   color: var(--tb-accent);
 }
 
 .lp-zone {
   display: inline-block;
-  font-size: 0.65rem;
+  font-size: var(--ms-fs-label);
   padding: 2px 7px;
   margin-left: 4px;
   border-radius: 999px;
@@ -907,7 +926,7 @@ input[type="number"] { padding-right: 1.9rem; }
 
 .lp-applied {
   flex: none;
-  font-size: 0.65rem;
+  font-size: var(--ms-fs-label);
   color: var(--tb-success);
   border: 1px solid var(--tb-success);
   border-radius: 999px;
@@ -975,8 +994,8 @@ input[type="number"] { padding-right: 1.9rem; }
   padding: 0;
 }
 
-.tabbar__icon { font-size: 1.15rem; opacity: 0.7; }
-.tabbar__label { font-size: 0.65rem; letter-spacing: 0.06em; }
+.tabbar__icon { font-size: var(--tb-font-size-lg); opacity: 0.7; }
+.tabbar__label { font-size: var(--ms-fs-label); letter-spacing: 0.06em; }
 .tabbar__item.active { color: var(--tb-accent); }
 .tabbar__item.active .tabbar__icon { opacity: 1; }
 
