@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.5.1">
+  <meta name="app-version" content="1.6.0">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.5.1">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.5.1">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.5.1">
-  <link rel="stylesheet" href="style.css?v=1.5.1">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.6.0">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.6.0">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.6.0">
+  <link rel="stylesheet" href="style.css?v=1.6.0">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -119,6 +119,19 @@
     <!-- ---------- 機材 ---------- -->
     <section class="page" id="page-gear">
       <h2 class="page__heading">📷 機材</h2>
+
+      <div class="card">
+        <h2 class="card__title">機材セット</h2>
+        <p class="card__desc">
+          カメラ・レンズ・ピント・インターバル・赤道儀の設定をまとめて保存できます。
+          2台体制の持ち替えに使ってください。
+        </p>
+        <select class="tb-select" id="gearSetSelect"></select>
+        <div class="chips">
+          <button type="button" class="chip" id="btnSaveGear">いまの構成を保存</button>
+          <button type="button" class="chip" id="btnDeleteGear" hidden>このセットを削除</button>
+        </div>
+      </div>
 
       <div class="card">
         <h2 class="card__title">カメラ</h2>
@@ -327,6 +340,23 @@
         <div class="sky-report" id="camReport"></div>
       </div>
 
+      <div class="card">
+        <h2 class="card__title">画角プレビュー</h2>
+        <p class="card__desc">
+          いまの焦点距離とカメラの向きで写る範囲です。星は5.0等より明るいもの。
+          <span id="fovNote"></span>
+        </p>
+        <div class="fov" id="fovWrap">
+          <canvas id="fovCanvas"></canvas>
+        </div>
+        <div class="tl__legend">
+          <span><i style="background:var(--tb-accent)"></i>放射点</span>
+          <span><i style="background:var(--ms-warn)"></i>放射点から45°</span>
+          <span><i style="background:var(--tb-danger)"></i>地平線</span>
+        </div>
+        <div class="sky-report" id="fovReport"></div>
+      </div>
+
     </section>
 
    </div><!-- /.pages__inputs -->
@@ -389,10 +419,12 @@
       <div class="card">
         <h2 class="card__title">画像で書き出す</h2>
         <p class="card__desc">
-          推奨設定を1枚の画像にします。撮影メモとして残したり、そのまま共有できます。
+          推奨設定を1枚の画像にします。撮影メモとして残せます。共有するときは
+          <strong>同じ設定で開けるURLも一緒に</strong>渡すので、X に投稿すると
+          画像が本文に付き、リンクから相手が同じ設定で開けます。
         </p>
         <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnCardShare">
-          画像を作って共有
+          画像とURLを共有
         </button>
         <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnCardSave"
                 style="margin-top:var(--tb-space-sm)">画像を保存</button>
@@ -518,6 +550,16 @@
       </div>
 
       <div class="card">
+        <h2 class="card__title">現地での使い方</h2>
+        <label class="switch">
+          <input type="checkbox" id="wakeLock">
+          <span class="switch__body"></span>
+          <span class="switch__text">画面を消さない</span>
+        </label>
+        <p class="hint" id="wakeLockHint"></p>
+      </div>
+
+      <div class="card">
         <h2 class="card__title">操作</h2>
         <ul class="warn-list">
           <li><span class="warn-list__icon">↔</span><span>画面を左右にスワイプすると 機材 → 条件 → 結果 と移動します。</span></li>
@@ -572,7 +614,11 @@
       <h2>計算の前提と出典</h2>
       <button type="button" class="sheet__close" data-close aria-label="閉じる">✕</button>
     </div>
-    <div class="sheet__body">
+    <div class="sheet__body" id="aboutBody">
+      <p class="sheet__nav">
+        <a href="#changelog" id="btnChangelog">更新履歴を見る（新しい順）→</a>
+      </p>
+
       <h3>出典</h3>
       <p>
         このツールの計算は、<strong>friend_camera</strong> 氏の記事
@@ -606,6 +652,20 @@
         地図は16段階の階調ですが、暗い空（21〜22等）では1段が 0.03〜0.26等 と細かく、
         到達等級への影響は 0.1等 未満です。都市部では1段が約0.6等になります。
         対象範囲は日本周辺（北緯20〜46度、東経122〜154度）のみです。
+      </p>
+
+      <h3>星のデータ出典</h3>
+      <p>
+        画角プレビューに出る星は
+        <strong>Yale 輝星星表（The Bright Star Catalogue, 5th Revised Ed.）</strong>
+        — Hoffleit D., Warren Jr W.H., Astronomical Data Center, NSSDC/ADC (1991)、
+        CDS カタログ V/50 — から 5.0等より明るい 1,630 星を抜き出して同梱したものです。
+        表示しているのは赤経・赤緯・実視等級だけで、固有名は1等星クラスに限って付けています。
+      </p>
+      <p>
+        <strong>星座線は入れていません。</strong>星座の結び方（あの棒人間の形）は星表に含まれず、
+        よく使われるデータには再配布条件が付くものが多いため、このアプリには取り込んでいません。
+        向きの手がかりは明るい星の固有名で取ってください。
       </p>
 
       <h3>カメラを向ける方向の扱い</h3>
@@ -675,6 +735,9 @@
         <li>周辺光量補正</li>
       </ul>
 
+      <h3 id="changelog">更新履歴</h3>
+      <div class="changelog" id="changelogList"></div>
+
       <p class="sheet__foot">
         <span id="aboutVersion"></span>
         <button type="button" class="tb-btn tb-btn--secondary" id="btnReload"
@@ -686,11 +749,12 @@
   </div>
 </div>
 
-<script src="data.js?v=1.5.1"></script>
-<script src="astro.js?v=1.5.1"></script>
-<script src="engine.js?v=1.5.1"></script>
-<script src="lightpollution.js?v=1.5.1"></script>
-<script src="app.js?v=1.5.1"></script>
+<script src="data.js?v=1.6.0"></script>
+<script src="astro.js?v=1.6.0"></script>
+<script src="engine.js?v=1.6.0"></script>
+<script src="stars.js?v=1.6.0"></script>
+<script src="lightpollution.js?v=1.6.0"></script>
+<script src="app.js?v=1.6.0"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

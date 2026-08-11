@@ -42,6 +42,8 @@
     camAlt: 60,         // カメラの高度
     articleMode: false,
     activePage: 'page-gear',   // 開いていたタブ（再読み込み後もここに戻る）
+    keepAwake: false,          // 現地で画面が消えないようにするか
+    gearSetName: null,         // 選んでいる機材セットの名前
   };
 
   /* 状態の初期値。共有URLには「初期値と違う項目」だけを載せるために取っておく */
@@ -283,6 +285,7 @@
     track.style.transform = 'translateX(0)';
     PAGES.forEach((id) => { $(id).style.transform = ''; });
     window.scrollTo(0, scrollMemo[pageId] || 0);
+    redrawFov();   // 表示されて初めて幅が決まるので、ここで描く
   }
 
   /** 指の位置に追従させる（端では抵抗をつけて引っぱり過ぎないようにする） */
@@ -337,7 +340,7 @@
    *  - 開いたページの種類やマイ地点の一覧は相手には意味がないので載せない
    *  - 読み取り側は state に元からあるキーだけを受け付ける（想定外の値を入れない）
    */
-  const SHARE_SKIP = ['activePage', 'myLocName'];
+  const SHARE_SKIP = ['activePage', 'myLocName', 'keepAwake', 'gearSetName'];
 
   function b64urlEncode(str) {
     const bytes = new TextEncoder().encode(str);
@@ -386,12 +389,17 @@
       });
     }
     const base = location.origin + location.pathname;
-    return base + '#s=' + b64urlEncode(JSON.stringify(payload));
+    /* クエリ（?s=）に載せる。ハッシュ（#s=）はメッセージアプリや短縮URLの経路で
+       落ちることがあるため、渡す側は必ずクエリにする。中身は撮影設定だけなので
+       サーバーのログに載っても差し支えない。 */
+    return base + '?s=' + b64urlEncode(JSON.stringify(payload));
   }
 
-  /** ハッシュから共有設定を読むだけ（state には触らない）。無ければ null */
+  /** URL から共有設定を読むだけ（state には触らない）。無ければ null。
+      新しい形（?s=）と、古いリンクの形（#s=）の両方を受ける */
   function readSharedPayload() {
-    const m = (location.hash || '').match(/[#&]s=([A-Za-z0-9\-_]+)/);
+    const src = (location.search || '') + (location.hash || '');
+    const m = src.match(/[?#&]s=([A-Za-z0-9\-_]+)/);
     if (!m) return null;
     try {
       const obj = JSON.parse(b64urlDecode(m[1]));
@@ -440,6 +448,88 @@
   }
 
   function escapeAttr(str) { return escapeHtml(str); }
+
+  /* ===================== 画面を消さない =====================
+   * 現地でアプリを見ながら操作していると画面が落ちて面倒なので、
+   * Screen Wake Lock で消灯を止める。
+   * 取得はユーザー操作か表示中でないと拒否されるため、失敗しても黙って諦め、
+   * バックグラウンドから戻ったときに取り直す（解除されるため）。
+   */
+  let wakeLockSentinel = null;
+
+  function wakeLockSupported() {
+    return !!(navigator.wakeLock && navigator.wakeLock.request);
+  }
+
+  async function acquireWakeLock() {
+    if (!wakeLockSupported() || wakeLockSentinel) return;
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+      wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
+    } catch (e) {
+      wakeLockSentinel = null;   // 端末が断ったときは何もしない
+    }
+    renderWakeLock();
+  }
+
+  async function releaseWakeLock() {
+    if (!wakeLockSentinel) return;
+    try { await wakeLockSentinel.release(); } catch (e) { /* 解放できなくても続行 */ }
+    wakeLockSentinel = null;
+    renderWakeLock();
+  }
+
+  function renderWakeLock() {
+    $('wakeLock').checked = !!state.keepAwake;
+    $('wakeLock').disabled = !wakeLockSupported();
+    const hint = $('wakeLockHint');
+    if (!wakeLockSupported()) {
+      hint.textContent = 'この端末（ブラウザ）では画面の消灯を止められません。' +
+        '端末側の自動ロックを長めにしてください。';
+    } else if (state.keepAwake) {
+      hint.textContent = wakeLockSentinel
+        ? '有効。バッテリーを使うので、撮影が終わったら切ってください。'
+        : '画面に触ると有効になります（バックグラウンドでは解除されます）。';
+    } else {
+      hint.textContent = '入れておくと、現地で画面を触らなくても消灯しません。';
+    }
+  }
+
+  /* ===================== 機材セット =====================
+   * カメラ・レンズ・ピント・インターバル・赤道儀の設定をまとめて名前付きで保存する。
+   * 2台体制（広角＋標準）を行き来するときのため。
+   * 観測地（マイ地点）と同じく、入力内容のリセットでは消えない別キーに置く。
+   */
+  const GEAR_KEY = 'ms-gear-presets';
+
+  /* セットに含める state のキー。ここに無い項目（日時・場所・空の暗さ等）は
+     現場の条件なので機材セットでは持ち回さない */
+  const GEAR_KEYS = ['cameraId', 'pixelPitch', 'megapixels', 'fwcBase', 'fwcSource',
+    'rnGain', 'rnFloor', 'dualGainISO', 'sensorW', 'sensorH', 'sensorAspect', 'cameraNote',
+    'focal', 'fnum', 'lensIndex', 'trailId', 'gap', 'hours', 'tracked', 'maxExposure'];
+
+  function loadGearSets() {
+    try {
+      const raw = localStorage.getItem(GEAR_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list.filter((g) => g && g.name && g.gear) : [];
+    } catch (e) { return []; }
+  }
+
+  function saveGearSets(list) {
+    try { localStorage.setItem(GEAR_KEY, JSON.stringify(list)); } catch (e) { /* 無視 */ }
+  }
+
+  function renderGearSets() {
+    const list = loadGearSets();
+    $('gearSetSelect').innerHTML =
+      '<option value="">（セットを選ばない）</option>' +
+      list.map((g) => `<option value="${escapeAttr(g.name)}">${escapeHtml(g.name)}</option>`).join('');
+    $('gearSetSelect').value = state.gearSetName && list.some((g) => g.name === state.gearSetName)
+      ? state.gearSetName : '';
+    if ($('gearSetSelect').value === '') state.gearSetName = null;
+    $('btnDeleteGear').hidden = !state.gearSetName;
+  }
 
   /* ===================== マイ地点 =====================
    * 現在地や友達に教わった穴場を名前付きで保存する。
@@ -799,6 +889,10 @@
    * 同じ夜・同じ地点・同じ群なら使い回す。
    */
   let tlCache = { key: null, value: null };
+  let fovResizeTimer = null;
+  /* 直近の計算結果。タブが表示された時点で画角プレビューを描き直すために持つ
+     （canvas は表示されていない間は幅が0で描けない） */
+  let lastRes = null;
 
   /** その時刻が属する「夜」の起点（現地12:00）。未明は前日の夜として扱う */
   function nightOf(date) {
@@ -1001,6 +1095,204 @@
           </div>
         </button>`;
       }).join('');
+  }
+
+  /* ===================== 画角プレビュー =====================
+   * カメラの向きを中心にした心射投影（gnomonic projection）で、レンズが写す範囲を
+   * そのまま長方形に描く。星は stars.js（5.0等まで1630星）から引く。
+   * 星座線は入れていない（ライセンスが波及しないデータが無いため）。
+   * 代わりに1等星クラスの固有名を出して向きが分かるようにしている。
+   */
+  const RAD = Math.PI / 180;
+
+  /**
+   * 方位・高度を、視野中心（az0, alt0）を原点とする画面座標に写す。
+   * 返り値の x は右が正・y は上が正で、単位は「中心から見た接平面上の距離」。
+   * behind が true の点は視野の裏側なので描かない。
+   */
+  function projectSky(az, alt, az0, alt0) {
+    const a = alt * RAD;
+    const a0 = alt0 * RAD;
+    const dAz = (az - az0) * RAD;
+    const cosC = Math.sin(a0) * Math.sin(a) + Math.cos(a0) * Math.cos(a) * Math.cos(dAz);
+    if (cosC <= 0.01) return { behind: true };
+    return {
+      x: (Math.cos(a) * Math.sin(dAz)) / cosC,
+      y: (Math.cos(a0) * Math.sin(a) - Math.sin(a0) * Math.cos(a) * Math.cos(dAz)) / cosC,
+      behind: false,
+    };
+  }
+
+  /** 放射点から指定した角距離だけ離れた点の列（離角の目安の円を描くため） */
+  function circleAround(az0, alt0, radiusDeg, steps) {
+    const pts = [];
+    const r = radiusDeg * RAD;
+    const a0 = alt0 * RAD;
+    for (let i = 0; i <= steps; i++) {
+      const th = (i / steps) * 2 * Math.PI;
+      // 中心（az0, alt0）から方位角 th の向きに r だけ進んだ点（球面三角）
+      const alt = Math.asin(Math.sin(a0) * Math.cos(r) + Math.cos(a0) * Math.sin(r) * Math.cos(th));
+      const dAz = Math.atan2(Math.sin(r) * Math.sin(th),
+        Math.cos(a0) * Math.cos(r) - Math.sin(a0) * Math.sin(r) * Math.cos(th));
+      pts.push({ az: az0 + dAz / RAD, alt: alt / RAD });
+    }
+    return pts;
+  }
+
+  /** 表示されているときだけ画角プレビューを描く */
+  function redrawFov() {
+    if (!lastRes) return;
+    if ($('fovWrap').clientWidth <= 0) return;
+    renderFov(lastRes);
+  }
+
+  function renderFov(res) {
+    const wrap = $('fovWrap');
+    const cv = $('fovCanvas');
+    const fov = E.fieldOfView(state.focal, state.sensorW, state.sensorH);
+    const geo = res.cfg.geo;
+
+    /* 表示サイズはセンサーの縦横比に合わせる（画角そのままの形にする） */
+    const cssW = wrap.clientWidth;
+    if (cssW <= 0) return;
+    const cssH = Math.round(cssW * (fov.heightDeg / fov.widthDeg));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.style.width = cssW + 'px';
+    cv.style.height = cssH + 'px';
+    cv.width = Math.round(cssW * dpr);
+    cv.height = Math.round(cssH * dpr);
+
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, cssW, cssH);
+
+    /* 接平面上の座標 → 画面座標。視野の横幅が画面の横幅に収まるようにする */
+    const halfW = Math.tan(fov.widthDeg / 2 * RAD);
+    const scale = (cssW / 2) / halfW;
+    const toScreen = (pt) => ({ x: cssW / 2 + pt.x * scale, y: cssH / 2 - pt.y * scale });
+
+    const bg = themeColor('--ms-tl-dark', '#101726');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, cssW, cssH);
+
+    const az0 = geo.az;
+    const alt0 = geo.alt;
+    const date = currentDate();
+
+    /* 地平線（高度0°の線）。視野に入るときだけ描く */
+    g.strokeStyle = themeColor('--tb-danger', '#f85149');
+    g.lineWidth = 1.5;
+    g.setLineDash([5, 4]);
+    g.beginPath();
+    let started = false;
+    for (let d = -100; d <= 100; d += 2) {
+      const pt = projectSky(az0 + d, 0, az0, alt0);
+      if (pt.behind) { started = false; continue; }
+      const sp = toScreen(pt);
+      if (!started) { g.moveTo(sp.x, sp.y); started = true; } else { g.lineTo(sp.x, sp.y); }
+    }
+    g.stroke();
+    g.setLineDash([]);
+
+    /* 星。等級で大きさを変える（明るいほど大きく） */
+    const starColor = themeColor('--tb-text-primary', '#e6edf3');
+    const labelColor = themeColor('--tb-text-secondary', '#8b949e');
+    const font = '"Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif';
+    const labels = [];
+    if (typeof MS_STARS !== 'undefined') {
+      MS_STARS.forEach((st) => {
+        const hz = A.equatorialToHorizontal(st[0], st[1], state.lat, state.lon, date);
+        const pt = projectSky(hz.azimuth, hz.altitude, az0, alt0);
+        if (pt.behind) return;
+        const sp = toScreen(pt);
+        if (sp.x < -10 || sp.x > cssW + 10 || sp.y < -10 || sp.y > cssH + 10) return;
+        const r = Math.max(0.7, (5.2 - st[2]) * 0.55);
+        g.fillStyle = starColor;
+        g.globalAlpha = Math.max(0.35, Math.min(1, (5.4 - st[2]) / 3));
+        g.beginPath();
+        g.arc(sp.x, sp.y, r, 0, 2 * Math.PI);
+        g.fill();
+        if (st[3]) labels.push({ x: sp.x, y: sp.y, name: st[3], r: r });
+      });
+      g.globalAlpha = 1;
+    }
+
+    /* 固有名。重なるものは間引き、端で切れたり下の方位表示に被るものは出さない */
+    g.font = `12px ${font}`;
+    g.fillStyle = labelColor;
+    const placed = [];
+    labels.sort((a, b) => b.r - a.r).forEach((l) => {
+      if (l.y < 16 || l.y > cssH - 24) return;          // 上端で切れる／下端の方位表示に被る
+      if (l.x > cssW - 70) return;                       // 右端で切れる
+      if (placed.some((q) => Math.abs(q.x - l.x) < 70 && Math.abs(q.y - l.y) < 15)) return;
+      placed.push(l);
+      g.fillText(l.name, l.x + l.r + 4, l.y + 4);
+    });
+
+    /* 放射点と、そこから45°の円 */
+    const rad = res.snap.rad;
+    let radiantInside = false;
+    if (!rad.isSporadic && rad.azimuth != null) {
+      const ring = circleAround(rad.azimuth, rad.altitude, 45, 96);
+      g.strokeStyle = themeColor('--ms-warn', '#d9a03c');
+      g.lineWidth = 1.5;
+      g.beginPath();
+      let on = false;
+      ring.forEach((q) => {
+        const pt = projectSky(q.az, q.alt, az0, alt0);
+        if (pt.behind) { on = false; return; }
+        const sp = toScreen(pt);
+        if (!on) { g.moveTo(sp.x, sp.y); on = true; } else { g.lineTo(sp.x, sp.y); }
+      });
+      g.stroke();
+
+      const rp = projectSky(rad.azimuth, rad.altitude, az0, alt0);
+      if (!rp.behind) {
+        const sp = toScreen(rp);
+        radiantInside = sp.x >= 0 && sp.x <= cssW && sp.y >= 0 && sp.y <= cssH;
+        g.strokeStyle = themeColor('--tb-accent', '#7eb8da');
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(sp.x, sp.y, 9, 0, 2 * Math.PI);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(sp.x - 14, sp.y);
+        g.lineTo(sp.x + 14, sp.y);
+        g.moveTo(sp.x, sp.y - 14);
+        g.lineTo(sp.x, sp.y + 14);
+        g.stroke();
+        if (radiantInside) {
+          g.fillStyle = themeColor('--tb-accent', '#7eb8da');
+          g.font = `bold 12px ${font}`;
+          g.fillText('放射点', sp.x + 14, sp.y - 8);
+        }
+      }
+    }
+
+    /* 画面の端に方位と高度を書く */
+    g.fillStyle = labelColor;
+    g.font = `12px ${font}`;
+    g.fillText(`${A.compassName(az0)} ${Math.round(az0)}° / 高度 ${Math.round(alt0)}°`, 8, cssH - 8);
+    g.textAlign = 'right';
+    g.fillText(`${fmt(fov.widthDeg, 0)}° × ${fmt(fov.heightDeg, 0)}°`, cssW - 8, cssH - 8);
+    g.textAlign = 'left';
+
+    /* 文章の補足 */
+    $('fovNote').textContent = `対角 ${fmt(fov.diagDeg, 0)}°。`;
+    let r = '';
+    r += `写る範囲 <b>${fmt(fov.widthDeg, 1)}° × ${fmt(fov.heightDeg, 1)}°</b>`;
+    r += `（対角 <b>${fmt(fov.diagDeg, 1)}°</b>）<br>`;
+    if (rad.isSporadic) {
+      r += '放射点を持たない群のため、放射点の印は出していません。';
+    } else if (radiantInside) {
+      r += `放射点は<b>画角の中</b>（離角 <b>${fmt(geo.separation, 0)}°</b>）。` +
+        '広角では45°離しても画角に入ります。放射点に近いほど流星は短く写るので、' +
+        '長い流星を狙うなら画面の端に置くとよいです。';
+    } else {
+      r += `放射点は<b>画角の外</b>（離角 <b>${fmt(geo.separation, 0)}°</b>）。` +
+        '橙色の円が「放射点から45°」の目安です。';
+    }
+    $('fovReport').innerHTML = r;
   }
 
   function renderCond(res) {
@@ -1438,6 +1730,8 @@
     renderGear(res);
     renderCond(res);
     renderTimeline(res);
+    lastRes = res;
+    renderFov(res);
     renderResult(res);
     renderLpLookup();
     save();
@@ -1600,8 +1894,16 @@
     });
 
     /* 機材 */
+    /* 機材を手で変えたら、選んでいたセットとは中身が食い違うので選択を外す */
+    const detachGearSet = () => {
+      if (!state.gearSetName) return;
+      state.gearSetName = null;
+      renderGearSets();
+    };
+
     $('cameraSelect').addEventListener('change', (e) => {
       applyCameraPreset(e.target.value);
+      detachGearSet();
       syncInputs();
       refresh();
     });
@@ -1639,12 +1941,14 @@
       state.lensIndex = Number(e.target.value);
       const l = D.lenses[state.lensIndex];
       if (l) { state.focal = l.focal; state.fnum = l.fnum; }
+      detachGearSet();
       syncInputs();
       refresh();
     });
 
-    numField('focal', 'focal');
+    numField('focal', 'focal', detachGearSet);
     numField('fnum', 'fnum', () => {
+      detachGearSet();
       document.querySelectorAll('[data-fnum]').forEach((el) => {
         el.classList.toggle('active', Math.abs(Number(el.dataset.fnum) - state.fnum) < 0.001);
       });
@@ -1885,6 +2189,14 @@
 
     /* シート（前提と出典・設定） */
     $('btnAbout').addEventListener('click', () => { openSheet('aboutSheet'); });
+
+    /* 更新履歴へ。シートの中身をスクロールさせる（ページ全体は動かさない） */
+    $('btnChangelog').addEventListener('click', (e) => {
+      e.preventDefault();
+      const body = $('aboutBody');
+      const target = $('changelog');
+      body.scrollTo({ top: target.offsetTop - body.offsetTop - 8, behavior: 'smooth' });
+    });
     $('btnSettings').addEventListener('click', () => { openSheet('settingsSheet'); });
     SHEETS.forEach((id) => {
       $(id).addEventListener('click', (e) => {
@@ -1921,6 +2233,22 @@
       else if (mq.addListener) mq.addListener(onSchemeChange);
     }
 
+    /* --- 共有まわりの共通処理（結果カードと設定シートの両方から使う） --- */
+    const putUrl = (url) => { $('shareHint').textContent = url; };
+
+    const copyUrl = async (url) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast('URLをコピーしました');
+        return true;
+      } catch (e) {
+        // クリップボードが使えない環境向けの手動フォールバック
+        putUrl(url);
+        showToast('コピーできませんでした。設定の下に出したURLを長押しで選んでください');
+        return false;
+      }
+    };
+
     /* 結果カードの画像 */
     $('btnCardSave').addEventListener('click', async () => {
       const img = await buildCardImage();
@@ -1934,16 +2262,92 @@
       showToast('画像を保存しました');
     });
 
+    /* 画像と「同じ設定で開けるURL」をまとめて共有する。
+       X に投稿すると画像が本文に付き、URL から相手が同じ設定で開ける。
+       共有先によっては url フィールドが落ちるので、URLは本文（text）に入れて渡す。 */
     $('btnCardShare').addEventListener('click', async () => {
       const img = await buildCardImage();
+      const url = shareUrl();
+      const sh = shower();
+      const text = `${purpose().label}／${sh.name}\n` +
+        `${shutterLabel(lastRes.cfg.exposure)} / F${fmt(lastRes.cfg.fnum, 1)} / ISO ${lastRes.cfg.iso}\n` +
+        `${url}`;
       const file = img.blob ? new File([img.blob], cardFileName(), { type: 'image/png' }) : null;
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: '流星撮影セッティング' });
-          return;
-        } catch (e) { return; }   // 共有をやめた場合は何もしない
+
+      if (file && navigator.canShare && navigator.share) {
+        // 画像＋本文（URL入り）で共有できるならそれが最良
+        if (navigator.canShare({ files: [file], text: text })) {
+          try { await navigator.share({ files: [file], text: text }); return; } catch (e) { return; }
+        }
+        // 本文を付けられない端末は画像だけ共有し、URLは別途コピーする
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: '流星撮影セッティング' });
+            $('shareHint').textContent = url;
+            copyUrl(url);
+            return;
+          } catch (e) { return; }
+        }
       }
-      showToast('この端末では共有できないので、画像を長押しで保存してください');
+      if (navigator.share) {
+        try { await navigator.share({ title: '流星撮影セッティング', text: text }); return; } catch (e) { return; }
+      }
+      showToast('この端末では共有できません。画像は「画像を保存」から、URLは設定からコピーできます');
+    });
+
+    /* 画面を消さない */
+    $('wakeLock').addEventListener('change', (e) => {
+      state.keepAwake = e.target.checked;
+      save();
+      if (state.keepAwake) acquireWakeLock(); else releaseWakeLock();
+      renderWakeLock();
+    });
+
+    /* バックグラウンドから戻ると解除されるので取り直す */
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && state.keepAwake) acquireWakeLock();
+    });
+
+    /* 機材セット */
+    $('gearSetSelect').addEventListener('change', (e) => {
+      const name = e.target.value;
+      if (!name) { state.gearSetName = null; renderGearSets(); return; }
+      const set = loadGearSets().find((g) => g.name === name);
+      if (!set) { renderGearSets(); return; }
+      GEAR_KEYS.forEach((k) => {
+        if (Object.prototype.hasOwnProperty.call(set.gear, k)) state[k] = set.gear[k];
+      });
+      state.gearSetName = name;
+      renderGearSets();
+      syncInputs();
+      refresh();
+      showToast(`機材セット「${name}」に切り替えました`);
+    });
+
+    $('btnSaveGear').addEventListener('click', () => {
+      const cam = D.cameras.find((c) => c.id === state.cameraId);
+      const suggested = state.gearSetName ||
+        `${cam ? cam.name : '機材'} ${fmt(state.focal, 0)}mm`;
+      const name = (window.prompt('この機材セットの名前', suggested) || '').trim();
+      if (!name) return;
+      const gear = {};
+      GEAR_KEYS.forEach((k) => { gear[k] = state[k]; });
+      const list = loadGearSets().filter((g) => g.name !== name);
+      list.push({ name: name, gear: gear });
+      saveGearSets(list);
+      state.gearSetName = name;
+      renderGearSets();
+      save();
+      showToast(`「${name}」として保存しました`);
+    });
+
+    $('btnDeleteGear').addEventListener('click', () => {
+      if (!state.gearSetName) return;
+      if (!window.confirm(`機材セット「${state.gearSetName}」を削除します。よろしいですか？`)) return;
+      saveGearSets(loadGearSets().filter((g) => g.name !== state.gearSetName));
+      state.gearSetName = null;
+      renderGearSets();
+      save();
     });
 
     /* 年間カレンダー */
@@ -1971,21 +2375,6 @@
     });
 
     /* 設定 — URL で共有 */
-    const putUrl = (url) => { $('shareHint').textContent = url; };
-
-    const copyUrl = async (url) => {
-      try {
-        await navigator.clipboard.writeText(url);
-        showToast('URLをコピーしました');
-        return true;
-      } catch (e) {
-        // クリップボードが使えない環境向けの手動フォールバック
-        putUrl(url);
-        showToast('コピーできませんでした。下のURLを長押しで選んでください');
-        return false;
-      }
-    };
-
     $('btnShare').addEventListener('click', async () => {
       const url = shareUrl();
       putUrl(url);
@@ -2018,6 +2407,19 @@
   }
 
   /* ===================== 起動 ===================== */
+
+  /** 更新履歴を ⓘ シートに出す（新しい順） */
+  function renderChangelog() {
+    const list = D.changelog || [];
+    $('changelogList').innerHTML = list.map((rel) => `
+      <div class="changelog__rel">
+        <div class="changelog__head">
+          <span class="changelog__ver">v${escapeHtml(rel.version)}</span>
+          <span class="changelog__date">${escapeHtml(rel.date)}</span>
+        </div>
+        <ul>${rel.items.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}</ul>
+      </div>`).join('');
+  }
 
   /** バージョンと更新日時をアプリバーに出す */
   function renderVersion() {
@@ -2209,6 +2611,9 @@
       track.style.transition = 'none';
       track.classList.remove('is-animating');
       track.style.transform = isTabMode() ? 'translateX(0)' : '';
+      // canvas は CSS では伸縮しないので描き直す
+      clearTimeout(fovResizeTimer);
+      fovResizeTimer = setTimeout(redrawFov, 150);
     });
   }
 
@@ -2234,6 +2639,7 @@
   function boot() {
     initSelects();
     renderVersion();
+    renderChangelog();
     applyTheme(themePref());       // インライン script が立てた値を正として全体に反映する
     applyTextSize(textSizePref()); // 同じく文字サイズ
     setupGestures();
@@ -2249,7 +2655,8 @@
       if (typeof sharedPayload.cameraId === 'string') applyCameraPreset(sharedPayload.cameraId);
       shared = applySharedPayload(sharedPayload);
       try {
-        history.replaceState(null, '', location.pathname + location.search);
+        // 次に開いたときは自分の設定に戻るよう、共有用のクエリとハッシュを外す
+        history.replaceState(null, '', location.pathname);
       } catch (e) { /* 履歴を触れなくても動作に影響はない */ }
     }
     if (state.locIndex == null || state.lat == null || state.lon == null) {
@@ -2275,6 +2682,9 @@
       applyCameraPreset(state.cameraId);
     }
     if (!state.datetime) state.datetime = nextPeakDate(shower()).toISOString();
+    renderGearSets();
+    renderWakeLock();
+    if (state.keepAwake) acquireWakeLock();
     syncInputs();
     bind();
     goToTab(state.activePage, false);   // 再読み込み後も開いていたタブに戻る

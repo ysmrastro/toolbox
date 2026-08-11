@@ -172,5 +172,14 @@ checkText('sw.js の VERSION', !!swMatch && swMatch[1] === version,
 checkText('data.js の appUpdated の書式', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(D.appUpdated),
   D.appUpdated);
 
+/* 更新時刻を手で書くと、うっかり未来の時刻を入れてしまう（実際に最大2時間先の値が
+   入っていた）。tools/release.py で打つのが正で、ここでは未来でないことを検査する。
+   端末の時計のずれを考えて5分だけ猶予を持たせる。 */
+const updatedAt = new Date(D.appUpdated.replace(' ', 'T'));
+const skewMin = (updatedAt.getTime() - Date.now()) / 60000;
+checkText('appUpdated が未来でないこと', skewMin <= 5,
+  skewMin > 5 ? `${Math.round(skewMin)}分先の時刻になっている（tools/release.py で打ち直す）`
+    : `${Math.round(-skewMin)}分前`);
+
 console.log(fail === 0 ? '\n全項目が記事の数値と一致しました。' : `\n${fail}項目が不一致です。`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1413,3 +1413,48 @@ input[type="number"] { padding-right: 1.9rem; }
 }
 
 .card-preview img { width: 100%; height: auto; display: block; }
+
+/* ---------------- 画角プレビュー ---------------- */
+.fov {
+  margin-top: var(--tb-space-sm);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  overflow: hidden;
+  line-height: 0;   /* canvas の下に隙間ができないように */
+}
+
+.fov canvas { display: block; width: 100%; }
+
+/* ---------------- 更新履歴 ---------------- */
+.sheet__nav {
+  margin-bottom: var(--tb-space-md);
+  padding-bottom: var(--tb-space-sm);
+  border-bottom: 1px solid var(--tb-border);
+  font-size: var(--tb-font-size-sm);
+}
+
+.changelog__rel {
+  margin-bottom: var(--tb-space-md);
+  padding-bottom: var(--tb-space-sm);
+  border-bottom: 1px dashed var(--tb-border);
+}
+
+.changelog__rel:last-child { border-bottom: none; }
+
+.changelog__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tb-space-sm);
+  margin-bottom: var(--tb-space-xs);
+}
+
+.changelog__ver {
+  font-family: var(--tb-font-mono);
+  font-weight: 700;
+  color: var(--tb-accent);
+}
+
+.changelog__date { font-size: var(--ms-fs-label); color: var(--tb-text-muted); }
+
+.changelog__rel ul { padding-left: 1.1em; margin-bottom: 0; }
+.changelog__rel li { margin-bottom: 4px; }
