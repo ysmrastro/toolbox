@@ -68,6 +68,67 @@
     } catch (e) { /* 無視 */ }
   }
 
+  /* ===================== 版の食い違いからの復帰 =====================
+   * Service Worker の更新中に「古い index.html ＋ 新しい app.js」の組み合わせで
+   * 起動してしまうと、新しい JS が古い HTML に無い要素を触って例外になり、
+   * どのページにも .active が付かないまま画面が真っ白になる（実際に発生した）。
+   *
+   * index.html に埋めた <meta name="app-version"> と data.js の版を突き合わせ、
+   * 食い違っていたらキャッシュと Service Worker を捨てて1回だけ作り直す。
+   * 1.3.2 より前の index.html はこの meta を持たないので、null も食い違い扱いにする。
+   */
+  const RECOVERY_KEY = 'ms-recovery';
+
+  function stampedVersion() {
+    const m = document.querySelector('meta[name="app-version"]');
+    return m ? m.getAttribute('content') : null;
+  }
+
+  function recoveryTried() {
+    try { return sessionStorage.getItem(RECOVERY_KEY); } catch (e) { return null; }
+  }
+
+  /** 画面上部に細い帯でお知らせを出す（古い HTML でも出せるよう要素は動的に作る） */
+  function showBanner(text, actionLabel, onAction) {
+    if (document.getElementById('msBanner')) return;   // 二重に出さない
+    const bar = document.createElement('div');
+    bar.id = 'msBanner';
+    bar.setAttribute('role', 'alert');
+    bar.style.cssText = [
+      'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+      'padding:10px 12px', 'font:13px/1.5 system-ui,sans-serif',
+      'background:#4a1f14', 'color:#ffd9c9', 'text-align:center',
+      'box-shadow:0 2px 8px rgba(0,0,0,0.5)',
+    ].join(';');
+    bar.appendChild(document.createTextNode(text + ' '));
+    if (actionLabel) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = actionLabel;
+      btn.style.cssText = 'margin-left:6px;padding:3px 10px;border-radius:6px;' +
+        'border:1px solid #ffd9c9;background:transparent;color:#ffd9c9;font:inherit';
+      btn.addEventListener('click', onAction);
+      bar.appendChild(btn);
+    }
+    document.body.appendChild(bar);
+  }
+
+  /** キャッシュと Service Worker を捨てて読み直す */
+  async function rebuildAndReload(reason) {
+    try { sessionStorage.setItem(RECOVERY_KEY, reason); } catch (e) { /* 続行する */ }
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (window.caches) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch (e) { /* 消せなくても読み直しは試す */ }
+    location.reload();
+  }
+
   /* ===================== 表示テーマ =====================
    * 選択値（auto/dark/light/astro）は入力内容とは別のキーに保存する。
    * index.html のインライン script が最初の描画より前に同じキーを読んで
@@ -1478,7 +1539,8 @@
     state.lon = D.locations[idx].lon;
   }
 
-  function init() {
+  /** 起動の本体。ここで落ちても真っ白にしないよう init() が包む */
+  function boot() {
     initSelects();
     renderVersion();
     applyTheme(themePref());   // インライン script が立てた値を正として全体に反映する
@@ -1516,6 +1578,31 @@
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => { /* オフライン対応は任意 */ });
+    }
+  }
+
+  function init() {
+    /* HTML と JS の版が食い違っていたら、そのまま起動しても要素が見つからず落ちる。
+       先にキャッシュを作り直す（無限に繰り返さないよう1回だけ） */
+    if (stampedVersion() !== D.appVersion) {
+      if (!recoveryTried()) { rebuildAndReload('version-mismatch'); return; }
+      showBanner('ファイルの版が揃っていません。', '作り直す', () => rebuildAndReload('manual'));
+    } else {
+      // 正常に起動できた版なので、次に食い違ったときも自動で直せるよう印を消す
+      try { sessionStorage.removeItem(RECOVERY_KEY); } catch (e) { /* 無視 */ }
+    }
+
+    try {
+      boot();
+    } catch (err) {
+      /* どこかで落ちても真っ白にはしない。最低限1ページを見せて、直す手段を出す */
+      try {
+        const first = $(PAGES[0]);
+        if (first && !document.querySelector('.page.active')) first.classList.add('active');
+      } catch (e) { /* 無視 */ }
+      showBanner('起動時にエラーが出ました（' + (err && err.message) + '）。',
+        '作り直す', () => rebuildAndReload('boot-error'));
+      throw err;   // 原因を残すためコンソールにも出す
     }
   }
 

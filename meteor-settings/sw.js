@@ -1,24 +1,44 @@
 /*
  * sw.js — オフラインでも使えるようにするための Service Worker
  * 撮影地は電波が届かないことが多いため、初回アクセス後は完全にオフラインで動く。
+ *
+ * 【必ず守ること】VERSION は data.js の appVersion と index.html の
+ * <meta name="app-version"> ・ scriptタグの ?v= と揃える。
+ * ずれていると selftest.js が落ちる（node meteor-settings/selftest.js）。
+ *
+ * 【設計の理由】以前は index.html もキャッシュ優先で返していたため、
+ * 更新のタイミングで「古い index.html ＋ 新しい app.js」の組み合わせで
+ * 起動してしまい、新しい JS が古い HTML に無い要素を触って例外になり、
+ * 画面が真っ白になる事故が起きた（iPhone・Android の両方で発生）。
+ * そのため:
+ *   1. HTML（ナビゲーション）はネットワーク優先。オフラインのときだけキャッシュを使う
+ *   2. JS・CSS は URL に ?v=バージョン を付け、HTML と同じ版だけを読む
+ *   3. activate で clients.claim() を呼ばない（開いているページを途中で乗っ取らない）
  */
-const CACHE = 'meteor-settings-v1.3.1';
+const VERSION = '1.3.2';
+const CACHE = 'meteor-settings-v' + VERSION;
+const V = '?v=' + VERSION;
 
-const ASSETS = [
-  './',
-  './index.html',
+/* HTML はネットワーク優先だが、オフライン用に控えを持つ */
+const HTML = ['./', './index.html'];
+
+/* 版を固定して読むもの（index.html の ?v= と同じ URL でなければキャッシュに当たらない） */
+const VERSIONED = [
   './style.css',
   './data.js',
   './astro.js',
   './engine.js',
   './lightpollution.js',
   './app.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
   '../shared/css/variables.css',
   '../shared/css/reset.css',
   '../shared/css/components.css',
+].map((p) => p + V);
+
+const STATIC = [
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
 ];
 
 /* 光害地図タイル（日本周辺・約0.8MB）。撮影地が圏外でも空の暗さを引けるように同梱する */
@@ -59,7 +79,7 @@ const LP_TILES = [
   './lp-tiles/tile_6_59_28.png',
 ];
 
-ASSETS.push.apply(ASSETS, LP_TILES);
+const ASSETS = HTML.concat(VERSIONED, STATIC, LP_TILES);
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
@@ -76,16 +96,46 @@ self.addEventListener('message', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
+  /* 古いキャッシュを片付ける。clients.claim() は呼ばない
+     （開いているページを途中で新しい版に乗り換えさせると、
+       そのページの HTML と読み込む JS の版が食い違う） */
   e.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
+    caches.keys().then((keys) => Promise.all(
+      keys.filter((k) => k.indexOf('meteor-settings-') === 0 && k !== CACHE)
+        .map((k) => caches.delete(k))
+    ))
   );
 });
 
-/* キャッシュ優先＋バックグラウンド更新 */
+/** ページそのものの読み込みか（HTML を取りに来たか） */
+function isNavigation(request) {
+  if (request.mode === 'navigate') return true;
+  // mode を見られない環境向けの保険
+  const url = new URL(request.url);
+  return request.destination === 'document' ||
+    url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');
+}
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+
+  /* HTML はネットワーク優先。古い HTML が残ると JS と版が食い違って起動できなくなる */
+  if (isNavigation(e.request)) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE).then((c) => c.put('./index.html', clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match('./index.html').then((hit) => hit || caches.match('./')))
+    );
+    return;
+  }
+
+  /* それ以外はキャッシュ優先＋バックグラウンド更新 */
   e.respondWith(
     caches.match(e.request).then((hit) => {
       const fetching = fetch(e.request)

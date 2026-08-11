@@ -136,5 +136,41 @@ if (sandbox.MS_ASTRO) {
   console.log(`  同時刻の月: 高度 ${moon.altitude.toFixed(1)}° / 輝面比 ${(moon.illumination * 100).toFixed(0)}% / 月齢 ${moon.age.toFixed(1)}日`);
 }
 
+/* ===================== 版の整合性 =====================
+ * 版は data.js / index.html（meta と ?v=）/ sw.js の4か所に出てくる。
+ * ずれると「古い HTML ＋ 新しい JS」で起動して真っ白になる事故につながるので、
+ * ここで機械的に突き合わせる。
+ */
+console.log('\n=== 版の整合性（4か所が揃っているか） ===');
+const version = D.appVersion;
+const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+const sw = fs.readFileSync(path.join(dir, 'sw.js'), 'utf8');
+
+function checkText(label, ok, detail) {
+  if (!ok) fail++;
+  console.log(`${ok ? '  OK ' : 'FAIL '} ${label.padEnd(42)} ${detail}`);
+}
+
+const metaMatch = html.match(/<meta name="app-version" content="([^"]+)">/);
+checkText('index.html の meta app-version', !!metaMatch && metaMatch[1] === version,
+  metaMatch ? metaMatch[1] : '（meta が無い）');
+
+const queries = Array.from(html.matchAll(/(?:src|href)="([^"?]+\.(?:js|css))\?v=([^"]+)"/g));
+const bad = queries.filter((m) => m[2] !== version).map((m) => `${m[1]}?v=${m[2]}`);
+checkText('index.html の ?v=（js/css）', queries.length >= 9 && bad.length === 0,
+  `${queries.length}件中${bad.length}件ずれ` + (bad.length ? ' → ' + bad.join(', ') : ''));
+
+const unversioned = Array.from(html.matchAll(/(?:src|href)="((?!https?:)[^"?]+\.(?:js|css))"/g))
+  .map((m) => m[1]);
+checkText('版を付け忘れた js/css が無いこと', unversioned.length === 0,
+  unversioned.length ? unversioned.join(', ') : 'なし');
+
+const swMatch = sw.match(/const VERSION = '([^']+)'/);
+checkText('sw.js の VERSION', !!swMatch && swMatch[1] === version,
+  swMatch ? swMatch[1] : '（VERSION が無い）');
+
+checkText('data.js の appUpdated の書式', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(D.appUpdated),
+  D.appUpdated);
+
 console.log(fail === 0 ? '\n全項目が記事の数値と一致しました。' : `\n${fail}項目が不一致です。`);
 process.exit(fail === 0 ? 0 : 1);

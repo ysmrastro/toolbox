@@ -83,8 +83,26 @@ OGP/Twitterカードのメタタグを置き、1200×630 の `ogp.png` を同じ
 
 アプリバー右上に `vX.Y.Z` と更新日を小さく表示している。バグ修正は +0.0.1、
 機能追加は +0.1（パッチは0に戻す）、メジャーはよほどの変更のときだけ。
-リリース時は `data.js` の `appVersion` / `appUpdated` と `sw.js` の `CACHE` を
-まとめて更新する（詳細は `meteor-settings/README.md`）。
+
+リリース時は**4か所**をまとめて更新する。
+
+1. `data.js` の `appVersion`
+2. `data.js` の `appUpdated`（`YYYY-MM-DD HH:MM`）
+3. `index.html` の `<meta name="app-version">` と js/css の `?v=`
+4. `sw.js` の `VERSION`
+
+**ずれると画面が真っ白になる**（古い HTML と新しい JS が混ざり、JS が存在しない要素を
+触って起動が止まる。実際に発生した）。`node meteor-settings/selftest.js` が4か所の一致を
+検査するので、コミット前に必ず実行する。詳細は `meteor-settings/README.md` の
+「画面が真っ白になった事故」を参照。
+
+## PWA のキャッシュで守ること（meteor-settings）
+
+- **HTML はネットワーク優先**。キャッシュ優先にすると古い HTML が残り、新しい JS と
+  食い違って起動できなくなる
+- **js/css は URL に `?v=` を付ける**。HTML と同じ版だけを読ませる
+- Service Worker の `activate` で **`clients.claim()` を呼ばない**。
+  開いているページを更新途中で乗り換えさせると版が混ざる
 
 ## 開発コマンド
 
