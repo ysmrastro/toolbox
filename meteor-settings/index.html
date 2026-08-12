@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.7.0">
+  <meta name="app-version" content="1.8.0">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.7.0">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.7.0">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.7.0">
-  <link rel="stylesheet" href="style.css?v=1.7.0">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.8.0">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.8.0">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.8.0">
+  <link rel="stylesheet" href="style.css?v=1.8.0">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -110,11 +110,72 @@
   <!-- ============ 本体 ============ -->
   <main class="pages" id="pages">
 
-   <!-- 狭い画面では3ページを横に並べたトラックにして指に追従させる。
-        広い画面では display:contents にして、下の2つがそのままグリッドの子になる -->
+   <!-- 狭い画面では4ページを横に並べたトラックにして指に追従させる。
+        広い画面では display:contents にして、中身がそのままグリッドの子になる -->
    <div class="track" id="track">
 
    <div class="pages__inputs">
+
+   <!-- 計画と機材は広い画面で同じカラムに積む（3カラムのときの1列目） -->
+   <div class="pages__stack">
+
+    <!-- ---------- 計画 ---------- -->
+    <section class="page" id="page-plan">
+      <h2 class="page__heading">📅 計画</h2>
+
+      <div class="card">
+        <h2 class="card__title">次の流星群</h2>
+        <p class="card__desc">
+          近い順に並べています。タップするとその群と極大の夜に切り替わります。
+        </p>
+        <div class="plan-list" id="planList"></div>
+        <div class="chips">
+          <button type="button" class="chip" id="btnCalendar">年間カレンダーで選ぶ</button>
+        </div>
+        <label class="field">
+          <span class="field__label">流星群（一覧から選ぶ）</span>
+          <select class="tb-select" id="showerSelect"></select>
+        </label>
+        <div class="shower-info" id="showerInfo"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">カレンダー</h2>
+        <p class="card__desc">
+          1マスは「その日の夜」（日没から翌朝まで）です。タップするとその夜に切り替わります。
+          丸い印は月の形、<span class="mcell__peak mcell__peak--legend"></span> は流星群の極大がある夜で、
+          極大は未明なので前夜のマスに付きます。
+        </p>
+        <div class="cal-nav">
+          <button type="button" class="cal-nav__btn" id="btnMonthPrev" aria-label="前の月">‹</button>
+          <div class="cal-nav__label" id="monthLabel">—</div>
+          <button type="button" class="cal-nav__btn" id="btnMonthNext" aria-label="次の月">›</button>
+        </div>
+        <div class="chips">
+          <button type="button" class="chip" id="btnMonthToday">今月に戻る</button>
+        </div>
+        <div class="month" id="month"></div>
+        <div class="sky-report" id="dayReport"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card__title">この夜の時刻</h2>
+        <p class="card__desc">
+          帯の中をタップするとその時刻に切り替わります。
+        </p>
+        <label class="field">
+          <span class="field__label">撮影日時（現地時刻）</span>
+          <input class="tb-input" type="datetime-local" id="datetime">
+        </label>
+        <div class="chips">
+          <button type="button" class="chip" id="btnPeak">次の極大の夜へ</button>
+          <button type="button" class="chip" id="btnBest">放射点が最も高い時刻へ</button>
+        </div>
+        <div class="tl" id="timeline"></div>
+        <div class="sky-report" id="timelineReport"></div>
+      </div>
+
+    </section>
 
     <!-- ---------- 機材 ---------- -->
     <section class="page" id="page-gear">
@@ -219,6 +280,8 @@
 
     </section>
 
+   </div><!-- /.pages__stack -->
+
     <!-- ---------- 条件 ---------- -->
     <section class="page" id="page-cond">
       <h2 class="page__heading">🌌 条件</h2>
@@ -230,24 +293,10 @@
       </div>
 
       <div class="card">
-        <h2 class="card__title">流星群</h2>
-        <select class="tb-select" id="showerSelect"></select>
-        <div class="chips">
-          <button type="button" class="chip" id="btnCalendar">年間カレンダーで選ぶ</button>
-        </div>
-        <div class="shower-info" id="showerInfo"></div>
-      </div>
-
-      <div class="card">
-        <h2 class="card__title">日時と場所</h2>
-        <label class="field">
-          <span class="field__label">撮影日時（現地時刻）</span>
-          <input class="tb-input" type="datetime-local" id="datetime">
-        </label>
-        <div class="chips">
-          <button type="button" class="chip" id="btnPeak">次の極大の夜へ</button>
-          <button type="button" class="chip" id="btnBest">放射点が最も高い時刻へ</button>
-        </div>
+        <h2 class="card__title">観測地</h2>
+        <p class="card__desc">
+          流星群と日時は「計画」タブで選びます。
+        </p>
         <label class="field">
           <span class="field__label">観測地</span>
           <select class="tb-select" id="locationSelect"></select>
@@ -268,15 +317,6 @@
           <button type="button" class="chip" id="btnDeleteLoc" hidden>この地点を削除</button>
         </div>
         <div class="sky-report" id="astroReport"></div>
-      </div>
-
-      <div class="card">
-        <h2 class="card__title">この夜の撮影計画</h2>
-        <p class="card__desc">
-          帯の中をタップするとその時刻に切り替わります。
-        </p>
-        <div class="tl" id="timeline"></div>
-        <div class="sky-report" id="timelineReport"></div>
       </div>
 
       <div class="card">
@@ -508,7 +548,10 @@
 
   <!-- ============ ボトムナビ ============ -->
   <nav class="tabbar" id="tabbar">
-    <button type="button" class="tabbar__item active" data-page="page-gear">
+    <button type="button" class="tabbar__item active" data-page="page-plan">
+      <span class="tabbar__icon">📅</span><span class="tabbar__label">計画</span>
+    </button>
+    <button type="button" class="tabbar__item" data-page="page-gear">
       <span class="tabbar__icon">📷</span><span class="tabbar__label">機材</span>
     </button>
     <button type="button" class="tabbar__item" data-page="page-cond">
@@ -748,7 +791,10 @@
         <li><strong>流星群データ</strong>：放射点・対地速度・ZHR・光度分布指数は IMO の Working List 相当の値。
           平均光度は、記事のペルセウス座 +1.63等 を基準に一定量オフセットして揃えた便宜的な値です。</li>
         <li><strong>遭遇本数</strong>：絶対本数は較正できないため、基準構成を 100 とした<strong>相対指数</strong>のみ表示します。</li>
-        <li><strong>天文計算</strong>：ライブラリを使わない低精度計算（太陽 ±0.01°、月 ±0.3°）。設定判断には十分です。</li>
+        <li><strong>天文計算</strong>：ライブラリを使わない低精度計算（太陽 ±0.01°、月 ±0.05°）。
+          日の出入り・月の出入りの時刻を国立天文台の公表値と比べると、<strong>太陽は ±1分・月は ±3分</strong>、
+          月齢は ±0.1日 の範囲で一致します（東京と根室・8月と12月の28件で実測）。
+          撮影計画には十分ですが、正確な時刻が必要な用途では公式の暦を参照してください。</li>
       </ul>
 
       <h3>撮影前に必ず切るもの（記事の実装チェックリスト）</h3>
@@ -772,12 +818,12 @@
   </div>
 </div>
 
-<script src="data.js?v=1.7.0"></script>
-<script src="astro.js?v=1.7.0"></script>
-<script src="engine.js?v=1.7.0"></script>
-<script src="stars.js?v=1.7.0"></script>
-<script src="lightpollution.js?v=1.7.0"></script>
-<script src="app.js?v=1.7.0"></script>
+<script src="data.js?v=1.8.0"></script>
+<script src="astro.js?v=1.8.0"></script>
+<script src="engine.js?v=1.8.0"></script>
+<script src="stars.js?v=1.8.0"></script>
+<script src="lightpollution.js?v=1.8.0"></script>
+<script src="app.js?v=1.8.0"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

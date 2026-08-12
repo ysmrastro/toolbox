@@ -46,7 +46,7 @@
     camRa: null,        // 赤経［度］
     camDec: null,       // 赤緯［度］
     articleMode: false,
-    activePage: 'page-gear',   // 開いていたタブ（再読み込み後もここに戻る）
+    activePage: 'page-plan',   // 開いていたタブ（再読み込み後もここに戻る）
     keepAwake: false,          // 現地で画面が消えないようにするか
     fovPortrait: false,        // 画角プレビューの構図（false=横 / true=縦）
     gearSetName: null,         // 選んでいる機材セットの名前
@@ -55,8 +55,9 @@
   /* 状態の初期値。共有URLには「初期値と違う項目」だけを載せるために取っておく */
   const DEFAULTS = JSON.parse(JSON.stringify(state));
 
-  /* ボトムナビで行き来するページ。設定はシートなのでここには入れない */
-  const PAGES = ['page-gear', 'page-cond', 'page-result'];
+  /* ボトムナビで行き来するページ。設定はシートなのでここには入れない。
+     並び順は index.html の DOM 順と一致させる（横スワイプのトラックがこの順に並ぶ） */
+  const PAGES = ['page-plan', 'page-gear', 'page-cond', 'page-result'];
 
   const DURATIONS = [
     { value: 0.3, label: '0.3秒', sub: '一般的な流星' },
@@ -72,12 +73,14 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* 無視 */ }
   }
 
+  /** 保存された設定を読む。初回訪問（保存が無い）なら false を返す */
   function load() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return;
+      if (!raw) return false;
       Object.assign(state, JSON.parse(raw));
-    } catch (e) { /* 無視 */ }
+      return true;
+    } catch (e) { return false; }
   }
 
   /* ===================== 版の食い違いからの復帰 =====================
@@ -710,9 +713,17 @@
     const cur = state.camAz == null ? defaultCamAz(snap) : state.camAz;
     if (kind === 'zenith') return { az: cur, alt: 90 };
     if (kind === 'radiant') return { az: radAz, alt: radAlt };
-    // 放射点から45°離す。高度に余裕があれば上へ、無ければ方位でずらす
-    if (radAlt + 45 <= 90) return { az: radAz, alt: radAlt + 45 };
-    return { az: norm360(radAz + 45), alt: radAlt };
+
+    /* 放射点から45°離す。
+       「方位を45°ずらす」だと放射点が高いときに離角が45°に届かない
+       （高度58°では方位45°ずらしても離角は23°しかない。実際にそうなっていた）。
+       球面上で45°離れた円をたどり、そのうち最も高度が取れる点を選ぶ。
+       高度が高いほど空が暗く流星の減光も小さいので、条件のいい向きになる。 */
+    let best = null;
+    circleAround(radAz, radAlt, 45, 72).forEach((q) => {
+      if (!best || q.alt > best.alt) best = q;
+    });
+    return best ? { az: norm360(best.az), alt: best.alt } : { az: norm360(radAz + 45), alt: radAlt };
   }
 
   /** いまの時刻・地点で、方位・高度の狙いに対応する赤経・赤緯 */
@@ -1127,13 +1138,17 @@
       // 極大日の未明（01:00）を代表時刻にする。nightTimeline は前日の夜として扱う
       const night = new Date(year, mm - 1, dd, 1, 0, 0, 0);
       const tl = A.nightTimeline(night, state.lat, state.lon, sh);
+      /* 月齢と輝面比は「その夜が始まる日の正午」の値にする。
+         マンスリーカレンダーのマスと同じ数え方に揃えて、別の数字が並ばないようにする */
+      const noon = new Date(night.getTime() - 13 * 3600000);   // 極大日01:00 → 前日12:00
+      const moonNoon = A.moonInfo(noon, state.lat, state.lon);
       return {
         shower: sh,
         date: night,
         timeline: tl,
         goldenMinutes: tl.goldenMinutes,
-        illumination: tl.moon.illumination,
-        moonAge: tl.moon.age,
+        illumination: moonNoon.illumination,
+        moonAge: moonNoon.age,
         peakAlt: tl.peak ? tl.peak.altitude : 0,
         peakTime: tl.peak ? tl.peak.time : null,
       };
@@ -1152,7 +1167,9 @@
     if (hours <= 0 || alt <= 5) return { rank: 'bad', label: '見込みなし' };
     // 狙える時間（暗夜×月なし）と放射点の高さの両方が要る
     const score = Math.min(hours / 5, 1) * Math.min(alt / 50, 1);
-    if (score >= 0.75) return { rank: 'ok', label: '当たり年' };
+    /* 評価しているのは「月と放射点高度の条件」だけで、群そのものの多さは含まない。
+       「当たり年」だと出現数が多いように読めるので、条件の良し悪しとして書く（ZHR は横に並べる） */
+    if (score >= 0.75) return { rank: 'ok', label: '条件よい' };
     if (score >= 0.4) return { rank: 'mid', label: 'まあまあ' };
     return { rank: 'warn', label: '条件わるい' };
   }
@@ -1172,30 +1189,283 @@
       || (state.locIndex >= 0 && D.locations[state.locIndex] ? D.locations[state.locIndex].name : '手入力の座標');
 
     $('calList').innerHTML =
-      `<p class="hint">観測地: ${escapeHtml(locName)}（${fmt(state.lat, 2)}, ${fmt(state.lon, 2)}）</p>` +
-      rows.map((r) => {
-        const v = calendarVerdict(r);
-        const md = `${r.date.getMonth() + 1}/${r.date.getDate()}`;
-        return `
-        <button type="button" class="cal-row" data-shower="${r.shower.id}" data-date="${r.date.toISOString()}">
-          <div class="cal-row__date">
-            <div class="cal-row__md">${md}</div>
-            <div class="cal-row__wd">${'日月火水木金土'[r.date.getDay()]}</div>
+      `<p class="hint">観測地: ${escapeHtml(locName)}（${fmt(state.lat, 2)}, ${fmt(state.lon, 2)}）` +
+      '<br>日付はその夜が始まる日（夕方）です。極大は未明なので前夜から狙います。</p>' +
+      rows.map(showerRowHtml).join('');
+  }
+
+  /**
+   * 極大の夜1件ぶんの行。計画タブの「次の流星群」と年間カレンダーで共通に使う。
+   * 左の日付は「その夜が始まる日」で、極大日（未明）とは1日ずれる。
+   */
+  function showerRowHtml(r) {
+    const v = calendarVerdict(r);
+    const night = nightAnchor(r.date);
+    const days = Math.round((night.getTime() - nightAnchor(new Date()).getTime()) / 86400000);
+    const daysLabel = days < 0 ? '' : days === 0 ? '今夜' : days === 1 ? '明日の夜' : `${days}日後`;
+    const active = r.shower.id === state.showerId && sameYMD(night, nightAnchor(currentDate()));
+    return `
+      <button type="button" class="cal-row${active ? ' active' : ''}"
+              data-shower="${r.shower.id}" data-date="${r.date.toISOString()}">
+        <div class="cal-row__date">
+          <div class="cal-row__md">${night.getMonth() + 1}/${night.getDate()}</div>
+          <div class="cal-row__wd">${WEEKDAYS_MON[weekIndex(night)]}</div>
+          ${daysLabel ? `<div class="cal-row__days">${daysLabel}</div>` : ''}
+        </div>
+        <div class="cal-row__body">
+          <div class="cal-row__name">${escapeHtml(r.shower.name)}
+            <span class="cal-badge cal-badge--${v.rank}">${v.label}</span></div>
+          <div class="cal-row__sub">
+            極大 ${peakLabel(r.shower)} 未明／ZHR ${r.shower.zhr}／
+            放射点 最高 <b>${fmt(r.peakAlt, 0)}°</b>
+            ${r.peakTime ? '（' + hhmm(r.peakTime) + '）' : ''}
           </div>
-          <div class="cal-row__body">
-            <div class="cal-row__name">${escapeHtml(r.shower.name)}
-              <span class="cal-badge cal-badge--${v.rank}">${v.label}</span></div>
-            <div class="cal-row__sub">
-              ZHR ${r.shower.zhr}／放射点 最高 ${fmt(r.peakAlt, 0)}°
-              ${r.peakTime ? '（' + hhmm(r.peakTime) + '）' : ''}
-            </div>
-            <div class="cal-row__sub">
-              月齢 ${fmt(r.moonAge, 1)}日・輝面比 ${Math.round(r.illumination * 100)}%／
-              狙える時間 <b>${r.goldenMinutes > 0 ? minutesText(r.goldenMinutes) : 'なし'}</b>
-            </div>
+          <div class="cal-row__sub">
+            月齢 ${fmt(r.moonAge, 1)}日・輝面比 ${Math.round(r.illumination * 100)}%／
+            狙える時間 <b>${r.goldenMinutes > 0 ? minutesText(r.goldenMinutes) : 'なし'}</b>
           </div>
-        </button>`;
-      }).join('');
+        </div>
+      </button>`;
+  }
+
+  /** 群と「その夜のいちばん狙いやすい時刻」を選ぶ（一覧と年間カレンダーの共通処理） */
+  function selectShowerNight(showerId, isoDate) {
+    state.showerId = showerId;
+    const ref = new Date(isoDate);
+    const night = nightAnchor(ref);
+    const sh = D.showers.find((s) => s.id === showerId) || shower();
+    const tl = A.nightTimeline(ref, state.lat, state.lon, sh);
+    state.datetime = bestTimeOfNight(tl, night).toISOString();
+    monthAnchor = new Date(night.getFullYear(), night.getMonth(), 1);
+  }
+
+  /* ===================== 計画タブ =====================
+   * 「次の流星群っていつだっけ？」に最初に答えるページ。
+   * 極大が遠い時期は機材より予定のほうが知りたいので、これを最初のタブにしている。
+   *
+   * カレンダーの1マスは「日付」ではなく「その夜」を表す。
+   * 8/12 のマス＝8/12 の日没から 8/13 の夜明けまで。流星群の極大は未明が本番なので、
+   * 極大日（例 8/13）の印はその前夜（8/12）のマスに置く。
+   */
+
+  /** カレンダーが表示している月の1日。null なら選んでいる夜の月を出す */
+  let monthAnchor = null;
+
+  const WEEKDAYS_MON = ['月', '火', '水', '木', '金', '土', '日'];
+
+  /** その夜を代表する日付（0時0分）。未明は前の日の夜の続きとして扱う */
+  function nightAnchor(date) {
+    const d = new Date(date.getTime());
+    if (d.getHours() < 12) d.setDate(d.getDate() - 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function sameYMD(a, b) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+      && a.getDate() === b.getDate();
+  }
+
+  /** 月曜始まりの曜日番号（0=月 … 6=日） */
+  function weekIndex(date) { return (date.getDay() + 6) % 7; }
+
+  /** その夜のうち最も狙いやすい時刻（暗夜のうち放射点が最も高い時刻） */
+  function bestTimeOfNight(tl, nightDate) {
+    if (tl && tl.peak) return tl.peak.time;
+    if (tl && tl.duskAstro && tl.dawnAstro) {
+      return new Date((tl.duskAstro.getTime() + tl.dawnAstro.getTime()) / 2);
+    }
+    const d = new Date(nightDate.getTime());
+    d.setHours(23, 0, 0, 0);
+    return d;
+  }
+
+  /**
+   * 月の形の小さな図。輝面比 k と満ちていく途中かどうかで描く。
+   * 明るい側は「満月に向かう途中なら右」（北半球から見た向き）。
+   * 明暗の境界は楕円になるので、半円＋楕円弧の2つの弧で閉じた形にする。
+   */
+  function moonGlyph(illumination, waxing, size) {
+    const c = size / 2;
+    const r = c - 0.5;
+    const k = Math.max(0, Math.min(1, illumination));
+    const rx = r * Math.abs(1 - 2 * k);          // 三日月ほど境界が明るい側へ寄る
+    const outer = waxing ? 1 : 0;                // 明るい側の半円をどちら回りで描くか
+    const inner = (!!waxing === (k < 0.5)) ? 0 : 1;
+    const lit = k <= 0.01 ? '' :
+      `<path d="M ${c},${c - r} A ${r},${r} 0 0,${outer} ${c},${c + r}` +
+      ` A ${rx.toFixed(2)},${r} 0 0,${inner} ${c},${c - r} Z" fill="var(--ms-cal-moon-lit)"/>`;
+    return `<svg class="mcell__moon" width="${size}" height="${size}" ` +
+      `viewBox="0 0 ${size} ${size}" aria-hidden="true">` +
+      `<circle cx="${c}" cy="${c}" r="${r}" fill="var(--ms-cal-moon-dark)"/>${lit}</svg>`;
+  }
+
+  /** 表示中の月に極大がある夜を { 日: [流星群] } で返す */
+  function peakNightsOfMonth(year, month) {
+    const map = {};
+    D.showers.filter((sh) => sh.peak).forEach((sh) => {
+      const [pm, pd] = sh.peak.split('-').map(Number);
+      // 1月・12月のマスには隣の年の極大が入るので前後の年も見る
+      [year - 1, year, year + 1].forEach((y) => {
+        const night = nightAnchor(new Date(y, pm - 1, pd, 1, 0, 0, 0));
+        if (night.getFullYear() !== year || night.getMonth() !== month) return;
+        const key = night.getDate();
+        if (!map[key]) map[key] = [];
+        map[key].push(sh);
+      });
+    });
+    return map;
+  }
+
+  /** 今日以降の極大を近い順に返す */
+  function upcomingPeaks(count) {
+    const todayMs = nightAnchor(new Date()).getTime();
+    const year = new Date().getFullYear();
+    const rows = [];
+    [year, year + 1].forEach((y) => {
+      calendarRows(y).forEach((r) => {
+        if (nightAnchor(r.date).getTime() >= todayMs) rows.push(r);
+      });
+    });
+    rows.sort((a, b) => a.date - b.date);
+    return rows.slice(0, count);
+  }
+
+  /** 'MM-DD' を「8/13」の形にする（0埋めのままだと日付に見えにくい） */
+  function peakLabel(sh) {
+    if (!sh.peak) return '—';
+    const [m, d] = sh.peak.split('-').map(Number);
+    return `${m}/${d}`;
+  }
+
+  function renderPlanList() {
+    $('planList').innerHTML = upcomingPeaks(8).map(showerRowHtml).join('');
+  }
+
+  let lastNightKey = null;
+
+  function renderMonth() {
+    const selected = nightAnchor(currentDate());
+    const key = selected.toDateString();
+    if (key !== lastNightKey) {
+      /* 日時が変わったら、その夜が見える月に合わせる。
+         月送りのボタンで眺めているだけのときは動かさない（renderMonth を直接呼ぶ） */
+      monthAnchor = new Date(selected.getFullYear(), selected.getMonth(), 1);
+      lastNightKey = key;
+    }
+    const y = monthAnchor.getFullYear();
+    const m = monthAnchor.getMonth();
+    $('monthLabel').textContent = `${y}年 ${m + 1}月`;
+
+    const peaks = peakNightsOfMonth(y, m);
+    const today = new Date();
+    const lead = weekIndex(new Date(y, m, 1));          // 1日までの空きマス
+    const days = new Date(y, m + 1, 0).getDate();       // その月の日数
+
+    const head = WEEKDAYS_MON.map((w, i) =>
+      `<span class="${i === 5 ? 'is-sat' : i === 6 ? 'is-sun' : ''}">${w}</span>`).join('');
+
+    const cells = [];
+    for (let i = 0; i < lead; i++) cells.push('<div class="mcell mcell--blank"></div>');
+    for (let d = 1; d <= days; d++) {
+      const date = new Date(y, m, d);
+      const wi = weekIndex(date);
+      const noon = new Date(y, m, d, 12, 0, 0, 0);
+      const moon = A.moonInfo(noon, state.lat, state.lon);
+      const sh = peaks[d];
+      const cls = ['mcell'];
+      if (wi === 5) cls.push('mcell--sat');
+      if (wi === 6) cls.push('mcell--sun');
+      if (sameYMD(date, today)) cls.push('mcell--today');
+      if (sameYMD(date, selected)) cls.push('active');
+      const label = `${m + 1}月${d}日（${WEEKDAYS_MON[wi]}）の夜／月齢 ${fmt(moon.age, 1)}日` +
+        (sh ? '／' + sh.map((s) => s.name).join('・') + 'の極大' : '');
+      cells.push(
+        `<button type="button" class="${cls.join(' ')}" data-day="${d}" aria-label="${label}">` +
+        `<span class="mcell__d">${d}</span>` +
+        moonGlyph(moon.illumination, moon.age < 14.77, 14) +
+        `<span class="mcell__peak${sh ? '' : ' mcell__peak--none'}"></span>` +
+        '</button>');
+    }
+
+    $('month').innerHTML =
+      `<div class="month__wd">${head}</div>` +
+      `<div class="month__grid">${cells.join('')}</div>`;
+  }
+
+  /** 選んでいる夜の詳細（日の出入り・月の出入り・月齢・暗夜） */
+  function renderDayReport(res) {
+    const night = nightAnchor(currentDate());
+    const next = new Date(night.getTime() + 86400000);
+    const ev = A.dayEvents(night, state.lat, state.lon);
+    const evNext = A.dayEvents(next, state.lat, state.lon);
+    const tl = timelineFor(currentDate(), state.lat, state.lon, res.snap.sh);
+    const peaks = peakNightsOfMonth(night.getFullYear(), night.getMonth())[night.getDate()];
+
+    let r = `<b>${night.getMonth() + 1}/${night.getDate()}` +
+      `（${WEEKDAYS_MON[weekIndex(night)]}）の夜</b>`;
+    if (peaks) {
+      r += '　<span class="mcell__peak mcell__peak--legend"></span>' +
+        `<span style="color:var(--tb-accent)"> ` +
+        peaks.map((s) => escapeHtml(s.name) + '（極大 ' + peakLabel(s) + '）').join('・') +
+        'の夜</span>';
+    }
+    r += '<br>';
+    r += `日の入 <b>${hhmm(ev.sunset)}</b> → 翌 日の出 <b>${hhmm(evNext.sunrise)}</b>`;
+    if (tl.duskAstro && tl.dawnAstro) {
+      const darkMin = (tl.dawnAstro.getTime() - tl.duskAstro.getTime()) / 60000;
+      r += `／暗夜 <b>${hhmm(tl.duskAstro)} 〜 ${hhmm(tl.dawnAstro)}</b>（${minutesText(darkMin)}）`;
+    }
+    r += '<br>';
+
+    /* 月はこの夜に出ているかどうかが本題なので、夜のあいだの出入りを先に書く */
+    if (!tl.moonUp.length) {
+      r += `月：<b>この夜は出ていません</b>`;
+    } else {
+      const spans = tl.moonUp.map((s) => `${hhmm(s.from)}〜${hhmm(s.to)}`).join('、');
+      r += `月が出ている時間：<b>${spans}</b>`;
+    }
+    r += `（月齢 <b>${fmt(ev.moonAge, 1)}日</b>・輝面比 <b>${Math.round(ev.illumination * 100)}%</b>）<br>`;
+    r += `この日の 日の出 ${hhmm(ev.sunrise)}・日の入 ${hhmm(ev.sunset)}／` +
+      `月の出 ${hhmm(ev.moonrise)}・月の入 ${hhmm(ev.moonset)}<br>`;
+    if (tl.peak) {
+      r += `放射点が最も高いのは <b>${hhmm(tl.peak.time)}</b>（${fmt(tl.peak.altitude, 0)}°）／`;
+    }
+    r += `狙える時間 <b>${tl.goldenMinutes > 0 ? minutesText(tl.goldenMinutes) : 'なし'}</b>`;
+    r += '<p class="hint">時刻は近似値です。国立天文台の公表値と比べて太陽は±1分、月は±3分の範囲で一致します。' +
+      '「狙える時間」は暗夜・月なし・放射点が地平線上の重なりです。</p>';
+    $('dayReport').innerHTML = r;
+  }
+
+  /** カレンダーの表示月を送る（選んでいる夜は動かさない） */
+  function shiftMonth(delta) {
+    const base = monthAnchor || nightAnchor(currentDate());
+    monthAnchor = new Date(base.getFullYear(), base.getMonth() + delta, 1);
+    renderMonth();
+  }
+
+  function renderPlan(res) {
+    renderPlanList();
+    renderMonth();
+    renderDayReport(res);
+
+    /* 流星群そのものの数値（条件タブから移設） */
+    const sh = res.snap.sh;
+    const tags = [];
+    if (sh.fireball === 'high') tags.push('<span class="tag tag--fireball">火球が多い</span>');
+    if (sh.velocity >= 60) tags.push('<span class="tag tag--fast">高速で不利</span>');
+    if (sh.velocity <= 30) tags.push('<span class="tag tag--slow">低速で有利</span>');
+    $('showerInfo').innerHTML = `
+      <div class="shower-info__grid">
+        <div class="stat"><div class="stat__label">対地速度</div><div class="stat__value">${sh.velocity} km/s</div></div>
+        <div class="stat"><div class="stat__label">流星の角速度</div><div class="stat__value">${fmt(res.cfg.omegaDeg, 1)} °/s</div></div>
+        <div class="stat"><div class="stat__label">平均光度</div><div class="stat__value">${signed(sh.meanMag)} 等</div></div>
+        <div class="stat"><div class="stat__label">光度分布 r</div><div class="stat__value">${sh.r}</div></div>
+        <div class="stat"><div class="stat__label">極大</div><div class="stat__value">${sh.peak ? sh.peak.replace('-', '/') : '—'}</div></div>
+        <div class="stat"><div class="stat__label">ZHR</div><div class="stat__value">${sh.zhr}</div></div>
+      </div>
+      <div>${tags.join('')}</div>
+      <p class="shower-info__note">${sh.note || ''}</p>`;
   }
 
   /* ===================== 画角プレビュー =====================
@@ -1508,24 +1778,8 @@
   }
 
   function renderCond(res) {
+    // 流星群そのものの数値は計画タブ（renderPlan）に移した
     const sh = res.snap.sh;
-    const tags = [];
-    if (sh.fireball === 'high') tags.push('<span class="tag tag--fireball">火球が多い</span>');
-    if (sh.velocity >= 60) tags.push('<span class="tag tag--fast">高速で不利</span>');
-    if (sh.velocity <= 30) tags.push('<span class="tag tag--slow">低速で有利</span>');
-
-    $('showerInfo').innerHTML = `
-      <div class="shower-info__grid">
-        <div class="stat"><div class="stat__label">対地速度</div><div class="stat__value">${sh.velocity} km/s</div></div>
-        <div class="stat"><div class="stat__label">流星の角速度</div><div class="stat__value">${fmt(res.cfg.omegaDeg, 1)} °/s</div></div>
-        <div class="stat"><div class="stat__label">平均光度</div><div class="stat__value">${signed(sh.meanMag)} 等</div></div>
-        <div class="stat"><div class="stat__label">光度分布 r</div><div class="stat__value">${sh.r}</div></div>
-        <div class="stat"><div class="stat__label">極大</div><div class="stat__value">${sh.peak ? sh.peak.replace('-', '/') : '—'}</div></div>
-        <div class="stat"><div class="stat__label">ZHR</div><div class="stat__value">${sh.zhr}</div></div>
-      </div>
-      <div>${tags.join('')}</div>
-      <p class="shower-info__note">${sh.note || ''}</p>`;
-
     const rad = res.snap.rad;
     const sun = res.snap.sun;
     const moon = res.snap.moon;
@@ -1964,6 +2218,7 @@
   /* ===================== 再計算と再描画 ===================== */
   function refresh() {
     const res = compute();
+    renderPlan(res);
     renderGear(res);
     renderCond(res);
     renderTimeline(res);
@@ -2614,6 +2869,38 @@
     });
 
     /* 年間カレンダー */
+    /* 計画 — 次の流星群のリスト */
+    $('planList').addEventListener('click', (e) => {
+      const row = e.target.closest('.cal-row');
+      if (!row) return;
+      selectShowerNight(row.dataset.shower, row.dataset.date);
+      syncInputs();
+      refresh();
+      showToast('この群と極大の夜に切り替えました');
+    });
+
+    /* 計画 — マンスリーカレンダー */
+    $('btnMonthPrev').addEventListener('click', () => { shiftMonth(-1); });
+    $('btnMonthNext').addEventListener('click', () => { shiftMonth(1); });
+    $('btnMonthToday').addEventListener('click', () => {
+      const now = new Date();
+      monthAnchor = new Date(now.getFullYear(), now.getMonth(), 1);
+      renderMonth();
+    });
+
+    $('month').addEventListener('click', (e) => {
+      const cell = e.target.closest('.mcell[data-day]');
+      if (!cell) return;
+      const night = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(),
+        Number(cell.dataset.day));
+      // その夜のうち狙いやすい時刻に合わせる（夜を選んだのに昼の時刻が残ると混乱する）
+      const noonNext = new Date(night.getTime() + 25 * 3600000);   // 翌日の未明を代表時刻に
+      const tl = A.nightTimeline(noonNext, state.lat, state.lon, shower());
+      state.datetime = bestTimeOfNight(tl, night).toISOString();
+      syncInputs();
+      refresh();
+    });
+
     $('btnCalendar').addEventListener('click', () => {
       renderCalendar();
       openSheet('calendarSheet');
@@ -2629,8 +2916,7 @@
     $('calList').addEventListener('click', (e) => {
       const row = e.target.closest('.cal-row');
       if (!row) return;
-      state.showerId = row.dataset.shower;
-      state.datetime = row.dataset.date;
+      selectShowerNight(row.dataset.shower, row.dataset.date);
       closeSheets();
       syncInputs();
       refresh();
@@ -2906,7 +3192,7 @@
     applyTheme(themePref());       // インライン script が立てた値を正として全体に反映する
     applyTextSize(textSizePref()); // 同じく文字サイズ
     setupGestures();
-    load();
+    const hadSaved = load();
     /* 共有URLで開かれた場合は、保存された内容よりURLを優先する。
        取り込んだらハッシュを外し、次に開いたときは自分の設定に戻るようにする */
     const sharedPayload = readSharedPayload();
@@ -2943,6 +3229,16 @@
     // 古い保存値にセンサー特性が無い場合はカメラIDからプリセットを当てる
     if (state.rnGain === undefined || state.fwcSource === undefined) {
       applyCameraPreset(state.cameraId);
+    }
+    /* 初めて開いたときは「次に来る流星群」とその夜を選んでおく。
+       極大が遠い時期に真っ先に知りたいのはこれなので、既定をペルセウス座に固定しない。
+       2回目以降は保存された選択を尊重する（勝手に切り替えない） */
+    if (!hadSaved && !shared) {
+      const next = upcomingPeaks(1)[0];
+      if (next) {
+        state.showerId = next.shower.id;
+        state.datetime = bestTimeOfNight(next.timeline, nightAnchor(next.date)).toISOString();
+      }
     }
     if (!state.datetime) state.datetime = nextPeakDate(shower()).toISOString();
     // 地点と日時が確定してから、追尾のオン・オフに合った座標系で狙いを持ち直す

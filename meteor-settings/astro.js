@@ -2,7 +2,9 @@
  * astro.js — 放射点高度・太陽高度・月の状態を求める最小限の天文計算
  *
  * 外部ライブラリを使わずブラウザだけで完結させるため、低精度アルゴリズムを使う。
- * 精度の目安: 太陽 ±0.01°、月 ±0.3°、放射点高度 ±0.1°。
+ * 精度の目安: 太陽 ±0.01°、月 ±0.05°、放射点高度 ±0.1°。
+ * 出入りの時刻を国立天文台の公表値と比べると、太陽 ±0.5分・月 ±2.2分・月齢 ±0.02日
+ * （東京と根室・8月と12月の28件で実測。tools/check-riseset.js で再現できる）。
  * 撮影設定を決める用途には十分だが、掩蔽計算のような用途には使えない。
  */
 
@@ -104,27 +106,99 @@ const MS_ASTRO = (function () {
     return { ra: eq.ra, dec: eq.dec, altitude: hz.altitude, azimuth: hz.azimuth };
   }
 
-  /** 月の位置・輝面比・月齢 */
-  function moonInfo(date, lat, lon) {
+  /**
+   * 月の黄経・黄緯 [度]
+   *
+   * 主要な周期項までの打ち切り近似。平均黄経＋出差（6.289°）だけでは
+   * 月の出入りが国立天文台の値と最大10分ずれたため、次に大きい
+   * 二均差（evection 1.274°）・変差（variation 0.658°）などを足している。
+   * 効果は tools/check-riseset.js で実測して確認する（最大10分→3分）。
+   */
+  function moonEcliptic(date) {
     const d = julianDay(date) - 2451545.0;
-    const lp = norm360(218.316 + 13.176396 * d);          // 平均黄経
-    const m = norm360(134.963 + 13.064993 * d) * RAD;     // 平均近点角
-    const f = norm360(93.272 + 13.229350 * d) * RAD;      // 昇交点からの平均離角
-    const lambda = norm360(lp + 6.289 * Math.sin(m));
-    const beta = 5.128 * Math.sin(f);
+    const lp = norm360(218.3165 + 13.17639648 * d);        // 平均黄経 L'
+    const dd = norm360(297.8502 + 12.19074910 * d) * RAD;  // 太陽からの平均離角 D
+    const ms = norm360(357.5291 + 0.98560028 * d) * RAD;   // 太陽の平均近点角 M
+    const mm = norm360(134.9634 + 13.06499300 * d) * RAD;  // 月の平均近点角 M'
+    const f = norm360(93.2721 + 13.22935050 * d) * RAD;    // 昇交点からの平均離角 F
 
-    const eq = eclipticToEquatorial(lambda, beta, date);
+    const lambda = lp
+      + 6.28875 * Math.sin(mm)                 // 出差
+      + 1.27402 * Math.sin(2 * dd - mm)        // 二均差
+      + 0.65831 * Math.sin(2 * dd)             // 変差
+      + 0.21362 * Math.sin(2 * mm)
+      - 0.18512 * Math.sin(ms)                 // 年差
+      - 0.11433 * Math.sin(2 * f)
+      + 0.05879 * Math.sin(2 * dd - 2 * mm)
+      + 0.05706 * Math.sin(2 * dd - ms - mm)
+      + 0.05332 * Math.sin(2 * dd + mm)
+      + 0.04576 * Math.sin(2 * dd - ms)
+      - 0.04092 * Math.sin(ms - mm)
+      - 0.03472 * Math.sin(dd)
+      - 0.03038 * Math.sin(ms + mm);
+
+    const beta = 5.12812 * Math.sin(f)
+      + 0.28060 * Math.sin(mm + f)
+      + 0.27769 * Math.sin(mm - f)
+      + 0.17324 * Math.sin(2 * dd - f)
+      + 0.05541 * Math.sin(2 * dd - mm + f)
+      + 0.04627 * Math.sin(2 * dd - mm - f)
+      + 0.03257 * Math.sin(2 * dd + f);
+
+    return { lambda: norm360(lambda), beta: beta };
+  }
+
+  /**
+   * 月の位置だけを求める軽い版。
+   * 出入りの時刻を探すときは1日あたり数百回呼ぶので、月齢の計算を含めない。
+   */
+  function moonPosition(date, lat, lon) {
+    const ec = moonEcliptic(date);
+    const eq = eclipticToEquatorial(ec.lambda, ec.beta, date);
     const hz = equatorialToHorizontal(eq.ra, eq.dec, lat, lon, date);
-
-    const elong = norm360(lambda - sunLongitude(date));   // 太陽からの離角
-    const illumination = (1 - Math.cos(elong * RAD)) / 2;
-    const age = 29.530589 * elong / 360;
-
     return {
       ra: eq.ra, dec: eq.dec,
       altitude: hz.altitude, azimuth: hz.azimuth,
-      illumination: illumination,
-      age: age,
+      lambda: ec.lambda,
+    };
+  }
+
+  const SYNODIC = 29.530589;        // 朔望月 [日]
+
+  /**
+   * 月齢＝直前の朔（新月）からの経過日数。
+   *
+   * 「29.53 × 離角 / 360」で済ませると、月の公転が一定速度でないため
+   * 国立天文台の値と最大0.8日ずれる（実際にずれていた）。
+   * 朔の時刻そのものをニュートン法で探して数える。
+   */
+  function moonAge(date) {
+    const rate = 360 / SYNODIC;     // 離角の平均増加率 [度/日]
+    // 朔をまたぐと符号が変わる量（-180〜180）にして、これがゼロになる時刻を探す
+    const signedElong = (t) => {
+      const e = norm360(moonEcliptic(t).lambda - sunLongitude(t));
+      return e > 180 ? e - 360 : e;
+    };
+    const converge = (guessMs) => {
+      let t = guessMs;
+      for (let i = 0; i < 6; i++) t -= (signedElong(new Date(t)) / rate) * 86400000;
+      return t;
+    };
+    let newMoon = converge(date.getTime());
+    // 最も近い朔が未来だった場合は、その1つ前の朔から数える
+    if (newMoon > date.getTime()) newMoon = converge(newMoon - SYNODIC * 86400000);
+    return (date.getTime() - newMoon) / 86400000;
+  }
+
+  /** 月の位置・輝面比・月齢 */
+  function moonInfo(date, lat, lon) {
+    const p = moonPosition(date, lat, lon);
+    const elong = norm360(p.lambda - sunLongitude(date));   // 太陽からの離角
+    return {
+      ra: p.ra, dec: p.dec,
+      altitude: p.altitude, azimuth: p.azimuth,
+      illumination: (1 - Math.cos(elong * RAD)) / 2,
+      age: moonAge(date),
       elongation: elong,
     };
   }
@@ -220,7 +294,7 @@ const MS_ASTRO = (function () {
    * @param {number} dir     +1 なら上向き（level を下から上へ）、-1 なら下向き
    * @returns {Date|null}
    */
-  function findCrossing(startMs, endMs, stepMs, fn, level, dir) {
+  function findCrossing(startMs, endMs, stepMs, fn, level, dir, refineMs) {
     let prevT = startMs;
     let prevV = fn(new Date(startMs)) - level;
     for (let t = startMs + stepMs; t <= endMs; t += stepMs) {
@@ -228,6 +302,12 @@ const MS_ASTRO = (function () {
       const up = prevV < 0 && v >= 0;
       const down = prevV > 0 && v <= 0;
       if ((dir > 0 && up) || (dir < 0 && down)) {
+        /* 粗い刻みで区間を見つけたら、その区間だけ細かく刻み直す。
+           荒い刻みのまま線形内挿すると、地平線近くで曲がる分だけ時刻がずれる */
+        if (refineMs && refineMs < t - prevT) {
+          const fine = findCrossing(prevT, t, refineMs, fn, level, dir);
+          if (fine) return fine;
+        }
         // 線形内挿（区間が短いので十分）
         const ratio = prevV / (prevV - v);
         return new Date(prevT + (t - prevT) * ratio);
@@ -236,6 +316,40 @@ const MS_ASTRO = (function () {
       prevV = v;
     }
     return null;
+  }
+
+  /* ---------- カレンダーの1日ぶんの出入り ----------
+   * 現地の 00:00〜24:00 を走査して、その日のうちに起きる出／入を採る
+   * （国立天文台「各地のこよみ」と同じ数え方）。月は毎日およそ50分ずつ遅れるため、
+   * 出が無い日・入が無い日がある。その場合は null を返す。
+   */
+  const SUN_HORIZON = -0.833;   // 太陽の出入り＝上辺が地平線に接する（大気差込み）
+  const MOON_HORIZON = 0.125;   // 月の出入り＝地心高度がこの値（視差・大気差・視半径の合成）
+
+  function dayEvents(date, lat, lon) {
+    const start = new Date(date.getTime());
+    start.setHours(0, 0, 0, 0);
+    const startMs = start.getTime();
+    const endMs = startMs + 24 * 3600000;
+    const sunAlt = (t) => sunPosition(t, lat, lon).altitude;
+    const moonAlt = (t) => moonPosition(t, lat, lon).altitude;
+    // 10分刻みで区間を探し、その区間を30秒刻みで詰める
+    const find = (fn, level, dir) =>
+      findCrossing(startMs, endMs, 10 * 60000, fn, level, dir, 30000);
+
+    const noon = new Date(startMs + 12 * 3600000);
+    const age = moonAge(noon);
+    const elong = norm360(moonEcliptic(noon).lambda - sunLongitude(noon));
+    return {
+      date: start,
+      sunrise: find(sunAlt, SUN_HORIZON, +1),
+      sunset: find(sunAlt, SUN_HORIZON, -1),
+      moonrise: find(moonAlt, MOON_HORIZON, +1),
+      moonset: find(moonAlt, MOON_HORIZON, -1),
+      moonAge: age,                                  // 正午の値
+      illumination: (1 - Math.cos(elong * RAD)) / 2,
+      waxing: age < SYNODIC / 2,                     // 満ちていく途中か
+    };
   }
 
   /**
@@ -256,7 +370,7 @@ const MS_ASTRO = (function () {
     const endMs = startMs + 24 * 3600000;
 
     const sunAlt = (t) => sunPosition(t, lat, lon).altitude;
-    const moonAlt = (t) => moonInfo(t, lat, lon).altitude;
+    const moonAlt = (t) => moonPosition(t, lat, lon).altitude;   // 月齢は要らないので軽い版
     const coarse = 5 * 60000;      // 5分刻みで符号の変化を探す
 
     /* 太陽 — 日没・各薄明の終わり／始まり */
@@ -358,6 +472,9 @@ const MS_ASTRO = (function () {
     eclipticToEquatorial: eclipticToEquatorial,
     sunPosition: sunPosition,
     moonInfo: moonInfo,
+    moonPosition: moonPosition,
+    moonAge: moonAge,
+    dayEvents: dayEvents,
     radiantPosition: radiantPosition,
     radiantAltitude: radiantAltitude,
     darkWindow: darkWindow,

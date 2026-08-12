@@ -46,6 +46,12 @@
   --ms-tl-twilight: #24304a;
   --ms-tl-dark: #101726;
   --ms-tl-moon: rgba(226, 232, 240, 0.16);
+  /* カレンダー。土日の色分けと、選んでいる夜の下地 */
+  --ms-cal-sat: #7fa8d8;
+  --ms-cal-sun: #e08a80;
+  --ms-cal-active: rgba(126, 184, 218, 0.18);
+  --ms-cal-moon-lit: #e2e8f0;    /* 月の明るい側 */
+  --ms-cal-moon-dark: #2a3550;   /* 月の欠けている側 */
 }
 
 /* ---- ライト（日中の下見・計画向け） ---- */
@@ -80,6 +86,11 @@
   --ms-tl-twilight: #e8eff7;
   --ms-tl-dark: #b6c8dc;
   --ms-tl-moon: rgba(255, 255, 255, 0.45);
+  --ms-cal-sat: #1a6693;
+  --ms-cal-sun: #c0281f;
+  --ms-cal-active: rgba(26, 102, 147, 0.14);
+  --ms-cal-moon-lit: #f0c14b;
+  --ms-cal-moon-dark: #c2cfdd;
 }
 
 /* ---- アストロ（暗所での目の順応を保つ赤系） ---- */
@@ -119,6 +130,12 @@
   --ms-tl-twilight: #2c1008;
   --ms-tl-dark: #140705;
   --ms-tl-moon: rgba(255, 156, 126, 0.14);
+  /* 赤単色なので土日は色相ではなく明るさで分ける */
+  --ms-cal-sat: #cd6c52;
+  --ms-cal-sun: #ff3a22;
+  --ms-cal-active: rgba(255, 106, 69, 0.16);
+  --ms-cal-moon-lit: #ff9c7e;
+  --ms-cal-moon-dark: #3a1109;
 }
 
 /* セレクトの▼は共通CSSでグレー固定なので、赤系のときだけ差し替える */
@@ -392,8 +409,8 @@ body {
      「並べているとき＝translateX(-i*100%)」と基準位置が変わる（app.js の endTrack / beginTrack）。 */
   .track:not(.is-animating) .page:not(.active) { display: none; }
 
-  /* 機材と条件のラッパーを透過させ、3ページをトラックの直接の子にする */
-  .pages__inputs { display: contents; }
+  /* ラッパーを透過させ、4ページをトラックの直接の子にする（.page が flex 項目になる） */
+  .pages__inputs, .pages__stack { display: contents; }
 }
 
 /* カラム見出し（タブがある狭い画面では不要） */
@@ -1142,13 +1159,15 @@ input[type="number"] { padding-right: 1.9rem; }
 
   /* 入力カラムは横幅があるのでカードを2列に並べる */
   /* 入力カラムは2段組にする。段組なら行の高さが揃わず隙間が空かない */
-  #page-gear, #page-cond {
+  #page-plan, #page-gear, #page-cond {
     columns: 2;
     column-gap: var(--tb-space-md);
   }
 
-  #page-gear > .card, #page-cond > .card { break-inside: avoid; }
-  #page-gear > .page__heading, #page-cond > .page__heading { column-span: all; }
+  #page-plan > .card, #page-gear > .card, #page-cond > .card { break-inside: avoid; }
+  #page-plan > .page__heading,
+  #page-gear > .page__heading,
+  #page-cond > .page__heading { column-span: all; }
 
   /* マウス操作向けのホバー表現 */
   .chip:hover { border-color: var(--tb-border-hover); color: var(--tb-text-primary); }
@@ -1179,19 +1198,19 @@ input[type="number"] { padding-right: 1.9rem; }
   to { transform: translate(-50%, -50%); opacity: 1; }
 }
 
-/* 大画面（1500px以上）は 機材 / 条件 / 結果 の3カラム */
+/* 大画面（1500px以上）は 計画＋機材 / 条件 / 結果 の3カラム */
 @media (min-width: 1500px) {
   :root { --ms-content-w: 1560px; }
 
   .pages { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 440px; }
 
-  /* 3カラムでは入力ラッパーを透過させ、機材と条件を独立したカラムにする */
+  /* 入力ラッパーを透過させ、.pages__stack（計画＋機材）と条件を独立したカラムにする */
   .pages__inputs { display: contents; }
-  #page-gear { min-width: 0; }
+  .pages__stack { min-width: 0; }
   #page-cond { min-width: 0; }
 
   /* 各カラムが狭くなるので段組を解除する */
-  #page-gear, #page-cond { columns: auto; }
+  #page-plan, #page-gear, #page-cond { columns: auto; }
 }
 
 /* =========================================================
@@ -1412,6 +1431,128 @@ input[type="number"] { padding-right: 1.9rem; }
 .cal-badge--mid { color: var(--tb-accent); }
 .cal-badge--warn { color: var(--ms-warn); }
 .cal-badge--bad { color: var(--tb-danger); }
+
+/* 選んでいる群（計画タブの「次の流星群」で cal-row を使い回している） */
+.cal-row.active {
+  border-color: var(--tb-accent);
+  background: var(--ms-cal-active);
+}
+
+.cal-row__days {
+  font-size: var(--ms-fs-label);
+  color: var(--tb-accent);
+  font-family: var(--tb-font-mono);
+}
+
+/* ---------------- マンスリーカレンダー（月曜始まり） ---------------- */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+  margin-bottom: var(--tb-space-sm);
+}
+
+.cal-nav__btn {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-tertiary);
+  color: var(--tb-text-primary);
+  font-size: var(--tb-font-size-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cal-nav__btn:hover { border-color: var(--tb-border-hover); }
+
+.cal-nav__label {
+  flex: 1;
+  text-align: center;
+  font-size: var(--tb-font-size-base);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+}
+
+.month__wd,
+.month__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.month__wd { margin-bottom: 2px; }
+
+.month__wd span {
+  padding: 2px 0;
+  text-align: center;
+  font-size: var(--ms-fs-label);
+  color: var(--tb-text-muted);
+}
+
+.month__wd .is-sat { color: var(--ms-cal-sat); }
+.month__wd .is-sun { color: var(--ms-cal-sun); }
+
+.mcell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1px;
+  min-height: 3rem;
+  padding: 3px 0 4px;
+  border: 1px solid transparent;
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-tertiary);
+  cursor: pointer;
+}
+
+.mcell:hover { border-color: var(--tb-border-hover); }
+
+/* 月の始まりまでの空きマス。押せないので背景も枠も持たせない */
+.mcell--blank {
+  background: none;
+  border-color: transparent;
+  cursor: default;
+}
+
+.mcell__d {
+  font-family: var(--tb-font-mono);
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--tb-text-primary);
+}
+
+.mcell--sat .mcell__d { color: var(--ms-cal-sat); }
+.mcell--sun .mcell__d { color: var(--ms-cal-sun); }
+
+/* 今日は枠で示す。選んでいる夜は下地を敷いてアクセント色の枠にする */
+.mcell--today { border-color: var(--tb-text-muted); }
+
+.mcell.active {
+  border-color: var(--tb-accent);
+  background: var(--ms-cal-active);
+}
+
+.mcell__moon { display: block; }
+
+/* 流星群の極大がある夜の印 */
+.mcell__peak {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tb-accent);
+}
+
+.mcell__peak--legend {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* 空のマスでも高さを揃えるための場所取り */
+.mcell__peak--none { background: none; }
 
 /* ---------------- 書き出した画像のプレビュー ---------------- */
 .card-preview {
