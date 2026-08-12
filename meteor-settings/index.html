@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.6.1">
+  <meta name="app-version" content="1.7.0">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.6.1">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.6.1">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.6.1">
-  <link rel="stylesheet" href="style.css?v=1.6.1">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.7.0">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.7.0">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.7.0">
+  <link rel="stylesheet" href="style.css?v=1.7.0">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -314,7 +314,7 @@
           放射点からの離角（＝流星の角速度）と、大気の厚みによる空の明るさ・流星の減光が
           この向きで決まります。
         </p>
-        <div class="field-row">
+        <div class="field-row" id="camHorizField">
           <div>
             <div class="slider-head">
               <span class="slider-head__value" id="camAzValue">—</span>
@@ -332,6 +332,25 @@
             <div class="slider-scale"><span>低空</span><span>天頂</span></div>
           </div>
         </div>
+        <div class="field-row" id="camEqField" hidden>
+          <div>
+            <div class="slider-head">
+              <span class="slider-head__value" id="camRaValue">—</span>
+              <span class="slider-head__unit">赤経</span>
+            </div>
+            <input class="tb-range" type="range" id="camRa" min="0" max="23.5" step="0.5">
+            <div class="slider-scale"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>
+          </div>
+          <div>
+            <div class="slider-head">
+              <span class="slider-head__value" id="camDecValue">—</span>
+              <span class="slider-head__unit">赤緯</span>
+            </div>
+            <input class="tb-range" type="range" id="camDec" min="-40" max="90" step="5">
+            <div class="slider-scale"><span>南の低空</span><span>天の北極</span></div>
+          </div>
+        </div>
+        <p class="hint" id="camModeHint"></p>
         <div class="chips" id="camPresets">
           <button type="button" class="chip" data-cam="zenith">天頂へ</button>
           <button type="button" class="chip" data-cam="radiant">放射点の方向へ</button>
@@ -753,12 +772,12 @@
   </div>
 </div>
 
-<script src="data.js?v=1.6.1"></script>
-<script src="astro.js?v=1.6.1"></script>
-<script src="engine.js?v=1.6.1"></script>
-<script src="stars.js?v=1.6.1"></script>
-<script src="lightpollution.js?v=1.6.1"></script>
-<script src="app.js?v=1.6.1"></script>
+<script src="data.js?v=1.7.0"></script>
+<script src="astro.js?v=1.7.0"></script>
+<script src="engine.js?v=1.7.0"></script>
+<script src="stars.js?v=1.7.0"></script>
+<script src="lightpollution.js?v=1.7.0"></script>
+<script src="app.js?v=1.7.0"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

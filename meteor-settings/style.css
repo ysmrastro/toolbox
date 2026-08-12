@@ -151,6 +151,15 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* hidden 属性はブラウザ標準の display:none で効いているだけなので、
+   .field { display: block } や .field-row { display: grid } のように
+   display を指定したクラスに必ず負ける（作成者スタイルが優先される）。
+   JS で出し入れする要素があるため明示的に打ち消しておく。
+   ※ これが無いと「追尾時の露出上限」が固定撮影でも出てしまう（実際に出ていた） */
+[hidden] {
+  display: none !important;
+}
+
 /* 端末以外（PC）では中央に細長く置いて「アプリらしさ」を保つ */
 .app {
   max-width: var(--ms-content-w);

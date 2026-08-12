@@ -61,6 +61,12 @@ toolbox/
 色を足すときは**必ずトークン経由**にする。個別の指定に生の色を書くと、そこだけ
 テーマ切り替えから取り残される（等級バーの塗りで実際に起きた）。
 
+**`hidden` 属性はクラスの `display` に負ける**。`[hidden]{display:none}` はブラウザ標準の
+スタイルなので、`.field{display:block}` のような作成者スタイルが必ず勝つ。
+JS で `el.hidden = true` としても消えない。meteor-settings では
+`[hidden]{display:none !important}` を置いて打ち消している
+（これが無くて「追尾時の露出上限」が固定撮影でも出ていた。v1.7.0 で修正）。
+
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 
 `euphoria-design` スキルの基準に従う。meteor-settings は準拠済み。

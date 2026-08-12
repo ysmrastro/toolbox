@@ -40,6 +40,11 @@
     durTarget: 2.0,
     camAz: null,        // カメラの方位（null なら放射点から45°離した向きを自動採用）
     camAlt: 60,         // カメラの高度
+    /* 赤道儀で追尾するときの狙い。三脚固定は「向けた方位・高度」がそのまま残るが、
+       追尾するカメラは空に貼り付くので、狙いは赤経・赤緯で持つほうが実物に合う。
+       null は「まだ持ち替えていない」状態で、追尾をオンにした時点で埋める */
+    camRa: null,        // 赤経［度］
+    camDec: null,       // 赤緯［度］
     articleMode: false,
     activePage: 'page-gear',   // 開いていたタブ（再読み込み後もここに戻る）
     keepAwake: false,          // 現地で画面が消えないようにするか
@@ -624,12 +629,48 @@
     return { sky: state.skyBase + delta, delta: delta };
   }
 
+  /* 向きのスライダーの刻みと範囲。大気の式は地平線近くで意味を失うので
+     高度には下限を置き、赤緯は日本から狙える範囲に絞る */
+  const CAM_ALT_MIN = 10;
+  const RA_STEP_DEG = 7.5;        // 赤経スライダーの刻み（0.5時間）
+  const DEC_MIN = -40;
+  const DEC_MAX = 90;
+
+  function norm360(deg) { return ((deg % 360) + 360) % 360; }
+  function roundRa(deg) { return norm360(Math.round(norm360(deg) / RA_STEP_DEG) * RA_STEP_DEG); }
+  function roundDec(deg) { return Math.min(DEC_MAX, Math.max(DEC_MIN, Math.round(deg / 5) * 5)); }
+
+  /** 赤経を「21h30m」の形にする */
+  function raLabel(deg) {
+    if (deg == null) return '—';
+    const h = norm360(deg) / 15;
+    const hh = Math.floor(h);
+    const mm = Math.round((h - hh) * 60);
+    return mm === 60 ? `${(hh + 1) % 24}h 00m` : `${hh}h ${String(mm).padStart(2, '0')}m`;
+  }
+
+  /** 追尾するかどうかで狙いの持ち方が変わるので、いま有効なほうを判定する */
+  function eqAimActive() {
+    return !!state.tracked && state.camRa != null && state.camDec != null;
+  }
+
   /** カメラの向きから、放射点との離角や大気の効果を求める */
   function cameraGeometry(snap, zenithSky) {
     const radAz = snap.rad.isSporadic ? 0 : snap.rad.azimuth;
     const radAlt = snap.rad.isSporadic ? 45 : snap.rad.altitude;
-    const az = state.camAz == null ? defaultCamAz(snap) : state.camAz;
-    const alt = state.camAlt;
+
+    /* 追尾するときは赤経・赤緯が狙い。時刻を動かすと同じ空を追いかけたまま高度が変わる
+       （固定撮影では逆に、向けた方位・高度がそのまま残って空が流れていく） */
+    let az;
+    let alt;
+    if (eqAimActive()) {
+      const hz = A.equatorialToHorizontal(state.camRa, state.camDec, state.lat, state.lon, snap.date);
+      az = norm360(hz.azimuth);
+      alt = hz.altitude;
+    } else {
+      az = state.camAz == null ? defaultCamAz(snap) : state.camAz;
+      alt = state.camAlt;
+    }
 
     // 散在流星は放射点を持たないので、記事の基準と同じ離角60°で扱う
     const sep = snap.rad.isSporadic
@@ -639,15 +680,22 @@
     // 放射点の真上を狙うと角速度がゼロに近づいて発散するため下限を設ける
     const elong = Math.max(sep, 10);
 
+    /* 赤経・赤緯で狙うと地平線の下も指せてしまう。大気の式（airmass や van Rhijn）は
+       そこで破綻するので、計算にはスライダーと同じ下限 10° を使い、
+       実際の高度は altTrue として別に持って画面で断る */
+    const altUsed = Math.max(alt, CAM_ALT_MIN);
+
     return {
       az: az,
-      alt: alt,
+      alt: altUsed,
+      altTrue: alt,
+      belowFloor: alt < CAM_ALT_MIN - 0.01,
       separation: sep,
       elong: elong,
-      airmass: E.airmass(alt),
-      skyOffset: E.skyOffsetForAltitude(zenithSky, alt),
-      skyHere: E.skyAtAltitude(zenithSky, alt),
-      extinction: E.meteorExtinction(alt),
+      airmass: E.airmass(altUsed),
+      skyOffset: E.skyOffsetForAltitude(zenithSky, altUsed),
+      skyHere: E.skyAtAltitude(zenithSky, altUsed),
+      extinction: E.meteorExtinction(altUsed),
     };
   }
 
@@ -655,6 +703,49 @@
   function defaultCamAz(snap) {
     if (snap.rad.isSporadic || snap.rad.azimuth == null) return 180;
     return Math.round(((snap.rad.azimuth + 45) % 360) / 5) * 5 % 360;
+  }
+
+  /** プリセットで狙う向き（方位・高度）。天頂は方位を変えない */
+  function presetDirection(kind, snap, radAz, radAlt) {
+    const cur = state.camAz == null ? defaultCamAz(snap) : state.camAz;
+    if (kind === 'zenith') return { az: cur, alt: 90 };
+    if (kind === 'radiant') return { az: radAz, alt: radAlt };
+    // 放射点から45°離す。高度に余裕があれば上へ、無ければ方位でずらす
+    if (radAlt + 45 <= 90) return { az: radAz, alt: radAlt + 45 };
+    return { az: norm360(radAz + 45), alt: radAlt };
+  }
+
+  /** いまの時刻・地点で、方位・高度の狙いに対応する赤経・赤緯 */
+  function eqFromHoriz(az, alt) {
+    return A.horizontalToEquatorial(az, alt, state.lat, state.lon, currentDate());
+  }
+
+  function setEqAim(eq) {
+    state.camRa = roundRa(eq.ra);
+    state.camDec = roundDec(eq.dec);
+  }
+
+  function setHorizAim(hz) {
+    state.camAz = Math.round(norm360(hz.azimuth) / 5) * 5 % 360;
+    state.camAlt = Math.min(90, Math.max(CAM_ALT_MIN, Math.round(hz.altitude / 5) * 5));
+  }
+
+  /**
+   * 追尾のオン・オフで狙いの持ち方が変わるとき、向いている方向を持ち替える。
+   * 切り替えた瞬間に画角が飛ばないよう、いまの向きを相手の座標系に移すだけ。
+   */
+  function ensureAimForMode() {
+    const snap = astroSnapshot();
+    if (state.tracked) {
+      if (state.camRa == null || state.camDec == null) {
+        const az = state.camAz == null ? defaultCamAz(snap) : state.camAz;
+        setEqAim(eqFromHoriz(az, state.camAlt));
+      }
+    } else if (state.camRa != null && state.camDec != null) {
+      setHorizAim(A.equatorialToHorizontal(state.camRa, state.camDec, state.lat, state.lon, snap.date));
+      state.camRa = null;
+      state.camDec = null;
+    }
   }
 
   function buildCfg(snap, sky) {
@@ -816,6 +907,13 @@
     $('moonSelect').value = state.moonId;
     $('camAz').value = state.camAz == null ? 180 : state.camAz;
     $('camAlt').value = state.camAlt;
+    $('camRa').value = (state.camRa == null ? 0 : norm360(state.camRa)) / 15;
+    $('camDec').value = state.camDec == null ? 45 : state.camDec;
+    $('camHorizField').hidden = !!state.tracked;
+    $('camEqField').hidden = !state.tracked;
+    $('camModeHint').textContent = state.tracked
+      ? '赤道儀に載せるので、狙いは赤経・赤緯で指定します。日時を変えても同じ空を追いかけたままになり、そのぶん高度（＝空の明るさと減光）が変わります。'
+      : '三脚に固定するので、狙いは方位・高度で指定します。日時を変えても向きはそのままで、空だけが流れていきます。';
     $('articleMode').checked = state.articleMode;
     $('datetime').value = toLocalInput(currentDate());
 
@@ -837,6 +935,8 @@
 
     $('skyValue').textContent = state.skyBase.toFixed(2);
     $('camAltValue').textContent = state.camAlt;
+    $('camRaValue').textContent = raLabel(state.camRa);
+    $('camDecValue').textContent = state.camDec == null ? '—' : signed(state.camDec, 0) + '°';
     $('purposeDesc').textContent = purpose().desc;
   }
 
@@ -1177,7 +1277,9 @@
     const geo = res.cfg.geo;
 
     const az0 = geo.az;
-    const alt0 = geo.alt;
+    /* 計算に使う高度には下限があるが、プレビューは実際に向いている方向を描く
+       （地平線の下を狙っていればそれが分かるようにする） */
+    const alt0 = geo.altTrue;
     const date = currentDate();
 
     /* --- 枠（センサーが写す範囲）を作る ---
@@ -1445,12 +1547,28 @@
 
     // カメラの向き
     const geo = res.cfg.geo;
-    $('camAz').value = geo.az;
-    $('camAzValue').textContent = Math.round(geo.az) + '°';
-    $('camAzName').textContent = A.compassName(geo.az);
-    $('camAltValue').textContent = geo.alt;
+    let camHead = '';
+    if (eqAimActive()) {
+      /* 追尾中は方位・高度が「赤経赤緯から決まる値」になる。夜のあいだに高度が
+         どう動くかが露出条件に直結するので、1時間後の高度も添える */
+      $('camRaValue').textContent = raLabel(state.camRa);
+      $('camDecValue').textContent = signed(state.camDec, 0) + '°';
+      const later = A.equatorialToHorizontal(state.camRa, state.camDec, state.lat, state.lon,
+        new Date(currentDate().getTime() + 3600000));
+      camHead += `いまこの向きは <b>${A.compassName(geo.az)} ${Math.round(geo.az)}°</b>` +
+        `／高度 <b>${fmt(geo.altTrue, 0)}°</b>（1時間後 ${fmt(later.altitude, 0)}°）<br>`;
+      if (geo.belowFloor) {
+        camHead += `<span style="color:var(--ms-warn)">この時刻には高度 ${CAM_ALT_MIN}° より低いため、` +
+          `大気の影響は高度 ${CAM_ALT_MIN}° として計算しています。</span><br>`;
+      }
+    } else {
+      $('camAz').value = geo.az;
+      $('camAzValue').textContent = Math.round(geo.az) + '°';
+      $('camAzName').textContent = A.compassName(geo.az);
+      $('camAltValue').textContent = Math.round(geo.alt);
+    }
     const clamped = geo.separation < geo.elong - 0.01;
-    $('camReport').innerHTML =
+    $('camReport').innerHTML = camHead +
       `放射点からの離角 <b>${fmt(geo.separation, 0)}°</b>` +
       (clamped ? `（計算には下限の ${geo.elong}° を使用）` : '') +
       `／流星の角速度 <b>${fmt(res.cfg.omegaDeg, 1)} °/s</b><br>` +
@@ -1606,8 +1724,11 @@
     if (res.cfg.geo.separation < 15) {
       add('warn', `カメラの向きが放射点に近すぎます（離角 ${fmt(res.cfg.geo.separation, 0)}°）。流星は点に近い短い痕跡しか残りません。`);
     }
-    if (res.cfg.geo.alt < 25) {
-      add('warn', `カメラの高度が ${res.cfg.geo.alt}° と低く、空が明るくなるうえ流星も ${fmt(res.cfg.geo.extinction, 2)}等 減光します。`);
+    if (res.cfg.geo.belowFloor) {
+      add('bad', `狙っている赤経・赤緯はこの時刻には高度 ${fmt(res.cfg.geo.altTrue, 0)}°（地平線の下または低空すぎ）です。` +
+        `大気の計算は高度 ${CAM_ALT_MIN}° として扱っているので、時刻か向きを変えてください。`);
+    } else if (res.cfg.geo.alt < 25) {
+      add('warn', `カメラの高度が ${fmt(res.cfg.geo.alt, 0)}° と低く、空が明るくなるうえ流星も ${fmt(res.cfg.geo.extinction, 2)}等 減光します。`);
     }
     if (ev.aperture < 12) {
       add('bad', `有効口径が ${fmt(ev.aperture, 1)}mm で、記事の基準（12mm以上）を下回ります。明るいレンズか長い焦点距離が必要です。`);
@@ -1703,7 +1824,8 @@
       ['1画素の角サイズ（式①）', `${fmt(ev.pixelAngle, 2)} 秒角`],
       ['1画素の滞在時間（式②）', `${(ev.dwellTime * 1000).toFixed(3)} ms`],
       ['カメラの方位', `${fmt(res.cfg.geo.az, 0)}° ${A.compassName(res.cfg.geo.az)}`],
-      ['カメラの高度', `${fmt(res.cfg.geo.alt, 0)}°`],
+      ['カメラの高度', `${fmt(res.cfg.geo.altTrue, 1)}°` +
+        (res.cfg.geo.belowFloor ? `（計算には下限の ${CAM_ALT_MIN}° を使用）` : '')],
       ['放射点からの離角', `${fmt(res.cfg.geo.separation, 1)}°`],
       ['流星の角速度（式③）', `${fmt(res.cfg.omegaDeg, 2)} °/s`],
       ['大気の厚み（天頂比）', `${fmt(res.cfg.geo.airmass, 2)} 倍`],
@@ -1723,6 +1845,11 @@
       ['記事の式のみでの到達等級', `${signed(ev.limMagArticle)} 等`],
       ['読み出しノイズで失う量', `${signed(-ev.readNoisePenalty)} 等`],
     ];
+    if (eqAimActive()) {
+      // 追尾中は方位・高度がこの狙いから決まる値なので、元の指定を先に出す
+      rows.splice(3, 0, ['狙いの赤経・赤緯（追尾）',
+        `${raLabel(state.camRa)} / ${signed(state.camDec, 0)}°`]);
+    }
     $('detailTable').innerHTML = rows
       .map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
 
@@ -2070,7 +2197,9 @@
       state.tracked = e.target.checked;
       $('maxExposureField').hidden = !state.tracked;
       detachGearSet();
-      refresh();   // 画角プレビューの枠の傾きもここで変わる
+      ensureAimForMode();   // 狙いを方位・高度 ⇔ 赤経・赤緯 で持ち替える
+      syncInputs();
+      refresh();            // 画角プレビューの枠の傾きもここで変わる
     });
 
     numField('maxExposure', 'maxExposure');
@@ -2268,26 +2397,38 @@
       refresh();
     });
 
+    $('camRa').addEventListener('input', (e) => {
+      state.camRa = norm360(Number(e.target.value) * 15);
+      $('camRaValue').textContent = raLabel(state.camRa);
+      refresh();
+    });
+
+    $('camDec').addEventListener('input', (e) => {
+      state.camDec = Number(e.target.value);
+      $('camDecValue').textContent = signed(state.camDec, 0) + '°';
+      refresh();
+    });
+
     $('camPresets').addEventListener('click', (e) => {
       const b = e.target.closest('[data-cam]');
       if (!b) return;
       const snap = astroSnapshot();
       const radAz = snap.rad.isSporadic || snap.rad.azimuth == null ? 180 : snap.rad.azimuth;
       const radAlt = snap.rad.isSporadic ? 45 : snap.rad.altitude;
-      if (b.dataset.cam === 'zenith') {
-        state.camAlt = 90;
-      } else if (b.dataset.cam === 'radiant') {
-        state.camAz = Math.round(radAz / 5) * 5 % 360;
-        state.camAlt = Math.min(90, Math.max(10, Math.round(radAlt / 5) * 5));
-      } else {
-        // 放射点から45°離す。高度に余裕があれば上へ、無ければ方位でずらす
-        if (radAlt + 45 <= 90) {
-          state.camAz = Math.round(radAz / 5) * 5 % 360;
-          state.camAlt = Math.min(90, Math.round((radAlt + 45) / 5) * 5);
+      const target = presetDirection(b.dataset.cam, snap, radAz, radAlt);
+      if (eqAimActive()) {
+        /* 追尾中は狙いを赤経・赤緯で持つ。放射点と天頂は座標が直接分かるので
+           方位・高度を経由せずそのまま入れる（丸め誤差を持ち込まない） */
+        if (b.dataset.cam === 'radiant' && !snap.rad.isSporadic) {
+          setEqAim({ ra: snap.rad.ra, dec: snap.rad.dec });
+        } else if (b.dataset.cam === 'zenith') {
+          // 天頂の赤緯は観測地の緯度、赤経はその瞬間の地方恒星時
+          setEqAim({ ra: A.gmst(snap.date) + state.lon, dec: state.lat });
         } else {
-          state.camAz = Math.round(((radAz + 45) % 360) / 5) * 5 % 360;
-          state.camAlt = Math.min(90, Math.max(10, Math.round(radAlt / 5) * 5));
+          setEqAim(eqFromHoriz(target.az, target.alt));
         }
+      } else {
+        setHorizAim({ azimuth: target.az, altitude: target.alt });
       }
       syncInputs();
       refresh();
@@ -2440,6 +2581,7 @@
       });
       state.gearSetName = name;
       renderGearSets();
+      ensureAimForMode();   // セットに含まれる tracked で狙いの座標系が変わることがある
       syncInputs();
       refresh();
       showToast(`機材セット「${name}」に切り替えました`);
@@ -2803,6 +2945,8 @@
       applyCameraPreset(state.cameraId);
     }
     if (!state.datetime) state.datetime = nextPeakDate(shower()).toISOString();
+    // 地点と日時が確定してから、追尾のオン・オフに合った座標系で狙いを持ち直す
+    ensureAimForMode();
     renderGearSets();
     renderWakeLock();
     if (state.keepAwake) acquireWakeLock();
