@@ -18,8 +18,8 @@ const MS_DATA = {};
  *   メジャー → よほどの変更のときだけ
  * リリース時は appUpdated と sw.js の CACHE 名も一緒に更新する。
  */
-MS_DATA.appVersion = '1.8.0';
-MS_DATA.appUpdated = '2026-08-12 15:48';
+MS_DATA.appVersion = '1.8.1';
+MS_DATA.appUpdated = '2026-08-15 15:47';
 
 /* ---------------- 画角プレビューの枠 ----------------
  * 空は地平線を基準に描き、枠（＝センサーの写る範囲）だけを構図に合わせて回す。
@@ -33,6 +33,12 @@ MS_DATA.fovMargin = 1.35;   /* 枠のまわりにどれだけ空を見せるか�
  * 書くのは「使う人に見える変化」だけ。内部の整理やドキュメント修正は載せない。
  */
 MS_DATA.changelog = [
+  {
+    version: '1.8.1', date: '2026-08-15', items: [
+      'カメラに Nikon ZR を追加した（Z 6III と同じ 24.5MP 部分積層センサー。デュアルベース ISO 800）',
+      '観測地に「東北（福島）」を新設し、浄土平ビジターセンター（福島市）と星の村天文台（田村市）を追加した',
+    ],
+  },
   {
     version: '1.8.0', date: '2026-08-12', items: [
       'ボトムナビに「計画」を追加し、最初に開くタブにした。極大が遠い時期は機材より「次の流星群はいつか」を先に出す',
@@ -198,6 +204,9 @@ MS_DATA.cameras = [
   { id: 'z8',     name: 'Nikon Z 8 / Z 9',       format: 'ff',    pixelPitch: 4.348, megapixels: 45.7, fwcBase: null,  fwcSource: 'estimated', rnGain: 4.98, rnFloor: 1.40, dualGainISO: 400 },
   { id: 'z63',    name: 'Nikon Z 6III',          format: 'ff',    pixelPitch: 5.936, megapixels: 24.5, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.50, dualGainISO: null },
   { id: 'zf',     name: 'Nikon Z f / Z 6II',     format: 'ff',    pixelPitch: 5.936, megapixels: 24.5, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.45, dualGainISO: 400 },
+  /* ZR は Z 6III と同じ 24.5MP 部分積層 FX センサー。画素ピッチと読み出しノイズは Z 6III と同値にした。
+     デュアルベース ISO 800/6400（Log3G10）はニコンの公表値。低いほうの 800 を切り替え点として持つ。 */
+  { id: 'zr',     name: 'Nikon ZR',              format: 'ff',    pixelPitch: 5.936, megapixels: 24.5, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.50, dualGainISO: 800 },
   { id: 's5m2',   name: 'Panasonic LUMIX S5II',  format: 'ff',    pixelPitch: 5.933, megapixels: 24.2, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.50, dualGainISO: 640 },
   { id: 'xt5',    name: 'FUJIFILM X-T5 / X-H2',  format: 'apsc',  pixelPitch: 3.041, megapixels: 40.2, fwcBase: null,  fwcSource: 'estimated', rnGain: 4.87, rnFloor: 1.40, dualGainISO: null },
   { id: 'xt4',    name: 'FUJIFILM X-T4 / X-S20', format: 'apsc',  pixelPitch: 3.756, megapixels: 26.1, fwcBase: null,  fwcSource: 'estimated', rnGain: 4.87, rnFloor: 1.40, dualGainISO: null },
@@ -345,6 +354,12 @@ MS_DATA.locations = [
   { region: '主要都市', name: '大阪',   lat: 34.69, lon: 135.50 },
   { region: '主要都市', name: '広島',   lat: 34.39, lon: 132.46 },
   { region: '主要都市', name: '福岡',   lat: 33.59, lon: 130.40 },
+
+  /* 東北 — 福島
+     いずれも Google マップの共有リンクで指定された地点。OSM の同名地物とも一致し
+     （ずれは 60m 以内）、標高は地理院APIで確認した（浄土平 1575m / 星の村天文台 643m）。 */
+  { region: '東北（福島）', name: '浄土平ビジターセンター（福島市）', lat: 37.7233, lon: 140.2546 },
+  { region: '東北（福島）', name: '星の村天文台（田村市）',           lat: 37.3418, lon: 140.6760 },
 
   /* 本州 — 長野・山梨 */
   { region: '本州（長野・山梨）', name: '野辺山',                       lat: 35.94,   lon: 138.48 },
