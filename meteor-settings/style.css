@@ -416,6 +416,56 @@ body {
 /* カラム見出し（タブがある狭い画面では不要） */
 .page__heading { display: none; }
 
+/* ---------------- 観測地バー（計画タブの最上部） ----------------
+ * 計画タブの数値（日の出入り・月・放射点高度）はすべて観測地に連動するので、
+ * 場所は常に見える位置に置く。ただしカードにすると「次の流星群」が下がるため、
+ * 畳んだ1行を既定にして、開いたときだけ緯度経度やマイ地点まで出す。
+ * 寸法は rem（文字サイズ切替でタップ目標が置き去りにならないように）。
+ */
+.locbar {
+  background: var(--tb-bg-secondary);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-xl);
+  margin-bottom: var(--tb-space-md);
+}
+
+.locbar__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+  min-height: 2.75rem;            /* 44px 相当のタップ目標 */
+  padding: var(--tb-space-sm) var(--tb-space-md);
+  font-size: var(--tb-font-size-sm);
+  cursor: pointer;
+  list-style: none;               /* Firefox の三角を消す */
+}
+
+.locbar__summary::-webkit-details-marker { display: none; }
+
+.locbar__pin { flex: none; }
+
+.locbar__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+
+.locbar__caret {
+  flex: none;
+  color: var(--tb-accent);
+  transition: transform var(--tb-transition);
+}
+
+.locbar[open] .locbar__caret { transform: rotate(180deg); }
+
+.locbar__body {
+  padding: var(--tb-space-sm) var(--tb-space-md) var(--tb-space-md);
+  border-top: 1px solid var(--tb-border);
+}
+
 /* ---------------- カード ---------------- */
 .card {
   background: var(--tb-bg-secondary);

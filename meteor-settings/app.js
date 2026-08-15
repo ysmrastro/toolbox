@@ -571,6 +571,14 @@
   function purpose() { return D.purposes.find((p) => p.id === state.purposeId) || D.purposes[0]; }
   function trailQuality() { return D.trailQuality.find((t) => t.id === state.trailId) || D.trailQuality[1]; }
 
+  /* いま選ばれている観測地の表示名。マイ地点 → プリセット → 手入力 の順で解決する。
+     計画タブのバー・条件タブの空の暗さ・年間カレンダー・書き出し画像で共通に使う。 */
+  function currentLocationName() {
+    if (state.myLocName) return state.myLocName;
+    const l = state.locIndex >= 0 ? D.locations[state.locIndex] : null;
+    return l ? l.name : '手入力の座標';
+  }
+
   function toLocalInput(date) {
     const p = (n) => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}T${p(date.getHours())}:${p(date.getMinutes())}`;
@@ -912,6 +920,8 @@
       $('locationSelect').value = '-1';
     }
     $('btnDeleteLoc').hidden = !state.myLocName;
+    // 計画タブのバーは畳んだ状態でも地名が見えている必要がある（下の時刻がこの地点で決まる）
+    $('locBarName').textContent = currentLocationName();
     $('lat').value = state.lat;
     $('lon').value = state.lon;
     $('sky').value = state.skyBase;
@@ -1185,8 +1195,7 @@
     ).join('');
 
     const rows = calendarRows(calYear).slice().sort((a, b) => a.date - b.date);
-    const locName = state.myLocName
-      || (state.locIndex >= 0 && D.locations[state.locIndex] ? D.locations[state.locIndex].name : '手入力の座標');
+    const locName = currentLocationName();
 
     $('calList').innerHTML =
       `<p class="hint">観測地: ${escapeHtml(locName)}（${fmt(state.lat, 2)}, ${fmt(state.lon, 2)}）` +
@@ -1786,6 +1795,11 @@
     // 暗夜とピークはタイムラインの計算結果を使い回す（同じ走査を2回しない）
     const tl = timelineFor(currentDate(), state.lat, state.lon, sh);
 
+    // 観測地の選択は計画タブにあるので、ここの値がどの地点のものかを明示する
+    $('condLocHint').innerHTML =
+      `観測地 <b>${escapeHtml(currentLocationName())}</b>（${fmt(state.lat, 2)}, ${fmt(state.lon, 2)}）` +
+      '／変更は「計画」タブの上部から';
+
     let report = '';
     report += rad.isSporadic
       ? '放射点を持たない群のため、高度45°相当で計算しています。<br>'
@@ -2318,8 +2332,7 @@
     });
 
     /* 条件（機材・日時・場所） */
-    const locName = state.myLocName
-      || (state.locIndex >= 0 && D.locations[state.locIndex] ? D.locations[state.locIndex].name : '手入力の座標');
+    const locName = currentLocationName();
     const cam = D.cameras.find((c) => c.id === state.cameraId);
     const lens = state.lensIndex >= 0 && D.lenses[state.lensIndex] ? D.lenses[state.lensIndex].name : null;
     const d = currentDate();
