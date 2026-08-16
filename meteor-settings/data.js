@@ -18,8 +18,8 @@ const MS_DATA = {};
  *   メジャー → よほどの変更のときだけ
  * リリース時は appUpdated と sw.js の CACHE 名も一緒に更新する。
  */
-MS_DATA.appVersion = '1.8.1';
-MS_DATA.appUpdated = '2026-08-16 22:16';
+MS_DATA.appVersion = '1.9.1';
+MS_DATA.appUpdated = '2026-08-16 22:19';
 
 /* ---------------- 画角プレビューの枠 ----------------
  * 空は地平線を基準に描き、枠（＝センサーの写る範囲）だけを構図に合わせて回す。
@@ -34,9 +34,22 @@ MS_DATA.fovMargin = 1.35;   /* 枠のまわりにどれだけ空を見せるか�
  */
 MS_DATA.changelog = [
   {
-    version: '1.8.1', date: '2026-08-16', items: [
+    version: '1.9.1', date: '2026-08-16', items: [
       '朝のうちに見ると「次の流星群」の日数が1日ずれていたのを修正。今夜の群が「明日の夜」と出ていた（夜明けまでは前の夜として数える基準を、朝になっても使い続けていた）',
       '同じ理由で、朝のあいだ前の夜の群が「次の流星群」に残っていたのも直した。マンスリーカレンダーの今日の印も今夜のマスに付くようにした',
+    ],
+  },
+  {
+    version: '1.9.0', date: '2026-08-15', items: [
+      '観測地の選択を条件タブから計画タブの最上部へ移した。計画タブの日の出入り・月の出入り・放射点高度はすべて観測地で変わるのに、変えるには別のタブへ行く必要があった',
+      '観測地は畳んだ1行のバーにして、開くと緯度経度の手入力・現在地・マイ地点まで出るようにした（「次の流星群」を上に置いたままにするため）',
+      '条件タブの「空の暗さ」に、どの地点の値なのかを表示するようにした',
+    ],
+  },
+  {
+    version: '1.8.1', date: '2026-08-15', items: [
+      'カメラに Nikon ZR を追加した（Z 6III と同じ 24.5MP 部分積層センサー。デュアルベース ISO 800）',
+      '観測地に「東北（福島）」を新設し、浄土平ビジターセンター（福島市）と星の村天文台（田村市）を追加した',
     ],
   },
   {
@@ -204,6 +217,9 @@ MS_DATA.cameras = [
   { id: 'z8',     name: 'Nikon Z 8 / Z 9',       format: 'ff',    pixelPitch: 4.348, megapixels: 45.7, fwcBase: null,  fwcSource: 'estimated', rnGain: 4.98, rnFloor: 1.40, dualGainISO: 400 },
   { id: 'z63',    name: 'Nikon Z 6III',          format: 'ff',    pixelPitch: 5.936, megapixels: 24.5, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.50, dualGainISO: null },
   { id: 'zf',     name: 'Nikon Z f / Z 6II',     format: 'ff',    pixelPitch: 5.936, megapixels: 24.5, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.45, dualGainISO: 400 },
+  /* ZR は Z 6III と同じ 24.5MP 部分積層 FX センサー。画素ピッチと読み出しノイズは Z 6III と同値にした。
+     デュアルベース ISO 800/6400（Log3G10）はニコンの公表値。低いほうの 800 を切り替え点として持つ。 */
+  { id: 'zr',     name: 'Nikon ZR',              format: 'ff',    pixelPitch: 5.936, megapixels: 24.5, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.50, dualGainISO: 800 },
   { id: 's5m2',   name: 'Panasonic LUMIX S5II',  format: 'ff',    pixelPitch: 5.933, megapixels: 24.2, fwcBase: null,  fwcSource: 'estimated', rnGain: 5.31, rnFloor: 1.50, dualGainISO: 640 },
   { id: 'xt5',    name: 'FUJIFILM X-T5 / X-H2',  format: 'apsc',  pixelPitch: 3.041, megapixels: 40.2, fwcBase: null,  fwcSource: 'estimated', rnGain: 4.87, rnFloor: 1.40, dualGainISO: null },
   { id: 'xt4',    name: 'FUJIFILM X-T4 / X-S20', format: 'apsc',  pixelPitch: 3.756, megapixels: 26.1, fwcBase: null,  fwcSource: 'estimated', rnGain: 4.87, rnFloor: 1.40, dualGainISO: null },
@@ -351,6 +367,12 @@ MS_DATA.locations = [
   { region: '主要都市', name: '大阪',   lat: 34.69, lon: 135.50 },
   { region: '主要都市', name: '広島',   lat: 34.39, lon: 132.46 },
   { region: '主要都市', name: '福岡',   lat: 33.59, lon: 130.40 },
+
+  /* 東北 — 福島
+     いずれも Google マップの共有リンクで指定された地点。OSM の同名地物とも一致し
+     （ずれは 60m 以内）、標高は地理院APIで確認した（浄土平 1575m / 星の村天文台 643m）。 */
+  { region: '東北（福島）', name: '浄土平ビジターセンター（福島市）', lat: 37.7233, lon: 140.2546 },
+  { region: '東北（福島）', name: '星の村天文台（田村市）',           lat: 37.3418, lon: 140.6760 },
 
   /* 本州 — 長野・山梨 */
   { region: '本州（長野・山梨）', name: '野辺山',                       lat: 35.94,   lon: 138.48 },

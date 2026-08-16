@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.8.1">
+  <meta name="app-version" content="1.9.1">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.8.1">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.8.1">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.8.1">
-  <link rel="stylesheet" href="style.css?v=1.8.1">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.9.1">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.9.1">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.9.1">
+  <link rel="stylesheet" href="style.css?v=1.9.1">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -122,6 +122,43 @@
     <!-- ---------- 計画 ---------- -->
     <section class="page" id="page-plan">
       <h2 class="page__heading">📅 計画</h2>
+
+      <!-- 観測地は計画タブの「軸」。この下の次の流星群・カレンダー・時刻はすべて
+           この座標で計算されるので、常に見える最上部に置く。ただしカードにすると
+           「次の流星群」が押し下げられて v1.8.0 の狙い（極大が遠い時期に
+           まず次の群を出す）が崩れるため、畳んだ1行を既定にしている。 -->
+      <details class="locbar" id="locBar">
+        <summary class="locbar__summary">
+          <span class="locbar__pin" aria-hidden="true">📍</span>
+          <span class="locbar__name" id="locBarName">—</span>
+          <span class="locbar__caret" aria-hidden="true">▾</span>
+        </summary>
+        <div class="locbar__body">
+          <label class="field">
+            <span class="field__label">観測地</span>
+            <select class="tb-select" id="locationSelect"></select>
+          </label>
+          <div class="field-row field-row--tight">
+            <label class="field">
+              <span class="field__label">緯度</span>
+              <input class="tb-input" type="number" id="lat" step="0.01" min="-90" max="90">
+            </label>
+            <label class="field">
+              <span class="field__label">経度</span>
+              <input class="tb-input" type="number" id="lon" step="0.01" min="-180" max="180">
+            </label>
+          </div>
+          <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnGeo">現在地を使う</button>
+          <div class="chips">
+            <button type="button" class="chip" id="btnSaveLoc">この地点を保存</button>
+            <button type="button" class="chip" id="btnDeleteLoc" hidden>この地点を削除</button>
+          </div>
+          <p class="hint">
+            この夜の時刻（日の出入り・月の出入り・放射点高度）はすべてこの地点で計算します。
+            空の暗さは地点を変えると光害地図から自動で引き直します。
+          </p>
+        </div>
+      </details>
 
       <div class="card">
         <h2 class="card__title">次の流星群</h2>
@@ -293,34 +330,10 @@
       </div>
 
       <div class="card">
-        <h2 class="card__title">観測地</h2>
-        <p class="card__desc">
-          流星群と日時は「計画」タブで選びます。
-        </p>
-        <label class="field">
-          <span class="field__label">観測地</span>
-          <select class="tb-select" id="locationSelect"></select>
-        </label>
-        <div class="field-row field-row--tight">
-          <label class="field">
-            <span class="field__label">緯度</span>
-            <input class="tb-input" type="number" id="lat" step="0.01" min="-90" max="90">
-          </label>
-          <label class="field">
-            <span class="field__label">経度</span>
-            <input class="tb-input" type="number" id="lon" step="0.01" min="-180" max="180">
-          </label>
-        </div>
-        <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnGeo">現在地を使う</button>
-        <div class="chips">
-          <button type="button" class="chip" id="btnSaveLoc">この地点を保存</button>
-          <button type="button" class="chip" id="btnDeleteLoc" hidden>この地点を削除</button>
-        </div>
-        <div class="sky-report" id="astroReport"></div>
-      </div>
-
-      <div class="card">
         <h2 class="card__title">空の暗さ</h2>
+        <!-- 観測地の選択は計画タブに移した（v1.9.0）。ここは選んだ地点から決まる値なので、
+             どの地点の値なのかが分かるように地名だけを出す。 -->
+        <p class="card__desc" id="condLocHint"></p>
         <div class="lp-lookup" id="lpLookup"></div>
         <button type="button" class="tb-btn tb-btn--secondary tb-btn--block" id="btnLp">
           光害地図からこの地点の値を取得
@@ -340,6 +353,9 @@
           <span>計算に使う空の明るさ</span>
           <strong id="effectiveSky">—</strong>
         </div>
+        <!-- 観測地カードから移設。月の高度・輝面比は上の月明かり補正の根拠、
+             放射点高度は下の「カメラを向ける方向」の根拠になるのでここに置く。 -->
+        <div class="sky-report" id="astroReport"></div>
       </div>
 
       <div class="card">
@@ -818,12 +834,12 @@
   </div>
 </div>
 
-<script src="data.js?v=1.8.1"></script>
-<script src="astro.js?v=1.8.1"></script>
-<script src="engine.js?v=1.8.1"></script>
-<script src="stars.js?v=1.8.1"></script>
-<script src="lightpollution.js?v=1.8.1"></script>
-<script src="app.js?v=1.8.1"></script>
+<script src="data.js?v=1.9.1"></script>
+<script src="astro.js?v=1.9.1"></script>
+<script src="engine.js?v=1.9.1"></script>
+<script src="stars.js?v=1.9.1"></script>
+<script src="lightpollution.js?v=1.9.1"></script>
+<script src="app.js?v=1.9.1"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

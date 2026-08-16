@@ -21,7 +21,7 @@
  *   2. JS・CSS は URL に ?v=バージョン を付け、HTML と同じ版だけを読む
  *   3. activate で clients.claim() を呼ばない（開いているページを途中で乗っ取らない）
  */
-const VERSION = '1.8.1';
+const VERSION = '1.9.1';
 const CACHE = 'meteor-settings-v' + VERSION;
 const V = '?v=' + VERSION;
 
