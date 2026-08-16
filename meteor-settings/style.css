@@ -599,6 +599,16 @@ input[type="number"] { padding-right: 1.9rem; }
   white-space: nowrap;
 }
 
+/* 数が多くて折り返すと縦に伸びてしまう並び（群を選ぶチップ）は横1行にする */
+.chips--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.chips--scroll .chip { flex: none; }
+
 .chip:active { background: var(--tb-bg-secondary); }
 .chip.active {
   border-color: var(--tb-accent);
@@ -1492,6 +1502,65 @@ input[type="number"] { padding-right: 1.9rem; }
   font-size: var(--ms-fs-label);
   color: var(--tb-accent);
   font-family: var(--tb-font-mono);
+}
+
+/* ---------------- 群別の見通し（20年） ----------------
+ * 年間カレンダーと同じ .cal-row を使い回し、左の列を「日付」から「年」に差し替える。
+ * 20行を上から読ませるので、条件の差はバーの長さで一目に分かるようにする。 */
+.cal-row__date--year { width: 4.4rem; }
+
+.cal-row--past { opacity: 0.55; }
+
+.out-bar {
+  height: 0.375rem;                 /* 6px 相当。文字サイズを大きくすると一緒に太る */
+  margin: 0.25rem 0;
+  border-radius: 999px;
+  background: var(--tb-bg-secondary);
+  overflow: hidden;
+}
+
+.out-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.out-bar__fill--ok { background: var(--tb-success); }
+.out-bar__fill--mid { background: var(--tb-accent); }
+.out-bar__fill--warn { background: var(--ms-warn); }
+.out-bar__fill--bad { background: var(--tb-danger); }
+
+/* 条件のバッジと並ぶので、条件と取り違えないよう色を持たせない */
+.cal-badge--week,
+.cal-badge--past { color: var(--tb-text-muted); }
+
+.outlook-lead {
+  margin-top: var(--tb-space-sm);
+  padding: var(--tb-space-sm);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  background: var(--tb-bg-tertiary);
+}
+
+.outlook-lead__name {
+  font-size: var(--tb-font-size-base);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+}
+
+.outlook-lead__text {
+  margin-top: 0.25rem;
+  font-size: var(--tb-font-size-sm);
+  line-height: 1.7;
+  color: var(--tb-text-secondary);
+}
+
+.outlook-lead__text b { color: var(--tb-accent); }
+
+.outlook-lead__loc {
+  margin-top: 0.25rem;
+  font-size: var(--ms-fs-label);
+  color: var(--tb-text-muted);
 }
 
 /* ---------------- マンスリーカレンダー（月曜始まり） ---------------- */
