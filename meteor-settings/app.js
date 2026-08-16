@@ -1201,7 +1201,7 @@
   function showerRowHtml(r) {
     const v = calendarVerdict(r);
     const night = nightAnchor(r.date);
-    const days = Math.round((night.getTime() - nightAnchor(new Date()).getTime()) / 86400000);
+    const days = Math.round((night.getTime() - tonightAnchor().getTime()) / 86400000);
     const daysLabel = days < 0 ? '' : days === 0 ? '今夜' : days === 1 ? '明日の夜' : `${days}日後`;
     const active = r.shower.id === state.showerId && sameYMD(night, nightAnchor(currentDate()));
     return `
@@ -1257,6 +1257,22 @@
   function nightAnchor(date) {
     const d = new Date(date.getTime());
     if (d.getHours() < 12) d.setDate(d.getDate() - 1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  /**
+   * 「今夜」がどの夜かの基準（0時0分）。夜明け前ならまだ前の夜の続き、
+   * 日が昇っていればもう今夜（当日の夜）を指す。
+   * nightAnchor の正午境界を「今」に当てると、朝のあいだ基準が昨夜のままになり、
+   * 今夜が「明日の夜」に見える（実際に発生した）。
+   */
+  function tonightAnchor() {
+    const now = new Date();
+    const d = new Date(now.getTime());
+    const stillNight = d.getHours() < 12
+      && A.sunPosition(now, state.lat, state.lon).altitude < -0.833;
+    if (stillNight) d.setDate(d.getDate() - 1);
     d.setHours(0, 0, 0, 0);
     return d;
   }
@@ -1319,7 +1335,7 @@
 
   /** 今日以降の極大を近い順に返す */
   function upcomingPeaks(count) {
-    const todayMs = nightAnchor(new Date()).getTime();
+    const todayMs = tonightAnchor().getTime();
     const year = new Date().getFullYear();
     const rows = [];
     [year, year + 1].forEach((y) => {
@@ -1358,7 +1374,7 @@
     $('monthLabel').textContent = `${y}年 ${m + 1}月`;
 
     const peaks = peakNightsOfMonth(y, m);
-    const today = new Date();
+    const today = tonightAnchor();          // マスは「日付」ではなく「その夜」なので今夜のマスを差す
     const lead = weekIndex(new Date(y, m, 1));          // 1日までの空きマス
     const days = new Date(y, m + 1, 0).getDate();       // その月の日数
 
