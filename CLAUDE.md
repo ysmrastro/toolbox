@@ -194,6 +194,38 @@ state を注入するのは app.js の役目で、`P.` の薄いラッパにま�
 単体では捕まらないので必要だが、Flaky が1つでもあるとテスト全体が信用されなくなる。
 待つときは時間ではなく状態を待つ（`waitForTimeout` で落ちて `.active` 待ちに直した）。
 
+## CI とブランチ保護
+
+`.github/workflows/test.yml` が PR と main への push で走る。ジョブは2つ。
+
+| チェック名 | 中身 | 目安 |
+|---|---|---|
+| `Small テスト` | `npm test`（依存なし） | 10秒 |
+| `E2E smoke` | `npm run test:e2e`（Playwright） | 50秒 |
+
+TZ は `Asia/Tokyo` に固定してある。日本の空を計算するアプリで参照値も JST なので、
+CI の既定（UTC）のままだと「その夜」の数え方が実際とずれる。
+
+**main は保護してある。**
+
+- **直接 push できない**（PR 必須。承認は0人でよいので一人でもマージできる）
+- 上の2つのチェックが**緑でないとマージできない**
+- **管理者にも適用**（`enforce_admins: true`）。オーナーでも素通りできない。
+  これを外すと一人リポジトリでは実質ノーガードになるので、意図して有効にしている
+- force push とブランチ削除は禁止
+- 「マージ前にブランチを最新にする」は**オフ**。一人開発では往復が増えるだけなので入れていない
+  （その代わり main が進んでいたら PR 側で取り込む。実際に v1.9.1 で発生した）
+- マージコミットを使うので直線履歴の強制も**オフ**
+
+**CI が止まって進めなくなったときの逃げ道**は、保護を一時的に外すこと。
+force push で回避しない。
+
+```bash
+gh api -X DELETE repos/ysmrastro/toolbox/branches/main/protection/enforce_admins  # 一時解除
+gh api -X POST   repos/ysmrastro/toolbox/branches/main/protection/enforce_admins  # 戻す
+```
+
 ## デプロイ
 
 mainブランチへのpushでGitHub Pagesが自動デプロイ。
+main は保護されているので、実際には**PR をマージした時点でデプロイされる**。
