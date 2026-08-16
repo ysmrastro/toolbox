@@ -1,0 +1,71 @@
+# PR とデフォルトブランチへの push でテストを走らせる。
+#
+# 【なぜ2つのジョブに分けるか】
+# Small テストは依存パッケージが要らず数秒で終わる。E2E は Playwright の
+# ブラウザ（約100MB）を落とすぶん遅い。分けておけば、落ちたときにどちらの層の
+# 問題かがチェック一覧を見ただけで分かる。
+#
+# 【TZ を固定する理由】
+# 日本の空を計算するアプリで、テストの参照値も国立天文台の JST の公表値。
+# CI の既定（UTC）のままだと「その夜」の数え方が実際とずれる。
+name: テスト
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 同じブランチに続けて push したら、走っている古いほうは止める
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TZ: Asia/Tokyo
+
+jobs:
+  unit:
+    name: Small テスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 依存パッケージなしで動く（Node 標準の node:test）ので npm ci は要らない
+      - name: npm test
+        run: npm test
+
+  e2e:
+    name: E2E smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: 依存パッケージを入れる
+        run: npm ci
+
+      # ブラウザ本体は node_modules と別の場所に入るので、自前でキャッシュする。
+      # キーは package-lock.json（＝Playwright の版）に紐付ける
+      - name: Playwright のブラウザをキャッシュから復元
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Playwright のブラウザを入れる
+        run: npx playwright install --with-deps chromium
+
+      - name: npm run test:e2e
+        run: npm run test:e2e
