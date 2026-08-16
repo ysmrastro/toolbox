@@ -504,6 +504,9 @@ npm test            # Small テスト（依存なし・1秒台）
 npm run test:e2e    # ブラウザで起動して表示だけ見る（Playwright）
 ```
 
+どちらも **PR で自動的に走る**（`.github/workflows/test.yml`）。main は保護してあり、
+この2つが緑でないとマージできない。手元で流し忘れても止まる。詳細はリポジトリの CLAUDE.md。
+
 Node 標準の `node:test` だけで動く（`npm test` に依存パッケージは要らない）。
 `npm run test:e2e` だけ Playwright を使う。TZ は npm script が `Asia/Tokyo` に固定する
 （参照値が JST のため）。
