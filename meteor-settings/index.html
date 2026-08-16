@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.9.1">
+  <meta name="app-version" content="1.10.0">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.9.1">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.9.1">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.9.1">
-  <link rel="stylesheet" href="style.css?v=1.9.1">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.10.0">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.10.0">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.10.0">
+  <link rel="stylesheet" href="style.css?v=1.10.0">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -168,6 +168,7 @@
         <div class="plan-list" id="planList"></div>
         <div class="chips">
           <button type="button" class="chip" id="btnCalendar">年間カレンダーで選ぶ</button>
+          <button type="button" class="chip" id="btnOutlook">この群を数年先まで見る</button>
         </div>
         <label class="field">
           <span class="field__label">流星群（一覧から選ぶ）</span>
@@ -589,16 +590,36 @@
   <div class="sheet__backdrop" data-close></div>
   <div class="sheet__panel">
     <div class="sheet__head">
-      <h2>年間カレンダー</h2>
+      <h2>流星群カレンダー</h2>
       <button type="button" class="sheet__close" data-close aria-label="閉じる">✕</button>
     </div>
     <div class="sheet__body">
-      <div class="chips" id="calYears"></div>
-      <p class="hint">
-        いま選んでいる観測地での計算です。行をタップするとその群と極大の夜に切り替わります。
-        「狙える時間」は暗夜で月が出ておらず放射点が地平線上にある長さです。
-      </p>
-      <div id="calList"></div>
+      <div class="segmented" id="calModes"></div>
+
+      <!-- 年で切る（その年の全群） -->
+      <div id="calByYear">
+        <div class="chips" id="calYears"></div>
+        <p class="hint">
+          いま選んでいる観測地での計算です。行をタップするとその群と極大の夜に切り替わります。
+          「狙える時間」は暗夜で月が出ておらず放射点が地平線上にある長さです。
+        </p>
+        <div id="calList"></div>
+      </div>
+
+      <!-- 群で切る（その群の20年） -->
+      <div id="calByShower" hidden>
+        <div class="chips chips--scroll" id="calShowers"></div>
+        <div id="calOutlookLead"></div>
+        <div class="chips" id="calSort"></div>
+        <div id="calOutlook"></div>
+        <p class="hint">
+          極大の日付と放射点の高さは毎年ほぼ同じなので、<b>年ごとの差はほとんど月の条件</b>です。
+          月の満ち欠けは約19年で同じ日付に戻るため、20年ぶん並べれば次の当たりは必ず入ります。
+          バーはこの20年で最長の「狙える時間」を100%とした長さ、色は4段階の判定です。
+          「週末」は金・土の夜（翌朝が休みになりやすい夜）。
+          実際の極大は年によって数時間ずれますが、ここでは代表的な日付で計算しています。
+        </p>
+      </div>
     </div>
   </div>
 </div>
@@ -834,12 +855,12 @@
   </div>
 </div>
 
-<script src="data.js?v=1.9.1"></script>
-<script src="astro.js?v=1.9.1"></script>
-<script src="engine.js?v=1.9.1"></script>
-<script src="stars.js?v=1.9.1"></script>
-<script src="lightpollution.js?v=1.9.1"></script>
-<script src="app.js?v=1.9.1"></script>
+<script src="data.js?v=1.10.0"></script>
+<script src="astro.js?v=1.10.0"></script>
+<script src="engine.js?v=1.10.0"></script>
+<script src="stars.js?v=1.10.0"></script>
+<script src="lightpollution.js?v=1.10.0"></script>
+<script src="app.js?v=1.10.0"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

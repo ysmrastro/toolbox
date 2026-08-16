@@ -571,6 +571,20 @@
   function purpose() { return D.purposes.find((p) => p.id === state.purposeId) || D.purposes[0]; }
   function trailQuality() { return D.trailQuality.find((t) => t.id === state.trailId) || D.trailQuality[1]; }
 
+  /**
+   * 群の名前にギリシャ文字の読みを添える（やぎ座α → やぎ座α（アルファ））。
+   * 括弧は文字の直後に置く。名前の末尾だと「みずがめ座δ南流星群（デルタ）」となり、
+   * どこに掛かる読みなのか分からなくなる。
+   *
+   * 使うのは「名前を選ぶ・読む」場面だけ（一覧・カレンダー・読み上げ用のラベル）。
+   * 結果カードの画像と共有テキスト、到達等級の文章では素の name を使う（data.js の注記）。
+   */
+  function showerLabel(sh) {
+    const name = typeof sh === 'string' ? sh : sh.name;
+    return name.replace(/[α-ω]/g, (c) =>
+      (D.greekReadings && D.greekReadings[c]) ? c + '（' + D.greekReadings[c] + '）' : c);
+  }
+
   /* いま選ばれている観測地の表示名。マイ地点 → プリセット → 手入力 の順で解決する。
      計画タブのバー・条件タブの空の暗さ・年間カレンダー・書き出し画像で共通に使う。 */
   function currentLocationName() {
@@ -832,7 +846,7 @@
       lensGroups.map((g) => `<optgroup label="${g.mount}">${g.items.join('')}</optgroup>`).join('');
 
     $('showerSelect').innerHTML = D.showers
-      .map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+      .map((s) => `<option value="${s.id}">${escapeHtml(showerLabel(s))}</option>`).join('');
 
     // 観測地は地域ごとに optgroup でまとめる
     const groups = [];
@@ -1138,53 +1152,82 @@
   let calCache = { key: null, rows: null };
   let calYear = null;
 
+  /**
+   * 「その群のその年の極大の夜」1件ぶんの評価。
+   * 年間カレンダー（1年 × 全群）と群別の見通し（1群 × 20年）で共通に使う。
+   */
+  function evaluatePeakNight(sh, year) {
+    const [mm, dd] = sh.peak.split('-').map(Number);
+    // 極大日の未明（01:00）を代表時刻にする。nightTimeline は前日の夜として扱う
+    const night = new Date(year, mm - 1, dd, 1, 0, 0, 0);
+    const tl = A.nightTimeline(night, state.lat, state.lon, sh);
+    /* 月齢と輝面比は「その夜が始まる日の正午」の値にする。
+       マンスリーカレンダーのマスと同じ数え方に揃えて、別の数字が並ばないようにする */
+    const noon = new Date(night.getTime() - 13 * 3600000);   // 極大日01:00 → 前日12:00
+    const moonNoon = A.moonInfo(noon, state.lat, state.lon);
+    return {
+      shower: sh,
+      date: night,
+      timeline: tl,
+      goldenMinutes: tl.goldenMinutes,
+      illumination: moonNoon.illumination,
+      moonAge: moonNoon.age,
+      peakAlt: tl.peak ? tl.peak.altitude : 0,
+      peakTime: tl.peak ? tl.peak.time : null,
+    };
+  }
+
   /** その年の各群の極大の夜を評価する */
   function calendarRows(year) {
     const key = [year, state.lat.toFixed(2), state.lon.toFixed(2)].join('|');
     if (calCache.key === key) return calCache.rows;
 
-    const rows = D.showers.filter((sh) => sh.peak).map((sh) => {
-      const [mm, dd] = sh.peak.split('-').map(Number);
-      // 極大日の未明（01:00）を代表時刻にする。nightTimeline は前日の夜として扱う
-      const night = new Date(year, mm - 1, dd, 1, 0, 0, 0);
-      const tl = A.nightTimeline(night, state.lat, state.lon, sh);
-      /* 月齢と輝面比は「その夜が始まる日の正午」の値にする。
-         マンスリーカレンダーのマスと同じ数え方に揃えて、別の数字が並ばないようにする */
-      const noon = new Date(night.getTime() - 13 * 3600000);   // 極大日01:00 → 前日12:00
-      const moonNoon = A.moonInfo(noon, state.lat, state.lon);
-      return {
-        shower: sh,
-        date: night,
-        timeline: tl,
-        goldenMinutes: tl.goldenMinutes,
-        illumination: moonNoon.illumination,
-        moonAge: moonNoon.age,
-        peakAlt: tl.peak ? tl.peak.altitude : 0,
-        peakTime: tl.peak ? tl.peak.time : null,
-      };
-    });
+    const rows = D.showers.filter((sh) => sh.peak).map((sh) => evaluatePeakNight(sh, year));
     calCache = { key: key, rows: rows };
     return rows;
   }
 
   /**
-   * 月・放射点高度・狙える時間から「当たり年かどうか」を4段階で表す。
-   * 出現数の絶対値は較正できないので、あくまで条件の良し悪しの目安。
+   * 月・放射点高度・狙える時間から条件の良し悪しを4段階で表す。
+   * 出現数の絶対値は較正できないので、あくまで条件の目安。
+   * score（0〜1）は群別の見通しでバーの長さと年の順位づけにも使う。
    */
   function calendarVerdict(row) {
     const hours = row.goldenMinutes / 60;
     const alt = row.peakAlt;
-    if (hours <= 0 || alt <= 5) return { rank: 'bad', label: '見込みなし' };
+    if (hours <= 0 || alt <= 5) return { rank: 'bad', label: '見込みなし', score: 0 };
     // 狙える時間（暗夜×月なし）と放射点の高さの両方が要る
     const score = Math.min(hours / 5, 1) * Math.min(alt / 50, 1);
     /* 評価しているのは「月と放射点高度の条件」だけで、群そのものの多さは含まない。
        「当たり年」だと出現数が多いように読めるので、条件の良し悪しとして書く（ZHR は横に並べる） */
-    if (score >= 0.75) return { rank: 'ok', label: '条件よい' };
-    if (score >= 0.4) return { rank: 'mid', label: 'まあまあ' };
-    return { rank: 'warn', label: '条件わるい' };
+    if (score >= 0.75) return { rank: 'ok', label: '条件よい', score: score };
+    if (score >= 0.4) return { rank: 'mid', label: 'まあまあ', score: score };
+    return { rank: 'warn', label: '条件わるい', score: score };
   }
 
+  /* シートは2つの見方を持つ。年で切る（その年の全群）か、群で切る（その群の20年）か。
+     どちらも「極大の夜を見わたして選ぶ」ためのものなので、1枚のシートに同居させている。 */
+  const CAL_MODES = [
+    { id: 'year', label: '年で見る', sub: 'その年の全群' },
+    { id: 'shower', label: '群で見る', sub: 'その群の20年' },
+  ];
+  let calMode = 'year';
+
   function renderCalendar() {
+    $('calModes').innerHTML = CAL_MODES.map((m) =>
+      `<button type="button" class="segmented__item${m.id === calMode ? ' active' : ''}" data-calmode="${m.id}">` +
+      `${m.label}<span class="segmented__sub">${m.sub}</span></button>`).join('');
+
+    $('calByYear').hidden = calMode !== 'year';
+    $('calByShower').hidden = calMode !== 'shower';
+    if (calMode === 'year') renderCalendarByYear(); else renderCalendarByShower();
+  }
+
+  function locationLine() {
+    return `観測地: ${escapeHtml(currentLocationName())}（${fmt(state.lat, 2)}, ${fmt(state.lon, 2)}）`;
+  }
+
+  function renderCalendarByYear() {
     const years = [];
     const thisYear = new Date().getFullYear();
     for (let y = thisYear; y <= thisYear + 2; y++) years.push(y);
@@ -1195,10 +1238,9 @@
     ).join('');
 
     const rows = calendarRows(calYear).slice().sort((a, b) => a.date - b.date);
-    const locName = currentLocationName();
 
     $('calList').innerHTML =
-      `<p class="hint">観測地: ${escapeHtml(locName)}（${fmt(state.lat, 2)}, ${fmt(state.lon, 2)}）` +
+      `<p class="hint">${locationLine()}` +
       '<br>日付はその夜が始まる日（夕方）です。極大は未明なので前夜から狙います。</p>' +
       rows.map(showerRowHtml).join('');
   }
@@ -1222,7 +1264,7 @@
           ${daysLabel ? `<div class="cal-row__days">${daysLabel}</div>` : ''}
         </div>
         <div class="cal-row__body">
-          <div class="cal-row__name">${escapeHtml(r.shower.name)}
+          <div class="cal-row__name">${escapeHtml(showerLabel(r.shower))}
             <span class="cal-badge cal-badge--${v.rank}">${v.label}</span></div>
           <div class="cal-row__sub">
             極大 ${peakLabel(r.shower)} 未明／ZHR ${r.shower.zhr}／
@@ -1232,6 +1274,176 @@
           <div class="cal-row__sub">
             月齢 ${fmt(r.moonAge, 1)}日・輝面比 ${Math.round(r.illumination * 100)}%／
             狙える時間 <b>${r.goldenMinutes > 0 ? minutesText(r.goldenMinutes) : 'なし'}</b>
+          </div>
+        </div>
+      </button>`;
+  }
+
+  /* ===================== 群別の見通し（20年） =====================
+   * 「今年のペルセウスの次に条件がいいのは何年後だ？」に答えるための見方。
+   *
+   * 極大の日付はほぼ固定で、同じ日付なら放射点の高さも毎年ほとんど変わらない。
+   * つまり年ごとの差はほぼ月の条件（月齢と月の出入り）だけで決まる。
+   * 月の満ち欠けは約19年で同じ日付に戻る（メトン周期）ので、20年ぶん並べれば
+   * 「次の当たり」は必ずこの中に入る。20年ぶんの計算は 20ms 程度で、待たせない。
+   */
+  const OUTLOOK_YEARS = 20;
+  let outlookShowerId = null;
+  let outlookSort = 'year';                        // 'year'（年順）| 'score'（条件順）
+  let outlookCache = { key: null, rows: null };
+
+  /** 見通しの対象。指定がなければいま選んでいる群（散在のように極大が無い群は除く） */
+  function outlookShower() {
+    const byId = D.showers.find((s) => s.id === outlookShowerId && s.peak);
+    if (byId) return byId;
+    const cur = shower();
+    return cur.peak ? cur : D.showers.find((s) => s.peak);
+  }
+
+  function outlookRows(sh) {
+    const from = tonightAnchor().getFullYear();
+    const key = [sh.id, from, state.lat.toFixed(2), state.lon.toFixed(2)].join('|');
+    if (outlookCache.key === key) return outlookCache.rows;
+
+    const rows = [];
+    for (let y = from; y < from + OUTLOOK_YEARS; y++) rows.push(evaluatePeakNight(sh, y));
+    outlookCache = { key: key, rows: rows };
+    return rows;
+  }
+
+  /** 「今年」「来年」「N年後」 */
+  function yearsAwayLabel(n) {
+    return n === 0 ? '今年' : n === 1 ? '来年' : `${n}年後`;
+  }
+
+  function renderCalendarByShower() {
+    const sh = outlookShower();
+    outlookShowerId = sh.id;
+    const baseYear = tonightAnchor().getFullYear();
+    const todayMs = tonightAnchor().getTime();
+
+    /* 群を選ぶチップは素の名前で横1行にする。ふりがな付きで折り返すと14個が
+       縦に伸び、肝心の結論が画面の外へ押し出される。読みは下の見出しで見せる */
+    const chipBox = $('calShowers');
+    chipBox.innerHTML = D.showers.filter((s) => s.peak).map((s) =>
+      `<button type="button" class="chip${s.id === sh.id ? ' active' : ''}"` +
+      ` data-outlook-shower="${s.id}">${escapeHtml(s.name)}</button>`).join('');
+    // 選んでいる群が右の見えない位置にあることがあるので、横スクロールを合わせる
+    const activeChip = chipBox.querySelector('.chip.active');
+    if (activeChip) {
+      chipBox.scrollLeft = activeChip.offsetLeft - (chipBox.clientWidth - activeChip.offsetWidth) / 2;
+    }
+
+    const raw = outlookRows(sh);
+    /* バーは「その群の20年で最長の狙える時間」を100%とした相対の長さにする。
+       4段階の判定に使う score は 5時間・高度50°で頭打ちになるので、
+       条件のよい年どうしを並べると全部いっぱいになって差が見えない
+       （放射点の高さは同じ日付なら毎年ほぼ同じなので、差は狙える時間に出る） */
+    const maxGolden = raw.reduce((m, r) => Math.max(m, r.goldenMinutes), 0);
+    const rows = raw.map((r) => {
+      const night = nightAnchor(r.date);
+      return {
+        row: r,
+        verdict: calendarVerdict(r),
+        ratio: maxGolden > 0 ? r.goldenMinutes / maxGolden : 0,
+        night: night,
+        year: night.getFullYear(),
+        past: night.getTime() < todayMs,
+      };
+    });
+
+    $('calOutlookLead').innerHTML = outlookLeadHtml(sh, rows, baseYear);
+
+    $('calSort').innerHTML = [
+      { id: 'year', label: '年の順' },
+      { id: 'score', label: '条件の順' },
+    ].map((s) => `<button type="button" class="chip${s.id === outlookSort ? ' active' : ''}"` +
+      ` data-outlook-sort="${s.id}">${s.label}</button>`).join('');
+
+    const sorted = outlookSort === 'score'
+      ? rows.slice().sort((a, b) => b.ratio - a.ratio || a.year - b.year)
+      : rows;
+
+    $('calOutlook').innerHTML = sorted.map((x) => outlookRowHtml(x, baseYear)).join('');
+  }
+
+  /**
+   * 結論の見出し。20行を読ませる前に「次はいつか」を先に言う。
+   * 「条件よい」の年（4段階の判定）と「いちばん長く狙える年」は別なので、
+   * 前者は行くかどうかの判断に、後者は何年後がベストかの答えに使う。
+   */
+  function outlookLeadHtml(sh, rows, baseYear) {
+    const future = rows.filter((x) => !x.past);
+    const thisYear = rows[0];
+    const best = future.slice().sort((a, b) => b.ratio - a.ratio)[0];
+    const nextGood = future.find((x) => x.verdict.rank === 'ok');
+    const away = (x) => yearsAwayLabel(x.year - baseYear);
+    const isBest = (x) => best && x.year === best.year;
+
+    const lines = [];
+    if (thisYear) {
+      lines.push(thisYear.past
+        ? `今年 ${thisYear.year}年の極大は終わりました（${thisYear.verdict.label}）。`
+        : `今年 ${thisYear.year}年は <b>${thisYear.verdict.label}</b>。`);
+    }
+    if (nextGood && !(thisYear && nextGood.year === thisYear.year && !thisYear.past)) {
+      lines.push(`次に <b>条件よい</b> になるのは <b>${nextGood.year}年</b>（${away(nextGood)}）。`);
+    } else if (!nextGood) {
+      lines.push(`今後 ${OUTLOOK_YEARS}年に「条件よい」の年はありません。`);
+    }
+    if (best && best.row.goldenMinutes > 0) {
+      /* 月が一晩中出ない年は暗夜いっぱいまで狙えるので、最長が何年も横並びになる。
+         1年だけのように書くと、より近い年や週末の年を見落とさせてしまう */
+      const topYears = future.filter((x) => x.ratio >= 0.999).length;
+      const longest = minutesText(best.row.goldenMinutes);
+      if (nextGood && isBest(nextGood) && lines.length > 1) {
+        // 「次に条件よい年」がそのまま最良なら、別の文にせず言い足したほうが早い
+        lines.push(topYears > 1
+          ? `しかもこれが ${OUTLOOK_YEARS}年で最長の <b>${longest}</b> 狙える年のひとつです（全${topYears}年）。`
+          : `しかもこれが ${OUTLOOK_YEARS}年でいちばん長く狙える年です（<b>${longest}</b>）。`);
+      } else {
+        lines.push(topYears > 1
+          ? `${OUTLOOK_YEARS}年で最長の <b>${longest}</b> 狙えるのは <b>${best.year}年</b>（${away(best)}）を含む${topYears}年。`
+          : `${OUTLOOK_YEARS}年でいちばん長く狙えるのは <b>${best.year}年</b>（${away(best)}）。狙える時間 <b>${longest}</b>。`);
+      }
+    }
+
+    return `<div class="outlook-lead">
+      <div class="outlook-lead__name">${escapeHtml(showerLabel(sh))}</div>
+      <p class="outlook-lead__text">${lines.join('<br>')}</p>
+      <p class="outlook-lead__loc">${locationLine()}</p>
+    </div>`;
+  }
+
+  function outlookRowHtml(x, baseYear) {
+    const r = x.row;
+    const v = x.verdict;
+    const night = x.night;
+    const wi = weekIndex(night);
+    // 金・土の夜は翌朝が休みになりやすい。何年も先の計画では曜日が効く
+    const weekend = wi === 4 || wi === 5;
+    const active = r.shower.id === state.showerId && sameYMD(night, nightAnchor(currentDate()));
+    return `
+      <button type="button" class="cal-row cal-row--year${x.past ? ' cal-row--past' : ''}${active ? ' active' : ''}"
+              data-shower="${r.shower.id}" data-date="${r.date.toISOString()}">
+        <div class="cal-row__date cal-row__date--year">
+          <div class="cal-row__md">${x.year}</div>
+          <div class="cal-row__days">${yearsAwayLabel(x.year - baseYear)}</div>
+        </div>
+        <div class="cal-row__body">
+          <div class="cal-row__name">${night.getMonth() + 1}/${night.getDate()}（${WEEKDAYS_MON[wi]}）の夜
+            <span class="cal-badge cal-badge--${v.rank}">${v.label}</span>
+            ${weekend ? '<span class="cal-badge cal-badge--week">週末</span>' : ''}
+            ${x.past ? '<span class="cal-badge cal-badge--past">終了</span>' : ''}
+          </div>
+          <div class="out-bar" role="presentation">
+            <span class="out-bar__fill out-bar__fill--${v.rank}"
+                  style="width:${Math.round(x.ratio * 100)}%"></span>
+          </div>
+          <div class="cal-row__sub">
+            月齢 ${fmt(r.moonAge, 1)}日・輝面比 ${Math.round(r.illumination * 100)}%／
+            狙える時間 <b>${r.goldenMinutes > 0 ? minutesText(r.goldenMinutes) : 'なし'}</b>／
+            放射点 最高 <b>${fmt(r.peakAlt, 0)}°</b>
           </div>
         </div>
       </button>`;
@@ -1404,7 +1616,7 @@
       if (sameYMD(date, today)) cls.push('mcell--today');
       if (sameYMD(date, selected)) cls.push('active');
       const label = `${m + 1}月${d}日（${WEEKDAYS_MON[wi]}）の夜／月齢 ${fmt(moon.age, 1)}日` +
-        (sh ? '／' + sh.map((s) => s.name).join('・') + 'の極大' : '');
+        (sh ? '／' + sh.map((s) => showerLabel(s)).join('・') + 'の極大' : '');
       cells.push(
         `<button type="button" class="${cls.join(' ')}" data-day="${d}" aria-label="${label}">` +
         `<span class="mcell__d">${d}</span>` +
@@ -1432,7 +1644,7 @@
     if (peaks) {
       r += '　<span class="mcell__peak mcell__peak--legend"></span>' +
         `<span style="color:var(--tb-accent)"> ` +
-        peaks.map((s) => escapeHtml(s.name) + '（極大 ' + peakLabel(s) + '）').join('・') +
+        peaks.map((s) => escapeHtml(showerLabel(s)) + '（極大 ' + peakLabel(s) + '）').join('・') +
         'の夜</span>';
     }
     r += '<br>';
@@ -2931,8 +3143,24 @@
     });
 
     $('btnCalendar').addEventListener('click', () => {
+      calMode = 'year';
       renderCalendar();
       openSheet('calendarSheet');
+    });
+
+    /* 同じシートを「群で見る」側で開く。いま選んでいる群をそのまま対象にする */
+    $('btnOutlook').addEventListener('click', () => {
+      calMode = 'shower';
+      outlookShowerId = state.showerId;
+      renderCalendar();
+      openSheet('calendarSheet');
+    });
+
+    $('calModes').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-calmode]');
+      if (!b) return;
+      calMode = b.dataset.calmode;
+      renderCalendar();
     });
 
     $('calYears').addEventListener('click', (e) => {
@@ -2942,7 +3170,22 @@
       renderCalendar();
     });
 
-    $('calList').addEventListener('click', (e) => {
+    $('calShowers').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-outlook-shower]');
+      if (!b) return;
+      outlookShowerId = b.dataset.outlookShower;
+      renderCalendarByShower();
+    });
+
+    $('calSort').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-outlook-sort]');
+      if (!b) return;
+      outlookSort = b.dataset.outlookSort;
+      renderCalendarByShower();
+    });
+
+    /* 行のタップはどちらの見方でも同じ（その群とその夜に切り替える） */
+    const pickCalRow = (e) => {
       const row = e.target.closest('.cal-row');
       if (!row) return;
       selectShowerNight(row.dataset.shower, row.dataset.date);
@@ -2950,7 +3193,9 @@
       syncInputs();
       refresh();
       showToast('この群と極大の夜に切り替えました');
-    });
+    };
+    $('calList').addEventListener('click', pickCalRow);
+    $('calOutlook').addEventListener('click', pickCalRow);
 
     /* 設定 — URL で共有 */
     $('btnShare').addEventListener('click', async () => {
