@@ -18,8 +18,8 @@ const MS_DATA = {};
  *   メジャー → よほどの変更のときだけ
  * リリース時は appUpdated と sw.js の CACHE 名も一緒に更新する。
  */
-MS_DATA.appVersion = '1.10.0';
-MS_DATA.appUpdated = '2026-08-16 22:43';
+MS_DATA.appVersion = '1.10.1';
+MS_DATA.appUpdated = '2026-08-16 23:48';
 
 /* ---------------- 画角プレビューの枠 ----------------
  * 空は地平線を基準に描き、枠（＝センサーの写る範囲）だけを構図に合わせて回す。

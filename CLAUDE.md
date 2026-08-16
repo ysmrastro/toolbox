@@ -12,6 +12,7 @@ ysmrastro toolbox — ちょっとしたWebアプリツール集。GitHub Pages 
 
 ```
 toolbox/
+├── package.json            # 開発用のみ（npm test / test:e2e）。配信物はフレームワーク不使用のまま
 ├── index.html              # ツール一覧トップページ
 ├── shared/css/             # 共通CSSアセット
 │   ├── variables.css       # CSS変数
@@ -32,9 +33,10 @@ toolbox/
     ├── engine.js           # note記事の付録A 8式の実装
     ├── lightpollution.js   # 光害地図タイルから地点の夜空の明るさを引く
     ├── lp-tiles/           # 光害地図タイル（日本周辺・34枚・約0.8MB）
-    ├── app.js
-    ├── selftest.js         # 記事の数値を再現するかの検証（node で実行）
-    ├── tools/              # 開発用（release.py / build-stars.py / check-riseset.js）
+    ├── plan.js             # 夜の数え方・極大の夜の評価・狙いの幾何（state を持たない純粋関数）
+    ├── app.js              # 状態管理・イベント・描画。計算は持たない
+    ├── test/               # 自動テスト（配信されない）
+    ├── tools/              # 開発用（release.py / build-stars.py）
     ├── manifest.json / sw.js
     └── README.md           # 出典・前提・データ確度の詳細
 ```
@@ -70,7 +72,7 @@ toolbox/
 よい年どうしを並べると差が消えるため）。理由は README に書いた。
 
 **日の出入り・月の出入りは国立天文台の公表値と突き合わせて精度を押さえている**
-（`TZ=Asia/Tokyo node meteor-settings/tools/check-riseset.js`、太陽±0.5分／月±2.2分／月齢±0.02日）。
+（`npm test` の `test/astro.test.js`、太陽±0.5分／月±2.2分／月齢±0.02日）。
 時刻を画面に出すようになったので、`astro.js` の月の計算を触ったらこれを必ず実行する。
 
 **オフライン動作は要件ではなく「あわよくば動けばよい」程度**（meteor-settings）。
@@ -146,7 +148,7 @@ OGP/Twitterカードのメタタグを置き、1200×630 の `ogp.png` を同じ
 
 ```bash
 python3 meteor-settings/tools/release.py 1.6.0
-node meteor-settings/selftest.js
+npm test
 ```
 
 版は `data.js` / `index.html`（meta と `?v=`）/ `sw.js` の**4か所**に出てくる。
@@ -154,7 +156,7 @@ node meteor-settings/selftest.js
 触って起動が止まる。実際に発生した）。
 
 更新時刻も**手で書かない**。以前 `appUpdated` を手打ちして実際より最大2時間先の値を
-入れており、ユーザーの指摘で発覚した。selftest が「4か所の一致」と
+入れており、ユーザーの指摘で発覚した。`test/release.test.js` が「4か所の一致」と
 「更新時刻が未来でないこと」を検査する。詳細は `meteor-settings/README.md` を参照。
 
 ユーザーに見える変更をしたら `data.js` の `MS_DATA.changelog` にも1件足す（新しいものを上）。
@@ -170,9 +172,27 @@ node meteor-settings/selftest.js
 ## 開発コマンド
 
 ```bash
+npm test                       # Small テスト（依存なし・1秒台）
+npm run test:e2e               # ブラウザで起動して表示だけ見る（Playwright）
 npx serve .                    # ローカルサーバー
 python3 -m http.server         # 代替
 ```
+
+## テスト
+
+**計算は plan.js に置く。app.js には置かない。** app.js は DOM に結び付いた1枚の
+クロージャで外から呼べず、この層のバグを2回逃している（45°離角・1日ずれ）。
+plan.js の関数は **「いま何時か」と「どこで見るか」を必ず引数で受け取る**
+（`new Date()` を内部で呼ぶと、朝の時刻を渡して試せない＝1日ずれを見つけられなかった原因）。
+state を注入するのは app.js の役目で、`P.` の薄いラッパにまとめてある。
+
+**期待値はできるだけアプリの外から取る。** engine は note 記事の数値、astro は
+国立天文台の公表値。プロダクトと同じ式をテストに書き写すと、バグごと固定してしまう。
+記事に数値が無い部分は `[現状値]` と明記して分ける（回帰防止であって正しさの証明ではない）。
+
+**E2E は smoke 1本だけ**にする。版ずれの真っ白事故（v1.3.2）と `hidden` の事故（v1.7.0）は
+単体では捕まらないので必要だが、Flaky が1つでもあるとテスト全体が信用されなくなる。
+待つときは時間ではなく状態を待つ（`waitForTimeout` で落ちて `.active` 待ちに直した）。
 
 ## デプロイ
 

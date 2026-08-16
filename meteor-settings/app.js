@@ -8,6 +8,7 @@
   const D = MS_DATA;
   const E = MS_ENGINE;
   const A = MS_ASTRO;
+  const P = MS_PLAN;
   const STORE_KEY = 'ms-meteor-settings-v1';
 
   /* ===================== 状態 ===================== */
@@ -571,18 +572,43 @@
   function purpose() { return D.purposes.find((p) => p.id === state.purposeId) || D.purposes[0]; }
   function trailQuality() { return D.trailQuality.find((t) => t.id === state.trailId) || D.trailQuality[1]; }
 
-  /**
-   * 群の名前にギリシャ文字の読みを添える（やぎ座α → やぎ座α（アルファ））。
-   * 括弧は文字の直後に置く。名前の末尾だと「みずがめ座δ南流星群（デルタ）」となり、
-   * どこに掛かる読みなのか分からなくなる。
-   *
-   * 使うのは「名前を選ぶ・読む」場面だけ（一覧・カレンダー・読み上げ用のラベル）。
-   * 結果カードの画像と共有テキスト、到達等級の文章では素の name を使う（data.js の注記）。
+  /* ===================== plan.js への橋渡し =====================
+   * 「いつ・どこを狙うか」の計算は plan.js（MS_PLAN）に置いてある。
+   * あちらは state を知らない純粋な関数にしてあり（テストのため）、
+   * ここで「いまの時刻」と「観測地」を注入して、これまでと同じ名前で呼べるようにする。
+   * app.js の役目は状態を持つことと描くことで、計算は持たない。
    */
-  function showerLabel(sh) {
-    const name = typeof sh === 'string' ? sh : sh.name;
-    return name.replace(/[α-ω]/g, (c) =>
-      (D.greekReadings && D.greekReadings[c]) ? c + '（' + D.greekReadings[c] + '）' : c);
+  const nightAnchor = P.nightAnchor;
+  const nightOf = P.nightOf;
+  const sameYMD = P.sameYMD;
+  const weekIndex = P.weekIndex;
+  const bestTimeOfNight = P.bestTimeOfNight;
+  const showerLabel = P.showerLabel;
+  const peakLabel = P.peakLabel;
+  const yearsAwayLabel = P.yearsAwayLabel;
+  const calendarVerdict = P.calendarVerdict;
+  const peakNightsOfMonth = P.peakNightsOfMonth;
+  const timelineFor = P.timelineFor;
+  const norm360 = P.norm360;
+  const projectSky = P.projectSky;
+  const circleAround = P.circleAround;
+  const OUTLOOK_YEARS = P.OUTLOOK_YEARS;
+
+  function tonightAnchor() { return P.tonightAnchor(new Date(), state.lat, state.lon); }
+  function calendarRows(year) { return P.calendarRows(year, state.lat, state.lon); }
+  function evaluatePeakNight(sh, year) { return P.evaluatePeakNight(sh, year, state.lat, state.lon); }
+  function upcomingPeaks(count) { return P.upcomingPeaks(count, new Date(), state.lat, state.lon); }
+  function nextPeakDate(sh) { return P.nextPeakDate(sh, new Date()); }
+
+  function outlookRows(sh) {
+    return P.outlookRows(sh, tonightAnchor().getFullYear(), state.lat, state.lon);
+  }
+
+  function defaultCamAz(snap) { return P.defaultCamAz(snap.rad); }
+
+  function presetDirection(kind, snap, radAz, radAlt) {
+    const cur = state.camAz == null ? defaultCamAz(snap) : state.camAz;
+    return P.presetDirection(kind, cur, radAz, radAlt);
   }
 
   /* いま選ばれている観測地の表示名。マイ地点 → プリセット → 手入力 の順で解決する。
@@ -601,22 +627,6 @@
   function currentDate() {
     const d = state.datetime ? new Date(state.datetime) : new Date();
     return isNaN(d.getTime()) ? new Date() : d;
-  }
-
-  /** 選択中の流星群の「次の極大の夜」の 01:00 */
-  function nextPeakDate(sh) {
-    const now = new Date();
-    if (!sh.peak) {
-      const d = new Date(now.getTime() + 86400000);
-      d.setHours(1, 0, 0, 0);
-      return d;
-    }
-    const [mm, dd] = sh.peak.split('-').map(Number);
-    for (let dy = 0; dy <= 1; dy++) {
-      const d = new Date(now.getFullYear() + dy, mm - 1, dd, 1, 0, 0, 0);
-      if (d.getTime() > now.getTime()) return d;
-    }
-    return new Date(now.getFullYear() + 1, mm - 1, dd, 1, 0, 0, 0);
   }
 
   function fmt(v, digits) {
@@ -661,7 +671,6 @@
   const DEC_MIN = -40;
   const DEC_MAX = 90;
 
-  function norm360(deg) { return ((deg % 360) + 360) % 360; }
   function roundRa(deg) { return norm360(Math.round(norm360(deg) / RA_STEP_DEG) * RA_STEP_DEG); }
   function roundDec(deg) { return Math.min(DEC_MAX, Math.max(DEC_MIN, Math.round(deg / 5) * 5)); }
 
@@ -722,30 +731,6 @@
       skyHere: E.skyAtAltitude(zenithSky, altUsed),
       extinction: E.meteorExtinction(altUsed),
     };
-  }
-
-  /** 放射点から方位で45°離した向き（初期値） */
-  function defaultCamAz(snap) {
-    if (snap.rad.isSporadic || snap.rad.azimuth == null) return 180;
-    return Math.round(((snap.rad.azimuth + 45) % 360) / 5) * 5 % 360;
-  }
-
-  /** プリセットで狙う向き（方位・高度）。天頂は方位を変えない */
-  function presetDirection(kind, snap, radAz, radAlt) {
-    const cur = state.camAz == null ? defaultCamAz(snap) : state.camAz;
-    if (kind === 'zenith') return { az: cur, alt: 90 };
-    if (kind === 'radiant') return { az: radAz, alt: radAlt };
-
-    /* 放射点から45°離す。
-       「方位を45°ずらす」だと放射点が高いときに離角が45°に届かない
-       （高度58°では方位45°ずらしても離角は23°しかない。実際にそうなっていた）。
-       球面上で45°離れた円をたどり、そのうち最も高度が取れる点を選ぶ。
-       高度が高いほど空が暗く流星の減光も小さいので、条件のいい向きになる。 */
-    let best = null;
-    circleAround(radAz, radAlt, 45, 72).forEach((q) => {
-      if (!best || q.alt > best.alt) best = q;
-    });
-    return best ? { az: norm360(best.az), alt: best.alt } : { az: norm360(radAz + 45), alt: radAlt };
   }
 
   /** いまの時刻・地点で、方位・高度の狙いに対応する赤経・赤緯 */
@@ -1021,31 +1006,15 @@
 
   /* ===================== 描画：条件タブ ===================== */
   /* ===================== 撮影計画タイムライン =====================
-   * 夜ごとの計算（薄明・月出没・放射点高度の系列）はそれなりに重いので、
-   * 同じ夜・同じ地点・同じ群なら使い回す。
+   * 夜ごとの計算（薄明・月出没・放射点高度の系列）は plan.js の timelineFor が持つ
+   * （同じ夜・同じ地点・同じ群なら使い回す）。ここは描くだけ。
    */
-  let tlCache = { key: null, value: null };
   let fovResizeTimer = null;
   /* 直近の計算結果。タブが表示された時点で画角プレビューを描き直すために持つ
      （canvas は表示されていない間は幅が0で描けない） */
   let lastRes = null;
 
   /** その時刻が属する「夜」の起点（現地12:00）。未明は前日の夜として扱う */
-  function nightOf(date) {
-    const noon = new Date(date.getTime());
-    noon.setHours(12, 0, 0, 0);
-    if (date.getTime() < noon.getTime()) noon.setDate(noon.getDate() - 1);
-    return noon;
-  }
-
-  function timelineFor(date, lat, lon, sh) {
-    const key = [nightOf(date).toDateString(), lat.toFixed(3), lon.toFixed(3), sh.id].join('|');
-    if (tlCache.key !== key) {
-      tlCache = { key: key, value: A.nightTimeline(date, lat, lon, sh) };
-    }
-    return tlCache.value;
-  }
-
   function hhmm(d) {
     if (!d) return '—';
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -1149,61 +1118,7 @@
    * 「今年のペルセウスは当たり年」といった判断ができる。
    * 15群 × タイムライン計算はそれなりに重いので、年ごとに結果を持っておく。
    */
-  let calCache = { key: null, rows: null };
   let calYear = null;
-
-  /**
-   * 「その群のその年の極大の夜」1件ぶんの評価。
-   * 年間カレンダー（1年 × 全群）と群別の見通し（1群 × 20年）で共通に使う。
-   */
-  function evaluatePeakNight(sh, year) {
-    const [mm, dd] = sh.peak.split('-').map(Number);
-    // 極大日の未明（01:00）を代表時刻にする。nightTimeline は前日の夜として扱う
-    const night = new Date(year, mm - 1, dd, 1, 0, 0, 0);
-    const tl = A.nightTimeline(night, state.lat, state.lon, sh);
-    /* 月齢と輝面比は「その夜が始まる日の正午」の値にする。
-       マンスリーカレンダーのマスと同じ数え方に揃えて、別の数字が並ばないようにする */
-    const noon = new Date(night.getTime() - 13 * 3600000);   // 極大日01:00 → 前日12:00
-    const moonNoon = A.moonInfo(noon, state.lat, state.lon);
-    return {
-      shower: sh,
-      date: night,
-      timeline: tl,
-      goldenMinutes: tl.goldenMinutes,
-      illumination: moonNoon.illumination,
-      moonAge: moonNoon.age,
-      peakAlt: tl.peak ? tl.peak.altitude : 0,
-      peakTime: tl.peak ? tl.peak.time : null,
-    };
-  }
-
-  /** その年の各群の極大の夜を評価する */
-  function calendarRows(year) {
-    const key = [year, state.lat.toFixed(2), state.lon.toFixed(2)].join('|');
-    if (calCache.key === key) return calCache.rows;
-
-    const rows = D.showers.filter((sh) => sh.peak).map((sh) => evaluatePeakNight(sh, year));
-    calCache = { key: key, rows: rows };
-    return rows;
-  }
-
-  /**
-   * 月・放射点高度・狙える時間から条件の良し悪しを4段階で表す。
-   * 出現数の絶対値は較正できないので、あくまで条件の目安。
-   * score（0〜1）は群別の見通しでバーの長さと年の順位づけにも使う。
-   */
-  function calendarVerdict(row) {
-    const hours = row.goldenMinutes / 60;
-    const alt = row.peakAlt;
-    if (hours <= 0 || alt <= 5) return { rank: 'bad', label: '見込みなし', score: 0 };
-    // 狙える時間（暗夜×月なし）と放射点の高さの両方が要る
-    const score = Math.min(hours / 5, 1) * Math.min(alt / 50, 1);
-    /* 評価しているのは「月と放射点高度の条件」だけで、群そのものの多さは含まない。
-       「当たり年」だと出現数が多いように読めるので、条件の良し悪しとして書く（ZHR は横に並べる） */
-    if (score >= 0.75) return { rank: 'ok', label: '条件よい', score: score };
-    if (score >= 0.4) return { rank: 'mid', label: 'まあまあ', score: score };
-    return { rank: 'warn', label: '条件わるい', score: score };
-  }
 
   /* シートは2つの見方を持つ。年で切る（その年の全群）か、群で切る（その群の20年）か。
      どちらも「極大の夜を見わたして選ぶ」ためのものなので、1枚のシートに同居させている。 */
@@ -1281,16 +1196,11 @@
 
   /* ===================== 群別の見通し（20年） =====================
    * 「今年のペルセウスの次に条件がいいのは何年後だ？」に答えるための見方。
-   *
-   * 極大の日付はほぼ固定で、同じ日付なら放射点の高さも毎年ほとんど変わらない。
-   * つまり年ごとの差はほぼ月の条件（月齢と月の出入り）だけで決まる。
-   * 月の満ち欠けは約19年で同じ日付に戻る（メトン周期）ので、20年ぶん並べれば
-   * 「次の当たり」は必ずこの中に入る。20年ぶんの計算は 20ms 程度で、待たせない。
+   * 年数の根拠と計算そのものは plan.js（MS_PLAN.outlookRows）にある。
+   * ここが持つのはどの群を出すかと並び順だけ。
    */
-  const OUTLOOK_YEARS = 20;
   let outlookShowerId = null;
   let outlookSort = 'year';                        // 'year'（年順）| 'score'（条件順）
-  let outlookCache = { key: null, rows: null };
 
   /** 見通しの対象。指定がなければいま選んでいる群（散在のように極大が無い群は除く） */
   function outlookShower() {
@@ -1298,22 +1208,6 @@
     if (byId) return byId;
     const cur = shower();
     return cur.peak ? cur : D.showers.find((s) => s.peak);
-  }
-
-  function outlookRows(sh) {
-    const from = tonightAnchor().getFullYear();
-    const key = [sh.id, from, state.lat.toFixed(2), state.lon.toFixed(2)].join('|');
-    if (outlookCache.key === key) return outlookCache.rows;
-
-    const rows = [];
-    for (let y = from; y < from + OUTLOOK_YEARS; y++) rows.push(evaluatePeakNight(sh, y));
-    outlookCache = { key: key, rows: rows };
-    return rows;
-  }
-
-  /** 「今年」「来年」「N年後」 */
-  function yearsAwayLabel(n) {
-    return n === 0 ? '今年' : n === 1 ? '来年' : `${n}年後`;
   }
 
   function renderCalendarByShower() {
@@ -1474,49 +1368,6 @@
 
   const WEEKDAYS_MON = ['月', '火', '水', '木', '金', '土', '日'];
 
-  /** その夜を代表する日付（0時0分）。未明は前の日の夜の続きとして扱う */
-  function nightAnchor(date) {
-    const d = new Date(date.getTime());
-    if (d.getHours() < 12) d.setDate(d.getDate() - 1);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
-
-  /**
-   * 「今夜」がどの夜かの基準（0時0分）。夜明け前ならまだ前の夜の続き、
-   * 日が昇っていればもう今夜（当日の夜）を指す。
-   * nightAnchor の正午境界を「今」に当てると、朝のあいだ基準が昨夜のままになり、
-   * 今夜が「明日の夜」に見える（実際に発生した）。
-   */
-  function tonightAnchor() {
-    const now = new Date();
-    const d = new Date(now.getTime());
-    const stillNight = d.getHours() < 12
-      && A.sunPosition(now, state.lat, state.lon).altitude < -0.833;
-    if (stillNight) d.setDate(d.getDate() - 1);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }
-
-  function sameYMD(a, b) {
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
-      && a.getDate() === b.getDate();
-  }
-
-  /** 月曜始まりの曜日番号（0=月 … 6=日） */
-  function weekIndex(date) { return (date.getDay() + 6) % 7; }
-
-  /** その夜のうち最も狙いやすい時刻（暗夜のうち放射点が最も高い時刻） */
-  function bestTimeOfNight(tl, nightDate) {
-    if (tl && tl.peak) return tl.peak.time;
-    if (tl && tl.duskAstro && tl.dawnAstro) {
-      return new Date((tl.duskAstro.getTime() + tl.dawnAstro.getTime()) / 2);
-    }
-    const d = new Date(nightDate.getTime());
-    d.setHours(23, 0, 0, 0);
-    return d;
-  }
-
   /**
    * 月の形の小さな図。輝面比 k と満ちていく途中かどうかで描く。
    * 明るい側は「満月に向かう途中なら右」（北半球から見た向き）。
@@ -1535,44 +1386,6 @@
     return `<svg class="mcell__moon" width="${size}" height="${size}" ` +
       `viewBox="0 0 ${size} ${size}" aria-hidden="true">` +
       `<circle cx="${c}" cy="${c}" r="${r}" fill="var(--ms-cal-moon-dark)"/>${lit}</svg>`;
-  }
-
-  /** 表示中の月に極大がある夜を { 日: [流星群] } で返す */
-  function peakNightsOfMonth(year, month) {
-    const map = {};
-    D.showers.filter((sh) => sh.peak).forEach((sh) => {
-      const [pm, pd] = sh.peak.split('-').map(Number);
-      // 1月・12月のマスには隣の年の極大が入るので前後の年も見る
-      [year - 1, year, year + 1].forEach((y) => {
-        const night = nightAnchor(new Date(y, pm - 1, pd, 1, 0, 0, 0));
-        if (night.getFullYear() !== year || night.getMonth() !== month) return;
-        const key = night.getDate();
-        if (!map[key]) map[key] = [];
-        map[key].push(sh);
-      });
-    });
-    return map;
-  }
-
-  /** 今日以降の極大を近い順に返す */
-  function upcomingPeaks(count) {
-    const todayMs = tonightAnchor().getTime();
-    const year = new Date().getFullYear();
-    const rows = [];
-    [year, year + 1].forEach((y) => {
-      calendarRows(y).forEach((r) => {
-        if (nightAnchor(r.date).getTime() >= todayMs) rows.push(r);
-      });
-    });
-    rows.sort((a, b) => a.date - b.date);
-    return rows.slice(0, count);
-  }
-
-  /** 'MM-DD' を「8/13」の形にする（0埋めのままだと日付に見えにくい） */
-  function peakLabel(sh) {
-    if (!sh.peak) return '—';
-    const [m, d] = sh.peak.split('-').map(Number);
-    return `${m}/${d}`;
   }
 
   function renderPlanList() {
@@ -1712,40 +1525,6 @@
    * 代わりに1等星クラスの固有名を出して向きが分かるようにしている。
    */
   const RAD = Math.PI / 180;
-
-  /**
-   * 方位・高度を、視野中心（az0, alt0）を原点とする画面座標に写す。
-   * 返り値の x は右が正・y は上が正で、単位は「中心から見た接平面上の距離」。
-   * behind が true の点は視野の裏側なので描かない。
-   */
-  function projectSky(az, alt, az0, alt0) {
-    const a = alt * RAD;
-    const a0 = alt0 * RAD;
-    const dAz = (az - az0) * RAD;
-    const cosC = Math.sin(a0) * Math.sin(a) + Math.cos(a0) * Math.cos(a) * Math.cos(dAz);
-    if (cosC <= 0.01) return { behind: true };
-    return {
-      x: (Math.cos(a) * Math.sin(dAz)) / cosC,
-      y: (Math.cos(a0) * Math.sin(a) - Math.sin(a0) * Math.cos(a) * Math.cos(dAz)) / cosC,
-      behind: false,
-    };
-  }
-
-  /** 放射点から指定した角距離だけ離れた点の列（離角の目安の円を描くため） */
-  function circleAround(az0, alt0, radiusDeg, steps) {
-    const pts = [];
-    const r = radiusDeg * RAD;
-    const a0 = alt0 * RAD;
-    for (let i = 0; i <= steps; i++) {
-      const th = (i / steps) * 2 * Math.PI;
-      // 中心（az0, alt0）から方位角 th の向きに r だけ進んだ点（球面三角）
-      const alt = Math.asin(Math.sin(a0) * Math.cos(r) + Math.cos(a0) * Math.sin(r) * Math.cos(th));
-      const dAz = Math.atan2(Math.sin(r) * Math.sin(th),
-        Math.cos(a0) * Math.cos(r) - Math.sin(a0) * Math.sin(r) * Math.cos(th));
-      pts.push({ az: az0 + dAz / RAD, alt: alt / RAD });
-    }
-    return pts;
-  }
 
   function renderFovOrient() {
     document.querySelectorAll('#fovOrient [data-orient]').forEach((b) => {

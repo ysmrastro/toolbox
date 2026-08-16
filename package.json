@@ -1,0 +1,13 @@
+{
+  "name": "toolbox",
+  "private": true,
+  "description": "ysmrastro toolbox — 開発用の設定だけを置く。配信されるサイト自体はフレームワーク不使用の素のHTML/CSS/JS",
+  "scripts": {
+    "test": "TZ=Asia/Tokyo node --test \"*/test/*.test.js\"",
+    "test:e2e": "node meteor-settings/test/e2e/smoke.mjs",
+    "serve": "python3 -m http.server 8899"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}
