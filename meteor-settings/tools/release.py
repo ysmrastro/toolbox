@@ -11,8 +11,8 @@
   3. index.html の <meta name="app-version"> と js/css の ?v=
   4. sw.js の VERSION
 
-実行後は必ず `node meteor-settings/selftest.js` を通す（4か所の一致と、
-更新時刻が未来でないことを検査する）。
+実行後は必ず `npm test` を通す（4か所の一致と、更新時刻が未来でないことを
+meteor-settings/test/release.test.js が検査する）。
 """
 import datetime
 import pathlib
@@ -39,7 +39,7 @@ def main():
     html = DIR / 'index.html'
     h = html.read_text(encoding='utf-8')
     h = re.sub(r'(<meta name="app-version" content=")[^"]+(")', rf'\g<1>{version}\g<2>', h)
-    # js/css の ?v= をすべて置き換える（付け忘れは selftest が検出する）
+    # js/css の ?v= をすべて置き換える（付け忘れは release.test.js が検出する）
     h = re.sub(r'((?:src|href)="[^"?]+\.(?:js|css))\?v=[^"]+"', rf'\g<1>?v={version}"', h)
     html.write_text(h, encoding='utf-8')
 
@@ -50,7 +50,7 @@ def main():
 
     print(f'{old_version} → {version} / 更新時刻 {now}')
     print('data.js / index.html / sw.js を更新しました。')
-    print('次に: node meteor-settings/selftest.js')
+    print('次に: npm test')
 
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@
  *
  * 【必ず守ること】VERSION は data.js の appVersion と index.html の
  * <meta name="app-version"> ・ scriptタグの ?v= と揃える。
- * ずれていると selftest.js が落ちる（node meteor-settings/selftest.js）。
+ * ずれていると test/release.test.js が落ちる（npm test）。
  *
  * 【設計の理由】以前は index.html もキャッシュ優先で返していたため、
  * 更新のタイミングで「古い index.html ＋ 新しい app.js」の組み合わせで
@@ -21,7 +21,7 @@
  *   2. JS・CSS は URL に ?v=バージョン を付け、HTML と同じ版だけを読む
  *   3. activate で clients.claim() を呼ばない（開いているページを途中で乗っ取らない）
  */
-const VERSION = '1.10.0';
+const VERSION = '1.10.1';
 const CACHE = 'meteor-settings-v' + VERSION;
 const V = '?v=' + VERSION;
 
@@ -36,6 +36,7 @@ const VERSIONED = [
   './engine.js',
   './stars.js',
   './lightpollution.js',
+  './plan.js',
   './app.js',
   '../shared/css/variables.css',
   '../shared/css/reset.css',
