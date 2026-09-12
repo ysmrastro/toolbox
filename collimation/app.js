@@ -72,12 +72,10 @@ const ALIGN_KEYS = Object.keys(DEF).filter(k=>k!=='draw');   // 繰り出しは�
 const opt = id => document.getElementById(id).checked;
 const state = Object.assign({},DEF);
 
+// 折りたためる塊（fold）ごとに、小見出し（group）を並べる。
+// 順番は、ふだんさわる順。ドローチューブは基本さわらないので一番下で、畳んである。
 const SLIDERS = [
-  {group:"ドローチューブ（覗き方）",
-   note:"つまみの中央が焦点面です。そこを基準に、目の位置とドローチューブの先が一緒に前後します。",
-   items:[
-     {k:"draw",label:"焦点面から",min:-45,max:45,step:1,unit:"mm",lo:"押し込む",hi:"繰り出す"}
-   ]},
+ {fold:"斜鏡まわり", open:true, groups:[
   {group:"スパイダー（斜鏡そのものの位置）",
    note:"4本は均一に張り、台は筒の中心軸の上に置きます。振ると台が軸から外れます。",
    items:[
@@ -100,15 +98,31 @@ const SLIDERS = [
    note:"中央の引きネジをゆるめて、土台の柱ごと回す。面が円錐を描くので視野ごと動きます。",
    items:[
      {k:"secRot",label:"回転",min:-6,max:6,step:.05,unit:"°"}
-   ]},
-  {group:"主鏡の押しネジ（3本）",
-   note:"主鏡は傾くだけで、中心は動きません。だから 1回反射の層は動きません。",
+   ]}
+ ]},
+ {fold:"主鏡の押しネジ（3本）", open:true, groups:[
+  {note:"主鏡は傾くだけで、中心は動きません。だから 1回反射の層は動きません。",
    items:[
      {k:"pmA",label:"押しネジ A",min:-1.5,max:1.5,step:.01,unit:"mm"},
      {k:"pmB",label:"押しネジ B",min:-1.5,max:1.5,step:.01,unit:"mm"},
      {k:"pmC",label:"押しネジ C",min:-1.5,max:1.5,step:.01,unit:"mm"}
    ]}
+ ]},
+ {fold:"ドローチューブ（覗き方）", open:false, groups:[
+  {note:"つまみの中央が焦点面です。そこを基準に、目の位置とドローチューブの先が一緒に前後します。",
+   items:[
+     {k:"draw",label:"焦点面から",min:-45,max:45,step:1,unit:"mm",lo:"押し込む",hi:"繰り出す"}
+   ]}
+ ]}
 ];
+
+const ITEM = {};
+for(const sec of SLIDERS) for(const gp of sec.groups) for(const it of gp.items) ITEM[it.k]=it;
+// つまみの刻みに乗せ、範囲に収める
+const fitKnob = (k,v) => {
+  const it=ITEM[k];
+  return +Math.max(it.min, Math.min(it.max, Math.round(v/it.step)*it.step)).toFixed(4);
+};
 
 /* ============================================================
    いまの姿勢を組み立てる
@@ -702,50 +716,88 @@ function readout(g,o,miss){
    ============================================================ */
 function buildControls(){
   const host=document.getElementById('controls');
-  host.innerHTML = SLIDERS.map(gp=>
-    '<div class="cl-group"><h3>'+gp.group+'</h3><p>'+gp.note+'</p>'+
-    gp.items.map(it=>
-      '<div class="cl-sl"><label for="s-'+it.k+'">'+it.label+'</label>'+
-      '<input type="range" id="s-'+it.k+'" data-k="'+it.k+'" min="'+it.min+'" max="'+it.max+
-      '" step="'+it.step+'" value="0" aria-describedby="o-'+it.k+'">'+
-      '<output id="o-'+it.k+'" data-k="'+it.k+'" title="タップで 0 に戻す">0.00 '+
-      it.unit+'</output></div>').join('')+
-    '</div>').join('');
+  host.innerHTML = SLIDERS.map((sec,i)=>
+    '<details class="cl-fold"'+(sec.open?' open':'')+'>'+
+    '<summary>'+sec.fold+
+      '<span class="cl-fold__flag" id="f-'+i+'" hidden></span></summary>'+
+    sec.groups.map(gp=>
+      '<div class="cl-group">'+(gp.group?'<h3>'+gp.group+'</h3>':'')+'<p>'+gp.note+'</p>'+
+      gp.items.map(it=>
+        '<div class="cl-sl"><label for="s-'+it.k+'">'+it.label+'</label>'+
+        '<input type="range" id="s-'+it.k+'" data-k="'+it.k+'" min="'+it.min+'" max="'+it.max+
+        '" step="'+it.step+'" value="0" aria-describedby="o-'+it.k+'">'+
+        '<output id="o-'+it.k+'" data-k="'+it.k+'" title="タップで 0 に戻す">0.00 '+
+        it.unit+'</output></div>').join('')+
+      '</div>').join('')+
+    '</details>').join('');
   host.querySelectorAll('input[type=range]').forEach(el=>{
-    el.addEventListener('input',()=>{ state[el.dataset.k]=parseFloat(el.value); render(); });
+    el.addEventListener('input',()=>{
+      state[el.dataset.k]=parseFloat(el.value); activePreset=null; syncFlags(); render(); });
   });
   host.querySelectorAll('output[data-k]').forEach(el=>{
-    el.addEventListener('click',()=>{ state[el.dataset.k]=0; syncControls(); render(); });
+    el.addEventListener('click',()=>{
+      state[el.dataset.k]=0; activePreset=null; syncControls(); render(); });
+  });
+}
+// 畳んだ塊の中に 0 でないつまみが残っていたら、見出しに印を出す
+function syncFlags(){
+  SLIDERS.forEach((sec,i)=>{
+    let n=0;
+    for(const gp of sec.groups) for(const it of gp.items)
+      if(Math.abs(state[it.k])>1e-9) n++;
+    const fl=document.getElementById('f-'+i);
+    fl.hidden = n===0;
+    fl.textContent = n>1 ? '●'+n : '●';
+    fl.title = '0 でないつまみが '+n+' 個あります';
   });
 }
 function syncControls(){
-  for(const gp of SLIDERS) for(const it of gp.items){
+  for(const sec of SLIDERS) for(const gp of sec.groups) for(const it of gp.items){
     const el=document.getElementById('s-'+it.k), ou=document.getElementById('o-'+it.k);
     el.value=state[it.k];
     const dec = it.unit==='°'?1:2;
     ou.textContent=state[it.k].toFixed(dec)+' '+it.unit;
     ou.classList.toggle('is-off', Math.abs(state[it.k])>1e-9);
   }
+  syncFlags();
 }
 
-const PRESETS={
-  zero:{},
-  sec:{secA:0.30,secB:-0.16,secC:-0.05},
-  pm:{pmA:0.85,pmB:-0.42,pmC:-0.43},
-  spider:{spiderX:2.6,spiderY:-1.2},
-  rot:{secRot:1.6},
-  rand:null
-};
-// いまのつまみの値が、どのプリセットと一致しているか
-function stateMatches(preset){
-  const t = Object.assign({}, DEF, preset||{});
-  return ALIGN_KEYS.every(k=>Math.abs(state[k]-t[k])<1e-9);
+const between = (lo,hi) => lo + Math.random()*(hi-lo);
+const signed  = (lo,hi) => (Math.random()<0.5?-1:1)*between(lo,hi);
+// 3本のネジで「傾きだけ」を作る。向きも大きさも毎回ちがう（前後は動かさない）
+function tiltScrews(lo,hi){
+  const A=between(lo,hi), ph=Math.random()*Math.PI*2;
+  return [Math.PI/2, Math.PI*7/6, Math.PI*11/6].map(t=>A*Math.cos(t-ph));
 }
+function spiderShove(lo,hi){
+  const r=between(lo,hi), th=Math.random()*Math.PI*2;
+  return {spiderX:r*Math.cos(th), spiderY:r*Math.sin(th)};
+}
+
+// プリセットは「ずれ方の型」。押すたびに、その型のなかで別のずれを作る
+const PRESETS={
+  zero  : ()=>({}),
+  sec   : ()=>{ const d=tiltScrews(.18,.34); return {secA:d[0],secB:d[1],secC:d[2]}; },
+  pm    : ()=>{ const d=tiltScrews(.50,1.15); return {pmA:d[0],pmB:d[1],pmC:d[2]}; },
+  spider: ()=>spiderShove(1.5,3.2),
+  rot   : ()=>({secRot:signed(.7,2.4)}),
+  rand  : ()=>{
+    const s=tiltScrews(.08,.28), p=tiltScrews(.25,.95);
+    return Object.assign(spiderShove(.4,2.4),
+      {secA:s[0],secB:s[1],secC:s[2],secPull:signed(.1,.8),secRot:signed(.2,1.4),
+       pmA:p[0],pmB:p[1],pmC:p[2]});
+  }
+};
+// 最後に押したプリセット。つまみを手で動かしたら外れる
+let activePreset='zero';
+const isZeroed = ()=>ALIGN_KEYS.every(k=>Math.abs(state[k])<1e-9);
+
 function markActivePreset(){
+  const zero = isZeroed();
   document.querySelectorAll('button[data-preset]').forEach(b=>{
     const k=b.dataset.preset;
     if(k==='rand') return;                       // ランダムは状態ではなく操作
-    const on = stateMatches(PRESETS[k]);
+    const on = k==='zero' ? zero : (!zero && activePreset===k);
     b.classList.toggle('is-active', on);
     b.setAttribute('aria-pressed', on?'true':'false');
   });
@@ -755,12 +807,9 @@ function applyPreset(name){
   const keep = state.draw;                 // 覗き方は保つ
   Object.assign(state,DEF);
   state.draw = keep;
-  if(name==='rand'){
-    const r=(a)=>+( (Math.random()*2-1)*a ).toFixed(2);
-    Object.assign(state,{spiderX:r(1.6),spiderY:r(1.6),
-      secA:r(.35),secB:r(.35),secC:r(.35),secPull:r(.8),secRot:r(1.2),
-      pmA:r(.7),pmB:r(.7),pmC:r(.7)});
-  } else Object.assign(state,PRESETS[name]||{});
+  const made = (PRESETS[name]||PRESETS.zero)();
+  for(const k in made) state[k]=fitKnob(k,made[k]);
+  activePreset = name;
   syncControls(); render();
 }
 document.querySelectorAll('button[data-preset]').forEach(b=>
