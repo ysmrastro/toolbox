@@ -23,9 +23,9 @@ const P = {
   F_PM   : 650,     // 主鏡の焦点距離
   SEC_A  : 45*Math.SQRT2/2,  // 斜鏡の長半径 31.82
   SEC_B  : 45/2,             // 斜鏡の短半径 22.5
-  L      : 472,     // 交点の z（＝650 − 交点から焦点面まで 178）
-  EYE    : 199,     // 覗き穴の、交点からの距離
-  OFFSET : 3.95,    // オフセット（面に沿って、主鏡側へ）
+  L      : 460,     // 交点の z（＝650 − 交点から焦点面まで 190。第1回の仮定）
+  EYE    : 199,     // 覗き穴の、交点からの距離（仮の値・未実測）
+  OFFSET : 2.714,   // オフセット（面に沿って、主鏡側へ。第1回の値）
   R_FIELD: 25.4,    // ドローチューブの内半径（2インチ）
   D_FIELD: 46,      // 視野環（ドローチューブの先）の、交点からの距離
   R_TUBE : 75,      // 筒の内半径
@@ -33,8 +33,8 @@ const P = {
   R_PSCR : 55,      // 主鏡の押しネジの配置半径
   MARK_IN: 2.13,    // センターマークの穴の半径
   MARK_OUT:3.90,    // センターマークの外半径
-  EPB_R  : 9.52,    // アイピースの裏側（銀の面）の半径
-  EPB_H  : 4.03,    // 覗き穴の半径
+  EPB_R  : 9.52,    // アイピースの裏側（銀の面）の半径（仮の値・未実測）
+  EPB_H  : 4.03,    // 覗き穴の半径（仮の値・未実測）
   CLIPS  : [10,140,262]  // 押さえの爪（度）
 };
 
@@ -360,7 +360,7 @@ function drawView(g,o,guide){
   ctx.textAlign='right'; ctx.fillText('主鏡側 ▶',w-8,h-fv2); ctx.textAlign='left';
 }
 
-// 最小二乗で円をあてはめる（第3回の measure_center.py と同じ代数解法）。
+// 最小二乗で円をあてはめる（代数解法）。
 // 射影された楕円は点の並びが偏るので、重心を中心にすると値がずれる。
 function fitCircle(pts){
   if(!pts||pts.length<3) return null;
@@ -739,15 +739,15 @@ function faceNote(g){
   const rp=coneRadius(g,g.fu), rm=coneRadius(g,V.mul(g.fu,-1));
   if(rp===null||rm===null){ el.textContent=''; return; }
   const d=(rp-rm)/2;
-  const side = d>0 ? '筒先側' : '主鏡側';
-  el.innerHTML =
-    'オフセットは <b>'+P.OFFSET.toFixed(2)+'mm</b> と仮定しています。'+
-    '光の切り口が鏡のまんなかにちょうど来るのは <b>'+OFFSET_IDEAL.toFixed(2)+'mm</b>'+
-    '（交点から焦点面まで '+(P.F_PM-P.L).toFixed(0)+'mm と置いた場合。190mm なら 2.71mm）── '+
-    'つまり<b>この鏡は、そのぶん多くずらして貼ってある</b>ことになります。'+
-    'だから合っていても、切り口は '+Math.abs(d).toFixed(2)+'mm だけ'+side+'へ寄ります。'+
-    '<br>この 2つの差は実測ではなく、覗いた写真からの逆算です。'+
-    '<b>覗き穴から交点までの距離を実機で測れば、一点に決まります。</b>';
+  const base =
+    '光の切り口が鏡のまんなかにちょうど来るオフセットは <b>'+OFFSET_IDEAL.toFixed(3)+'mm</b>'+
+    '（交点から焦点面までを '+(P.F_PM-P.L).toFixed(0)+'mm と置いた場合）。'+
+    'ここではその値を使っています。';
+  el.innerHTML = Math.abs(d)<0.05
+    ? base+'<b>だから切り口は、鏡のまんなかに収まります。</b>'+
+      'オフセットは、この2つの中心を合わせるための操作でした。'
+    : base+'いまは <b>'+P.OFFSET.toFixed(3)+'mm</b> なので、'+
+      '切り口が '+Math.abs(d).toFixed(2)+'mm だけ'+(d>0?'筒先側':'主鏡側')+'へ寄っています。';
 }
 
 function render(){
