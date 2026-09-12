@@ -151,6 +151,39 @@ canvas {
   background: var(--tb-accent-subtle);
 }
 
+/* 折りたためる塊 */
+.cl-fold { border-top: 1px solid var(--tb-border); }
+.cl-fold:first-of-type { border-top: none; }
+.cl-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-xs);
+  list-style: none;
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+  padding: var(--tb-space-sm) 0;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+.cl-fold > summary::-webkit-details-marker { display: none; }
+.cl-fold > summary::before {
+  content: "▶";
+  display: inline-block;
+  font-size: .7em;
+  color: var(--tb-text-muted);
+  transition: transform var(--tb-transition);
+}
+.cl-fold[open] > summary::before { transform: rotate(90deg); }
+.cl-fold > summary:hover { color: var(--tb-accent); }
+/* 畳んだ中に 0 でないつまみが残っているしるし */
+.cl-fold__flag {
+  margin-left: auto;
+  font-size: .7em;
+  color: var(--cl-r1);
+  font-variant-numeric: tabular-nums;
+}
+
 .cl-group { margin-bottom: var(--tb-space-md); }
 .cl-group > h3 {
   font-size: var(--tb-font-size-xs);
