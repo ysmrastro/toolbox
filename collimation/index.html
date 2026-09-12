@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.7.0">
+  <link rel="stylesheet" href="style.css?v=1.8.0">
 </head>
 <body>
 
@@ -47,6 +47,7 @@
       <button class="cl-tab is-active" role="tab" aria-selected="true"  data-pane="view">視野</button>
       <button class="cl-tab"           role="tab" aria-selected="false" data-pane="side">断面</button>
       <button class="cl-tab"           role="tab" aria-selected="false" data-pane="face">斜鏡</button>
+      <button class="cl-tab"           role="tab" aria-selected="false" data-pane="stem">土台</button>
     </div>
 
     <div class="cl-panes">
@@ -73,6 +74,14 @@
         <p class="cl-hint">鏡の楕円と、主鏡から来る光の切り口。</p>
         <canvas id="cv-face"></canvas>
         <p class="cl-hint" id="face-note" style="margin:var(--tb-space-sm) 0 0"></p>
+      </section>
+
+      <section class="cl-pane" data-pane="stem">
+        <h2>土台をドローチューブ側から</h2>
+        <p class="cl-hint">45°に切った柱の先に、鏡を<b>中心からずらして</b>貼ってあります。
+           柱の回転が見えるよう、<b>少しだけ斜めから</b>見ています。</p>
+        <canvas id="cv-stem"></canvas>
+        <p class="cl-hint" id="stem-note" style="margin:var(--tb-space-sm) 0 0"></p>
       </section>
     </div>
   </div>
@@ -127,6 +136,9 @@
          <b>オフセットは、鏡を土台のどこに貼るかで作ります</b> ──
          土台の軸から、面に沿って主鏡側へ 2.714mm。
          だから貼り付けの向きが回れば、オフセットの向きも一緒に回ります。</p>
+      <p>土台は<b>ステム軸に沿った円柱を 45°で切ったもの</b>として描いています。
+         円柱の半径を斜鏡の短半径にとれば、切り口はちょうど鏡の楕円になります
+         （長半径＝短半径×√2）。<b>柱の長さと太さは、絵のためだけの仮の値です。</b></p>
       <p>斜鏡の押しネジ3本と引きネジ1本は、<b>ステム軸（＝筒の中心軸）に沿って</b>効きます。
          3本を同じだけ回しても傾かず、前後に動くだけです。</p>
       <p><b>「斜鏡の回転」は、中央の引きネジをゆるめて土台の柱ごと回す動きです。</b>
@@ -144,6 +156,7 @@
         <tr><th>目の位置</th><td>つまみの中央が<b>焦点面</b>（交点から 190mm）。そこから前後します</td></tr>
         <tr><th>ドローチューブの先から交点まで</th><td>46mm ── 目の位置と一緒に動きます</td></tr>
         <tr><th>ドローチューブの縁の内径</th><td>50.8mm ── 差込口の呼び径。実際の開口はもう少し大きいかもしれません</td></tr>
+        <tr><th>土台の柱</th><td>本体の長さ 28mm／柱の半径 4.5mm ── <b>絵のためだけの仮の値</b>。本体の太さだけは、45°に切ると鏡の楕円になる大きさ（半径 22.5mm）</td></tr>
         <tr><th>アイピースの裏側／覗き穴の半径</th><td>9.52mm／4.03mm</td></tr>
       </table>
       <p>センタリングアイピースの長さは人によって違うので、モデルに入れていません。
@@ -163,6 +176,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.7.0"></script>
+<script src="app.js?v=1.8.0"></script>
 </body>
 </html>

@@ -29,6 +29,8 @@ const P = {
   D_FIELD: 46,      // ドローチューブの先の、交点からの距離（繰り出し 0 のとき）
   R_TUBE : 75,      // 筒の内半径
   R_SSCR : 15,      // 斜鏡の押しネジの配置半径
+  HOLD_L : 28,      // 斜鏡の土台の本体の長さ（絵のためだけの仮の値・未実測）
+  STEM_R : 4.5,     // 柱（中央の引きネジ）の半径（絵のためだけの仮の値・未実測）
   R_PSCR : 55,      // 主鏡の押しネジの配置半径
   MARK_IN: 2.13,    // センターマークの穴の半径
   MARK_OUT:3.90,    // センターマークの外半径
@@ -172,7 +174,7 @@ function geometry(s){
   // 目を斜鏡の面で折り返す
   const eye = eyePoint(s.draw), dfront = drawFront(s.draw);
   const e1 = reflectPoint(eye, cSec, nSec);
-  return {hub,Q,cSec,nSec,fu,fv,major,minor,nPm,vPm,pu,pv,e1,rot,eye,dfront,
+  return {hub,Q,stem,cSec,nSec,fu,fv,major,minor,nPm,vPm,pu,pv,e1,rot,eye,dfront,
           secTilt:Math.hypot(f.a,f.b), pmTilt:Math.hypot(g.a,g.b)};
 }
 
@@ -616,6 +618,109 @@ function drawFace(g){
   ctx.fillText('○ 土台の軸 ／ ＋ 鏡の中心 ／ ＋ 光の切り口', 8, h-8-fF*1.7);
 }
 
+/* ============================================================
+   描画（ドローチューブ側から見た土台）
+   ── 土台は「ステム軸に沿った円柱を 45°で切ったもの」。半径を斜鏡の短半径に
+      とれば、切り口はちょうど鏡の楕円になる（長半径＝短半径×√2）。
+      鏡はその切り口に、軸から OFFSET だけずらして貼ってある。
+   ── 真正面から見ると柱の回転がまったく見えない（軸のまわりに対称なので
+      輪郭が変わらない）。少しだけ斜めから見て、鏡の楕円の向きで見せる。
+   ============================================================ */
+const cvStem = document.getElementById('cv-stem');
+const STEM_TILT = 15*Math.PI/180;                               // 斜めの角度
+const CAM   = [Math.cos(STEM_TILT), 0,  Math.sin(STEM_TILT)];   // 物体 → カメラ
+const SCR_R = [Math.sin(STEM_TILT), 0, -Math.cos(STEM_TILT)];   // 画面の右（＝主鏡側）
+const SCR_U = [0,1,0];
+
+function drawStem(g,gr){
+  const s0=setup(cvStem,84,66,300); if(!s0) return;
+  const {ctx,w,h}=s0;
+  ctx.fillStyle='#05090B'; ctx.fillRect(0,0,w,h);
+  // 画面の原点は「合っているときの土台の軸」。だから土台が動けば絵の中でも動く
+  const s=w/84, cx=w/2+16*s, cy=h/2-4*s;
+  const pr = p => {const d=V.sub(p,HUB0); return [cx+V.dot(d,SCR_R)*s, cy-V.dot(d,SCR_U)*s];};
+  const path = pts => {ctx.beginPath();
+    pts.forEach((p,i)=>{const q=pr(p); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});
+    ctx.closePath();};
+  const seg = (p0,p1)=>{const a=pr(p0),b=pr(p1);
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();};
+  // 円柱は、軸と視線の両方に直交する向きへ半径ぶん振ればシルエットになる
+  const cyl=(c0,c1,r,fill,stroke)=>{
+    const wv=V.norm(V.cross(V.sub(c1,c0),CAM));
+    path([V.add(c0,V.mul(wv,r)),V.add(c1,V.mul(wv,r)),V.sub(c1,V.mul(wv,r)),V.sub(c0,V.mul(wv,r))]);
+    ctx.fillStyle=fill; ctx.fill();
+    ctx.strokeStyle=stroke; ctx.lineWidth=1.2; ctx.stroke();
+  };
+
+  const R=rotBetween([0,0,1],g.stem), su=R([1,0,0]), sv=R([0,1,0]);
+  const back=V.add(g.Q,V.mul(g.stem,P.HOLD_L));
+
+  // 筒の中心軸（合っているときの柱の軸）
+  ctx.strokeStyle='#2A353C'; ctx.lineWidth=1; ctx.setLineDash([2,5]);
+  seg(V.add(HUB0,[0,0,-26]), V.add(HUB0,[0,0,72]));
+  // いまの柱の軸 ── 回転はこの軸のまわり
+  ctx.strokeStyle='#54666F'; ctx.setLineDash([5,4]);
+  seg(V.add(g.Q,V.mul(g.stem,-26)), V.add(g.Q,V.mul(g.stem,72)));
+  ctx.setLineDash([]);
+
+  // 柱（中央の引きネジが通る）── 枠の外まで伸びる
+  cyl(back, V.add(g.Q,V.mul(g.stem,P.HOLD_L+70)), P.STEM_R, '#151D23', '#3C5059');
+  // 土台の本体
+  cyl(g.Q, back, P.SEC_B, '#131C22', '#3B5763');
+  // 背の面と、押しネジ3本
+  path(ring(back,su,sv,P.SEC_B,P.SEC_B,72));
+  ctx.fillStyle='#141C22'; ctx.fill();
+  ctx.strokeStyle='#3B5763'; ctx.lineWidth=1.2; ctx.stroke();
+  for(const t of [Math.PI/2, Math.PI*7/6, Math.PI*11/6]){
+    const p=pr(V.add(back, V.add(V.mul(su,P.R_SSCR*Math.cos(t)), V.mul(sv,P.R_SSCR*Math.sin(t)))));
+    ctx.beginPath(); ctx.arc(p[0],p[1],3,0,7);
+    ctx.fillStyle='#26333A'; ctx.fill();
+    ctx.strokeStyle='#7B8D97'; ctx.lineWidth=1; ctx.stroke();
+  }
+
+  // 合っているときの鏡（点線）── 少しの回転でも、ここからのずれで見える
+  if(!isZeroed()){
+    path(ring(gr.cSec,gr.fu,gr.fv,P.SEC_A,P.SEC_B,96));
+    ctx.strokeStyle='rgba(123,141,151,.8)'; ctx.lineWidth=1.2;
+    ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // 鏡
+  path(ring(g.cSec,g.fu,g.fv,P.SEC_A,P.SEC_B,96));
+  ctx.fillStyle='#1B242A'; ctx.fill();
+  ctx.strokeStyle='#63B6D8'; ctx.lineWidth=2; ctx.stroke();
+
+  // 面の長径と短径。柱を回すと、この十字ごと傾く
+  ctx.strokeStyle='rgba(99,182,216,.45)'; ctx.lineWidth=1;
+  seg(V.sub(g.cSec,V.mul(g.fu,P.SEC_A)), V.add(g.cSec,V.mul(g.fu,P.SEC_A)));
+  seg(V.sub(g.cSec,V.mul(g.fv,P.SEC_B)), V.add(g.cSec,V.mul(g.fv,P.SEC_B)));
+
+  // 土台の軸（○）と、鏡の中心（＋）。この隙間がオフセット
+  const qa=pr(g.Q);
+  ctx.strokeStyle='#7B8D97'; ctx.lineWidth=1.2; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.arc(qa[0],qa[1],5,0,7); ctx.stroke(); ctx.setLineDash([]);
+  const cm=pr(g.cSec);
+  ctx.strokeStyle='#63B6D8'; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.moveTo(cm[0]-6,cm[1]); ctx.lineTo(cm[0]+6,cm[1]);
+  ctx.moveTo(cm[0],cm[1]-6); ctx.lineTo(cm[0],cm[1]+6); ctx.stroke();
+
+  const fF=Math.max(9,Math.min(11,w/30));
+  ctx.fillStyle='#5C6E78'; ctx.font=fF+'px system-ui';
+  ctx.fillText('◀ 筒先側', 8, h-8);
+  const rl='主鏡側 ▶'; ctx.fillText(rl, w-8-ctx.measureText(rl).width, h-8);
+  ctx.fillText('○ 土台の軸 ／ ＋ 鏡の中心', 8, h-8-fF*1.7);
+}
+
+// 土台のペインの下の一言
+function stemNote(g,gr){
+  const el=document.getElementById('stem-note'); if(!el) return;
+  const d=Math.acos(Math.max(-1,Math.min(1,V.dot(g.nSec,gr.nSec))))*180/Math.PI;
+  el.innerHTML = d<0.005
+    ? (opt('opt-offset')
+        ? '鏡は、土台の軸から <b>'+P.OFFSET.toFixed(2)+'mm</b> だけずらして貼ってあります。これがオフセットです。'
+        : 'オフセットを切ってあるので、鏡の中心は土台の軸の上にあります。')
+    : '鏡の面は、合っているときから <b>'+d.toFixed(2)+'°</b> 振れています。点線が合っているときの鏡です。';
+}
+
 // 斜鏡の面内で、方向 e に沿って主鏡から来る光錐の縁までの距離
 function coneRadius(g,e){
   const A = V.sub(V.sub(g.cSec,g.vPm), V.mul(g.nPm, V.dot(V.sub(g.cSec,g.vPm),g.nPm)));
@@ -836,11 +941,15 @@ function faceNote(g){
 function render(){
   markActivePreset();
   const g=geometry(state);
+  // 合っているときの姿。点線の下敷きと、振れ角の基準に使う
+  const gr=geometry(Object.assign({},DEF,{draw:state.draw}));
   const o=build(g);
   drawView(g,o,opt('opt-guide'),opt('opt-cross'));
   const miss=drawSide(g,opt('opt-ray'));
   drawFace(g);
   faceNote(g);
+  drawStem(g,gr);
+  stemNote(g,gr);
   readout(g,o,miss);
 }
 // スマホでは上のペインを1枚ずつ出す

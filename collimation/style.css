@@ -26,15 +26,17 @@
   align-items: start;
 }
 
-/* 視野を大きく取り、右に斜鏡の正面、下に横長の断面 */
+/* 視野を大きく取り、右に斜鏡の正面と土台を上下に、下に横長の断面 */
 .cl-panes {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
   gap: var(--tb-space-md);
+  align-items: start;
 }
-.cl-pane[data-pane="view"] { grid-column: 1; grid-row: 1; }
+.cl-pane[data-pane="view"] { grid-column: 1; grid-row: 1 / 3; }
 .cl-pane[data-pane="face"] { grid-column: 2; grid-row: 1; }
-.cl-pane[data-pane="side"] { grid-column: 1 / -1; grid-row: 2; }
+.cl-pane[data-pane="stem"] { grid-column: 2; grid-row: 2; }
+.cl-pane[data-pane="side"] { grid-column: 1 / -1; grid-row: 3; }
 
 .cl-side {
   display: grid;
@@ -358,6 +360,7 @@ input[type=range]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(-
   .cl-pane.is-active { display: block; }
   .cl-pane[data-pane="view"],
   .cl-pane[data-pane="face"],
+  .cl-pane[data-pane="stem"],
   .cl-pane[data-pane="side"] { grid-column: auto; grid-row: auto; }
 
   /* 貼りついている側は詰める。画面の半分を絵に使わせない */
