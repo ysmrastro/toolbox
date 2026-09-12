@@ -86,9 +86,9 @@ const SLIDERS = [
      {k:"secPull",label:"引きネジ",min:-2.5,max:2.5,step:.02,unit:"mm",lo:"ゆるめる",hi:"締める"}
    ]},
   {group:"斜鏡の回転",
-   note:"鏡の貼り付けの向き。回すとオフセットの向きも一緒に回ります。",
+   note:"中央の引きネジをゆるめて、土台の柱ごと回す。面が円錐を描くので視野ごと動きます。",
    items:[
-     {k:"secRot",label:"回転",min:-45,max:45,step:.5,unit:"°"}
+     {k:"secRot",label:"回転",min:-6,max:6,step:.05,unit:"°"}
    ]},
   {group:"主鏡の押しネジ（3本）",
    note:"主鏡は傾くだけで、中心は動きません。だから 1回反射の層は動きません。",
@@ -116,20 +116,24 @@ function geometry(s){
   const hub = V.add(HUB0,[s.spiderX,s.spiderY,0]);
 
   // ---- 斜鏡の土台 ----
+  // 回転は「中央の引きネジをゆるめて、土台の柱をステム軸のまわりに回す」動き。
+  // 45°に切った面ごと回るので、鏡の法線が円錐を描いて振れる ── 視野ごと動く。
+  // 台に載っているものは全部まとめて回るので、まずここで回してから傾きを乗せる。
+  const rot = s.secRot*Math.PI/180, cr=Math.cos(rot), sr=Math.sin(rot);
+  const rz = q=>[q[0]*cr - q[1]*sr, q[0]*sr + q[1]*cr, q[2]];
+
   // 中央の引きネジと3本の押しネジは、ステム軸（＝筒の中心軸）に沿って効く。
   const f = threeScrewFit(s.secA,s.secB,s.secC,P.R_SSCR);
   const stem = V.norm([-f.a,-f.b,1]);
   const R = rotBetween([0,0,1],stem);
-  const nSec = R(N_SEC0);
-  const fu = R(FACE_U0), fv = R(FACE_V0);
+  const nSec = R(rz(N_SEC0));
+  const fu = R(rz(FACE_U0)), fv = R(rz(FACE_V0));
   const Q = V.add(hub, V.mul(stem, f.piston + s.secPull));   // 土台の45°面の中心
 
   // ---- 鏡の貼り付け位置 ----
   // オフセットはここ。土台の軸から、面に沿って主鏡側へ OFFSET だけずらして貼ってある。
-  // 貼り付けの向きが回れば、楕円の向きもオフセットの向きも一緒に回る。
-  const rot = s.secRot*Math.PI/180, cr=Math.cos(rot), sr=Math.sin(rot);
-  const major = V.add(V.mul(fu, cr), V.mul(fv, sr));
-  const minor = V.add(V.mul(fu,-sr), V.mul(fv, cr));
+  // 柱ごと回るので、オフセットの向きも楕円の向きも一緒に回る。
+  const major = fu, minor = fv;
   const cSec = V.sub(Q, V.mul(major, P.OFFSET));
 
   // ---- 主鏡 ----
@@ -511,14 +515,12 @@ function drawFace(g){
   // 面内の座標（fu を右、fv を上）
   const T=(u,v)=>[cx+u*s, cy-v*s];
 
-  // 鏡の楕円（長軸が回転する）
-  const rot=state.secRot*Math.PI/180;
+  // 鏡の楕円。柱ごと回るので、面の座標に対しては向きが変わらない
   ctx.beginPath();
   for(let i=0;i<=180;i++){
     const t=2*Math.PI*i/180;
-    const u=P.SEC_A*Math.cos(t)*Math.cos(rot) - P.SEC_B*Math.sin(t)*Math.sin(rot);
-    const v=P.SEC_A*Math.cos(t)*Math.sin(rot) + P.SEC_B*Math.sin(t)*Math.cos(rot);
-    const c=T(u,v); i?ctx.lineTo(c[0],c[1]):ctx.moveTo(c[0],c[1]);
+    const c=T(P.SEC_A*Math.cos(t), P.SEC_B*Math.sin(t));
+    i?ctx.lineTo(c[0],c[1]):ctx.moveTo(c[0],c[1]);
   }
   ctx.closePath();
   ctx.fillStyle='#1B242A'; ctx.fill();
@@ -541,6 +543,11 @@ function drawFace(g){
     ctx.strokeStyle='rgba(229,160,82,.85)'; ctx.lineWidth=1.4; ctx.setLineDash([5,4]); ctx.stroke(); ctx.setLineDash([]);
   }
 
+  // 土台の軸（鏡はここから OFFSET だけずらして貼ってある）
+  const qa=T(P.OFFSET,0);
+  ctx.strokeStyle='#7B8D97'; ctx.lineWidth=1.2; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.arc(qa[0],qa[1],5,0,7); ctx.stroke(); ctx.setLineDash([]);
+
   // 鏡の中心と、光の切り口の中心
   const cm=T(0,0);
   ctx.strokeStyle='#63B6D8'; ctx.lineWidth=1.2;
@@ -557,6 +564,7 @@ function drawFace(g){
   const fF=Math.max(9,Math.min(11,w/30));
   ctx.fillStyle='#5C6E78'; ctx.font=fF+'px system-ui';
   ctx.fillText('筒先／接眼部側 ▶', 8, h-8);
+  ctx.fillText('○ 土台の軸 ／ ＋ 鏡の中心 ／ ＋ 光の切り口', 8, h-8-fF*1.7);
 }
 
 // 斜鏡の面内で、方向 e に沿って主鏡から来る光錐の縁までの距離
@@ -670,7 +678,7 @@ const PRESETS={
   sec:{secA:0.30,secB:-0.16,secC:-0.05},
   pm:{pmA:0.85,pmB:-0.42,pmC:-0.43},
   spider:{spiderX:2.6,spiderY:-1.2},
-  rot:{secRot:28},
+  rot:{secRot:1.6},
   rand:null
 };
 function applyPreset(name){
@@ -678,7 +686,7 @@ function applyPreset(name){
   if(name==='rand'){
     const r=(a)=>+( (Math.random()*2-1)*a ).toFixed(2);
     Object.assign(state,{spiderX:r(1.6),spiderY:r(1.6),
-      secA:r(.35),secB:r(.35),secC:r(.35),secPull:r(.8),secRot:r(18),
+      secA:r(.35),secB:r(.35),secC:r(.35),secPull:r(.8),secRot:r(1.2),
       pmA:r(.7),pmB:r(.7),pmC:r(.7)});
   } else Object.assign(state,PRESETS[name]||{});
   syncControls(); render();
