@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.5.0">
+  <link rel="stylesheet" href="style.css?v=1.6.0">
 </head>
 <body>
 
@@ -94,6 +94,8 @@
 
       <div id="controls"></div>
 
+      <label class="cl-chk"><input type="checkbox" id="opt-offset" checked> 斜鏡をオフセットする</label>
+      <label class="cl-chk"><input type="checkbox" id="opt-cross"> 十字線を出す（実物にはありません）</label>
       <label class="cl-chk"><input type="checkbox" id="opt-guide"> 測った円を重ねる</label>
       <label class="cl-chk"><input type="checkbox" id="opt-ray" checked> 断面に視線を描く</label>
     </section>
@@ -138,7 +140,7 @@
       <table class="cl-read">
         <tr><th>斜鏡の短径</th><td>45mm</td></tr>
         <tr><th>交点から焦点面まで</th><td>190mm</td></tr>
-        <tr><th>オフセット</th><td>2.714mm（上の値から決まります）</td></tr>
+        <tr><th>オフセット</th><td>2.714mm ── 上の値と F 値だけで決まります（斜鏡の大きさは効きません）。<b>切ることもできます</b></td></tr>
         <tr><th>目の位置</th><td>つまみの中央が<b>焦点面</b>（交点から 190mm）。そこから前後します</td></tr>
         <tr><th>ドローチューブの先から交点まで</th><td>46mm ── 目の位置と一緒に動きます</td></tr>
         <tr><th>ドローチューブの縁の内径</th><td>50.8mm ── 差込口の呼び径。実際の開口はもう少し大きいかもしれません</td></tr>
@@ -161,6 +163,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.5.0"></script>
+<script src="app.js?v=1.6.0"></script>
 </body>
 </html>

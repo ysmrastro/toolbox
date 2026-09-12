@@ -69,6 +69,7 @@ const R_HAT = [0,0,-1];   // 画面の右（＝主鏡側）
    ============================================================ */
 const DEF = {draw:0,spiderX:0,spiderY:0,secA:0,secB:0,secC:0,secPull:0,secRot:0,pmA:0,pmB:0,pmC:0};
 const ALIGN_KEYS = Object.keys(DEF).filter(k=>k!=='draw');   // 繰り出しは光軸の調整ではない
+const opt = id => document.getElementById(id).checked;
 const state = Object.assign({},DEF);
 
 const SLIDERS = [
@@ -144,7 +145,8 @@ function geometry(s){
   // オフセットはここ。土台の軸から、面に沿って主鏡側へ OFFSET だけずらして貼ってある。
   // 柱ごと回るので、オフセットの向きも楕円の向きも一緒に回る。
   const major = fu, minor = fv;
-  const cSec = V.sub(Q, V.mul(major, P.OFFSET));
+  // オフセットは切れる。切ると鏡の中心が土台の軸の上に来る
+  const cSec = V.sub(Q, V.mul(major, opt('opt-offset') ? P.OFFSET : 0));
 
   // ---- 主鏡 ----
   const g = threeScrewFit(s.pmA,s.pmB,s.pmC,P.R_PSCR);
@@ -294,7 +296,7 @@ function lineOf(ctx,pts,tx){
   return true;
 }
 
-function drawView(g,o,guide){
+function drawView(g,o,guide,cross){
   const s0=setup(cvView,1,1,640); if(!s0) return;
   const {ctx,w,h}=s0;
   const cx=w/2, cy=h/2, S=Math.min(w,h)/2/FIELD_TAN*0.94;
@@ -363,6 +365,20 @@ function drawView(g,o,guide){
       ctx.beginPath(); ctx.moveTo(c[0]-7,c[1]); ctx.lineTo(c[0]+7,c[1]);
       ctx.moveTo(c[0],c[1]-7); ctx.lineTo(c[0],c[1]+7); ctx.stroke(); };
     cr(center(o.pmRim),C[1]); cr(center(o.sil),C[2]); cr(center(o.epHole),C[3]);
+  }
+
+  // 十字線（シミュレーターの補助。実物にはない）
+  // ドローチューブの縁の中心＝視線の軸なので、画面の中央に引けばよい
+  if(cross){
+    ctx.save();
+    if(pathOf(ctx,o.field,tx)) ctx.clip();
+    ctx.strokeStyle='rgba(126,184,218,.85)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(0,cy); ctx.lineTo(w,cy);
+    ctx.moveTo(cx,0); ctx.lineTo(cx,h);
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,Math.max(6,S*0.012),0,7); ctx.stroke();
+    ctx.restore();
   }
 
   // 向き
@@ -749,8 +765,8 @@ function applyPreset(name){
 }
 document.querySelectorAll('button[data-preset]').forEach(b=>
   b.addEventListener('click',()=>applyPreset(b.dataset.preset)));
-document.getElementById('opt-guide').addEventListener('change',render);
-document.getElementById('opt-ray').addEventListener('change',render);
+['opt-offset','opt-cross','opt-guide','opt-ray'].forEach(id=>
+  document.getElementById(id).addEventListener('change',render));
 
 /* ============================================================
    まわす
@@ -772,8 +788,8 @@ function render(){
   markActivePreset();
   const g=geometry(state);
   const o=build(g);
-  drawView(g,o,document.getElementById('opt-guide').checked);
-  const miss=drawSide(g,document.getElementById('opt-ray').checked);
+  drawView(g,o,opt('opt-guide'),opt('opt-cross'));
+  const miss=drawSide(g,opt('opt-ray'));
   drawFace(g);
   faceNote(g);
   readout(g,o,miss);
