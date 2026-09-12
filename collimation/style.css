@@ -144,7 +144,12 @@ canvas {
   transition: border-color var(--tb-transition);
 }
 .cl-btn:hover { border-color: var(--tb-border-hover); }
-.cl-btn--primary { border-color: var(--tb-accent); color: var(--tb-accent); }
+/* いまの状態と一致しているプリセットだけを光らせる */
+.cl-btn.is-active {
+  border-color: var(--tb-accent);
+  color: var(--tb-accent);
+  background: var(--tb-accent-subtle);
+}
 
 .cl-group { margin-bottom: var(--tb-space-md); }
 .cl-group > h3 {

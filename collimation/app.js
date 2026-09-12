@@ -681,6 +681,21 @@ const PRESETS={
   rot:{secRot:1.6},
   rand:null
 };
+// いまのつまみの値が、どのプリセットと一致しているか
+function stateMatches(preset){
+  const t = Object.assign({}, DEF, preset||{});
+  return Object.keys(DEF).every(k=>Math.abs(state[k]-t[k])<1e-9);
+}
+function markActivePreset(){
+  document.querySelectorAll('button[data-preset]').forEach(b=>{
+    const k=b.dataset.preset;
+    if(k==='rand') return;                       // ランダムは状態ではなく操作
+    const on = stateMatches(PRESETS[k]);
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-pressed', on?'true':'false');
+  });
+}
+
 function applyPreset(name){
   Object.assign(state,DEF);
   if(name==='rand'){
@@ -700,6 +715,7 @@ document.getElementById('opt-ray').addEventListener('change',render);
    まわす
    ============================================================ */
 function render(){
+  markActivePreset();
   const g=geometry(state);
   const o=build(g);
   drawView(g,o,document.getElementById('opt-guide').checked);

@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <link rel="stylesheet" href="style.css?v=1.1.1">
 </head>
 <body>
 
@@ -83,12 +83,12 @@
       <p class="cl-hint">まんなかが合っている状態。左右どちらにも振れます。<b>数字をタップすると 0 に戻ります。</b></p>
 
       <div class="cl-btns">
-        <button class="cl-btn cl-btn--primary" data-preset="zero">完全に合っている</button>
-        <button class="cl-btn" data-preset="sec">斜鏡だけずれている</button>
-        <button class="cl-btn" data-preset="pm">主鏡だけずれている</button>
-        <button class="cl-btn" data-preset="spider">スパイダーがずれている</button>
-        <button class="cl-btn" data-preset="rot">斜鏡が回っている</button>
-        <button class="cl-btn" data-preset="rand">ランダム</button>
+        <button type="button" class="cl-btn" data-preset="zero"   aria-pressed="true">完全に合っている</button>
+        <button type="button" class="cl-btn" data-preset="sec"    aria-pressed="false">斜鏡だけずれている</button>
+        <button type="button" class="cl-btn" data-preset="pm"     aria-pressed="false">主鏡だけずれている</button>
+        <button type="button" class="cl-btn" data-preset="spider" aria-pressed="false">スパイダーがずれている</button>
+        <button type="button" class="cl-btn" data-preset="rot"    aria-pressed="false">斜鏡が回っている</button>
+        <button type="button" class="cl-btn" data-preset="rand">ランダム</button>
       </div>
 
       <div id="controls"></div>
@@ -156,6 +156,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.1.0"></script>
+<script src="app.js?v=1.1.1"></script>
 </body>
 </html>
