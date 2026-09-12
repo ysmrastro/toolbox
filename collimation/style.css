@@ -262,6 +262,27 @@ input[type=range]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(-
   input[type=range]::-moz-range-thumb     { width: 1.5rem; height: 1.5rem; }
 }
 
+/* 反射の回数ごとの表示。つまみの上に横並びで置く */
+.cl-layers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--tb-space-md);
+  margin-bottom: var(--tb-space-sm);
+  padding-bottom: var(--tb-space-xs);
+  border-bottom: 1px solid var(--tb-border);
+}
+.cl-layers > span {
+  font-size: var(--tb-font-size-xs);
+  color: var(--tb-text-muted);
+}
+.cl-layers .cl-chk { gap: var(--tb-space-xs); }
+.cl-layers i {
+  display: inline-block;
+  width: 0.625rem; height: 0.625rem;
+  border-radius: 50%;
+}
+
 .cl-chk {
   display: flex;
   align-items: center;
