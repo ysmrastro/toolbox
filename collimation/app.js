@@ -72,7 +72,12 @@ const R_HAT = [0,0,-1];   // 画面の右（＝主鏡側）
 const DEF = {draw:0,spiderX:0,spiderY:0,secA:0,secB:0,secC:0,secPull:0,secRot:0,pmA:0,pmB:0,pmC:0};
 const ALIGN_KEYS = Object.keys(DEF).filter(k=>k!=='draw');   // 繰り出しは光軸の調整ではない
 const opt = id => document.getElementById(id).checked;
-const state = Object.assign({},DEF);
+// つまみの値は「始めた位置から、どれだけ回したか」。
+// ずれた状態から始めても、つまみはまんなかに置く ── 実際の光軸合わせと同じで、
+// いまどれだけずれているかは覗いて確かめるしかない。
+const state = Object.assign({},DEF);   // 回した量
+const base  = Object.assign({},DEF);   // 始めの状態（隠してある）
+const live  = ()=>{const o={}; for(const k in DEF) o[k]=base[k]+state[k]; return o;};
 
 // 折りたためる塊（fold）ごとに、小見出し（group）を並べる。
 // 順番は、ふだんさわる順。ドローチューブは基本さわらないので一番下で、畳んである。
@@ -632,7 +637,7 @@ const CAM   = [Math.cos(STEM_TILT), 0,  Math.sin(STEM_TILT)];   // 物体 → �
 const SCR_R = [Math.sin(STEM_TILT), 0, -Math.cos(STEM_TILT)];   // 画面の右（＝主鏡側）
 const SCR_U = [0,1,0];
 
-function drawStem(g,gr){
+function drawStem(g,gr,ok){
   const s0=setup(cvStem,84,66,300); if(!s0) return;
   const {ctx,w,h}=s0;
   ctx.fillStyle='#05090B'; ctx.fillRect(0,0,w,h);
@@ -679,7 +684,7 @@ function drawStem(g,gr){
   }
 
   // 合っているときの鏡（点線）── 少しの回転でも、ここからのずれで見える
-  if(!isZeroed()){
+  if(!ok){
     path(ring(gr.cSec,gr.fu,gr.fv,P.SEC_A,P.SEC_B,96));
     ctx.strokeStyle='rgba(123,141,151,.8)'; ctx.lineWidth=1.2;
     ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
@@ -844,7 +849,7 @@ function buildControls(){
       state[el.dataset.k]=0; activePreset=null; syncControls(); render(); });
   });
 }
-// 畳んだ塊の中に 0 でないつまみが残っていたら、見出しに印を出す
+// 畳んだ塊の中に、回したままのつまみが残っていたら見出しに印を出す
 function syncFlags(){
   SLIDERS.forEach((sec,i)=>{
     let n=0;
@@ -853,7 +858,7 @@ function syncFlags(){
     const fl=document.getElementById('f-'+i);
     fl.hidden = n===0;
     fl.textContent = n>1 ? '●'+n : '●';
-    fl.title = '0 でないつまみが '+n+' 個あります';
+    fl.title = '始めた位置から回したつまみが '+n+' 個あります';
   });
 }
 function syncControls(){
@@ -895,10 +900,15 @@ const PRESETS={
 };
 // 最後に押したプリセット。つまみを手で動かしたら外れる
 let activePreset='zero';
-const isZeroed = ()=>ALIGN_KEYS.every(k=>Math.abs(state[k])<1e-9);
+// 光軸が合っているか ── つまみの値ではなく、出来上がった姿勢そのもので見る。
+// 押しネジ3本を同じだけ回すのと引きネジは同じ動きなので、
+// 値がちがっても同じ姿勢になり得る。それを「合っていない」と言わないため。
+const near = (a,b,t)=>V.len(V.sub(a,b))<t;
+const alignedNow = (g,r)=>
+  near(g.cSec,r.cSec,1e-6) && near(g.nSec,r.nSec,1e-9) &&
+  near(g.fu,r.fu,1e-9)     && near(g.nPm,r.nPm,1e-9);
 
-function markActivePreset(){
-  const zero = isZeroed();
+function markActivePreset(zero){
   document.querySelectorAll('button[data-preset]').forEach(b=>{
     const k=b.dataset.preset;
     if(k==='rand') return;                       // ランダムは状態ではなく操作
@@ -912,8 +922,11 @@ function applyPreset(name){
   const keep = state.draw;                 // 覗き方は保つ
   Object.assign(state,DEF);
   state.draw = keep;
+  Object.assign(base,DEF);
+  // ずれは「始めの状態」のほうに入れる。つまみはまんなかから始まる。
+  // 刻みに乗せてあるので、つまみを逆に同じだけ回せばちょうど合う。
   const made = (PRESETS[name]||PRESETS.zero)();
-  for(const k in made) state[k]=fitKnob(k,made[k]);
+  for(const k in made) base[k]=fitKnob(k,made[k]);
   activePreset = name;
   syncControls(); render();
 }
@@ -939,16 +952,16 @@ function faceNote(g){
 }
 
 function render(){
-  markActivePreset();
-  const g=geometry(state);
+  const g=geometry(live());
   // 合っているときの姿。点線の下敷きと、振れ角の基準に使う
   const gr=geometry(Object.assign({},DEF,{draw:state.draw}));
+  markActivePreset(alignedNow(g,gr));
   const o=build(g);
   drawView(g,o,opt('opt-guide'),opt('opt-cross'));
   const miss=drawSide(g,opt('opt-ray'));
   drawFace(g);
   faceNote(g);
-  drawStem(g,gr);
+  drawStem(g,gr,alignedNow(g,gr));
   stemNote(g,gr);
   readout(g,o,miss);
 }
