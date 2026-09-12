@@ -5,7 +5,7 @@
   --tb-font-size-sm: 0.875rem;   /* 14px */
   --tb-font-size-lg: 1.125rem;   /* 18px */
 
-  /* 反射の回数の色（note 第3回の図と揃える） */
+  /* 反射の回数の色 */
   --cl-r0: #63B6D8;
   --cl-r1: #E5A052;
   --cl-r2: #B39BDB;
