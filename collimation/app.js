@@ -742,7 +742,8 @@ function faceNote(g){
   const side = d>0 ? '筒先側' : '主鏡側';
   el.innerHTML =
     'オフセットは <b>'+P.OFFSET.toFixed(2)+'mm</b> と仮定しています。'+
-    '光の切り口が鏡のまんなかにちょうど来るのは <b>'+OFFSET_IDEAL.toFixed(2)+'mm</b> ── '+
+    '光の切り口が鏡のまんなかにちょうど来るのは <b>'+OFFSET_IDEAL.toFixed(2)+'mm</b>'+
+    '（交点から焦点面まで '+(P.F_PM-P.L).toFixed(0)+'mm と置いた場合。190mm なら 2.71mm）── '+
     'つまり<b>この鏡は、そのぶん多くずらして貼ってある</b>ことになります。'+
     'だから合っていても、切り口は '+Math.abs(d).toFixed(2)+'mm だけ'+side+'へ寄ります。'+
     '<br>この 2つの差は実測ではなく、覗いた写真からの逆算です。'+
