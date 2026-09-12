@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>OGP source — 光軸合わせシミュレーター</title>
+<!-- 1200x630 で撮って ogp.png として保存する。実物の描画をそのまま使う。 -->
+<link rel="stylesheet" href="../shared/css/variables.css">
+<link rel="stylesheet" href="../shared/css/reset.css">
+<link rel="stylesheet" href="style.css">
+<style>
+  html,body{margin:0;padding:0;width:1200px;height:630px;overflow:hidden;background:var(--tb-bg-primary)}
+  .ogp{display:grid;grid-template-columns:560px 1fr;height:630px;align-items:center}
+  .ogp__art{width:560px;height:560px;display:flex;align-items:center;justify-content:center;padding:0 0 0 40px}
+  .ogp__art canvas{border-radius:12px}
+  .ogp__text{padding:0 56px 0 40px}
+  .ogp__eyebrow{font-family:var(--tb-font-mono);font-size:18px;letter-spacing:.22em;color:var(--tb-accent);margin:0 0 18px}
+  .ogp__title{font-size:56px;line-height:1.25;font-weight:700;color:var(--tb-text-primary);margin:0 0 22px;letter-spacing:.01em}
+  .ogp__lead{font-size:22px;line-height:1.8;color:var(--tb-text-secondary);margin:0}
+  .ogp__lead b{color:var(--tb-text-primary)}
+  .hidden-host{position:absolute;left:-9999px;top:0;width:10px}
+</style>
+</head>
+<body>
+  <div class="ogp">
+    <div class="ogp__art"><canvas id="cv-view"></canvas></div>
+    <div class="ogp__text">
+      <p class="ogp__eyebrow">YSMRASTRO TOOLBOX</p>
+      <h1 class="ogp__title">光軸合わせ<br>シミュレーター</h1>
+      <p class="ogp__lead">ニュートン式反射望遠鏡。<b>ネジを1本ずつ動かして、<br>覗いた景色がどう変わるかを確かめる。</b></p>
+    </div>
+  </div>
+
+  <!-- app.js が探す要素。ここは撮影範囲の外に置く -->
+  <div class="hidden-host">
+    <canvas id="cv-side"></canvas>
+    <canvas id="cv-face"></canvas>
+    <div id="controls"></div>
+    <label><input type="checkbox" id="opt-guide"></label>
+    <label><input type="checkbox" id="opt-ray" checked></label>
+    <table><tbody id="readout"></tbody></table>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

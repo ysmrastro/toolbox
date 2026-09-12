@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>光軸合わせシミュレーター | ysmrastro toolbox</title>
+  <meta name="description" content="ニュートン式反射望遠鏡の光軸を、ネジごとに動かして確かめるシミュレーター。センタリングアイピースの視野・筒の断面・斜鏡の正面が同時に動きます。">
+
+  <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ysmrastro toolbox">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:url" content="https://ysmrastro.github.io/toolbox/collimation/">
+  <meta property="og:title" content="光軸合わせシミュレーター">
+  <meta property="og:description" content="ニュートン式反射望遠鏡の光軸を、ネジごとに動かして確かめる。覗いた景色がどう変わるかが、その場で出ます。">
+  <meta property="og:image" content="https://ysmrastro.github.io/toolbox/collimation/ogp.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="光軸合わせシミュレーター">
+  <meta name="twitter:description" content="ニュートン式反射望遠鏡の光軸を、ネジごとに動かして確かめる。覗いた景色がどう変わるかが、その場で出ます。">
+  <meta name="twitter:image" content="https://ysmrastro.github.io/toolbox/collimation/ogp.png">
+
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="apple-touch-icon" href="../favicon.png">
+  <link rel="stylesheet" href="../shared/css/variables.css">
+  <link rel="stylesheet" href="../shared/css/reset.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="style.css?v=1.0.0">
+</head>
+<body>
+
+<header class="tb-header">
+  <a href="../" class="tb-header__logo">ysmrastro toolbox</a>
+  <nav class="tb-header__nav">
+    <a href="../">ツール一覧</a>
+  </nav>
+</header>
+
+<div class="cl-app">
+
+  <!-- ── 見るほう（スマホでは上に貼りつく） ── -->
+  <div class="cl-viewport">
+    <div class="cl-tabs" role="tablist" aria-label="表示の切り替え">
+      <button class="cl-tab is-active" role="tab" aria-selected="true"  data-pane="view">視野</button>
+      <button class="cl-tab"           role="tab" aria-selected="false" data-pane="side">断面</button>
+      <button class="cl-tab"           role="tab" aria-selected="false" data-pane="face">斜鏡</button>
+    </div>
+
+    <div class="cl-panes">
+      <section class="cl-pane is-active" data-pane="view">
+        <h2>センタリングアイピースの視野</h2>
+        <p class="cl-hint">覗き穴から見た景色。<b>左が筒先側、右が主鏡側</b>です。</p>
+        <canvas id="cv-view"></canvas>
+        <ul class="cl-key">
+          <li><i style="background:#63B6D8"></i>0回<span> ドローチューブの縁・斜鏡の鏡面の縁</span></li>
+          <li><i style="background:#E5A052"></i>1回<span> 主鏡の縁・爪・センターマーク</span></li>
+          <li><i style="background:#B39BDB"></i>2回<span> 斜鏡のシルエット・スパイダー</span></li>
+          <li><i style="background:#E8748F"></i>3回<span> アイピースの裏側・覗き穴</span></li>
+        </ul>
+      </section>
+
+      <section class="cl-pane" data-pane="side">
+        <h2>筒の断面</h2>
+        <p class="cl-hint">主鏡＝右／筒先＝左／接眼部＝下。細い線は覗き穴から出した視線です。</p>
+        <canvas id="cv-side"></canvas>
+      </section>
+
+      <section class="cl-pane" data-pane="face">
+        <h2>斜鏡を面の正面から</h2>
+        <p class="cl-hint">鏡の楕円と、主鏡から来る光の切り口。</p>
+        <canvas id="cv-face"></canvas>
+      </section>
+    </div>
+  </div>
+
+  <!-- ── さわるほう ── -->
+  <div class="cl-side">
+    <section class="cl-card">
+      <h2>調整パラメータ</h2>
+      <p class="cl-hint">まんなかが合っている状態。左右どちらにも振れます。<b>数字をタップすると 0 に戻ります。</b></p>
+
+      <div class="cl-btns">
+        <button class="cl-btn cl-btn--primary" data-preset="zero">完全に合っている</button>
+        <button class="cl-btn" data-preset="sec">斜鏡だけずれている</button>
+        <button class="cl-btn" data-preset="pm">主鏡だけずれている</button>
+        <button class="cl-btn" data-preset="spider">スパイダーがずれている</button>
+        <button class="cl-btn" data-preset="rot">斜鏡が回っている</button>
+        <button class="cl-btn" data-preset="rand">ランダム</button>
+      </div>
+
+      <div id="controls"></div>
+
+      <label class="cl-chk"><input type="checkbox" id="opt-guide"> 測った円を重ねる</label>
+      <label class="cl-chk"><input type="checkbox" id="opt-ray" checked> 断面に視線を描く</label>
+    </section>
+
+    <section class="cl-card">
+      <h2>いま測るとこうなる</h2>
+      <p class="cl-hint">主鏡の見かけの半径に対する%。</p>
+      <table class="cl-read"><tbody id="readout"></tbody></table>
+    </section>
+  </div>
+</div>
+
+<div class="cl-notes">
+  <details>
+    <summary>このモデルについて</summary>
+    <div class="cl-notes__body">
+      <h3>どう計算しているか</h3>
+      <p>斜鏡は<b>平面の鏡</b>として厳密に、主鏡は<b>近軸の凹面鏡</b>（f=650mm）として結像させています。
+         覗いている目を斜鏡の面で折り返した点をひとつ作れば、あとは全部の層をそこから投影するだけで済みます。</p>
+      <table class="cl-read">
+        <tr><th>0回</th><td>ドローチューブの縁・斜鏡の鏡面の縁 ── 物体を斜鏡の面で折り返したもの</td></tr>
+        <tr><th>1回</th><td>主鏡の縁・爪・センターマーク ── 物体そのもの</td></tr>
+        <tr><th>2回</th><td>斜鏡のシルエット・スパイダー ── 主鏡が結んだ像</td></tr>
+        <tr><th>3回</th><td>アイピースの裏側・覗き穴 ── 斜鏡で折り返してから、主鏡が結んだ像</td></tr>
+      </table>
+
+      <h3>構造</h3>
+      <p><b>スパイダーの4本は均一に張ってあり、台は筒の中心軸の上にあります。</b>
+         オフセットはスパイダーで作るものではなく、<b>鏡を土台のどこに貼るか</b>で作ります ──
+         土台の軸から、面に沿って主鏡側へ 3.95mm ずらして貼ってある、という形にしてあります。
+         だから貼り付けの向きが回ると、オフセットの向きも一緒に回ります。</p>
+      <p>斜鏡の押しネジ3本と引きネジ1本は、<b>ステム軸（＝筒の中心軸）に沿って</b>効きます。
+         3本を同じだけ回しても傾かず、前後に動くだけです。</p>
+
+      <h3>実機と照合した</h3>
+      <p>BKP130（口径 130mm・焦点距離 650mm・F5・斜鏡短径 45mm・差込口 2インチ）。
+         合っている状態の見え方を、実写を測った値と突き合わせてあります。</p>
+      <table class="cl-read">
+        <tr><th>斜鏡の縁／主鏡の縁 の大きさ比</th><td>1.149（実測 1.153）</td></tr>
+        <tr><th>斜鏡の縁の偏心</th><td>1.45% 主鏡側（実測 1.31% 主鏡側）</td></tr>
+        <tr><th>斜鏡のシルエットの偏心</th><td>4.36% 主鏡側（実測 4.73% 主鏡側）</td></tr>
+        <tr><th>シルエットの見かけ半径</th><td>35.4%（実測 35.4%）</td></tr>
+        <tr><th>輪の太さ</th><td>1.21 倍・太いのは主鏡側（実測 1.29 倍・主鏡側）</td></tr>
+      </table>
+
+      <h3>近似の限界</h3>
+      <ul>
+        <li>交点〜焦点面 178mm、覗き穴は交点から 199mm、オフセット 3.95mm は<b>まだ実測できていない仮定値</b>です</li>
+        <li>主鏡を近軸で扱っているので、視野の端のほうの 2回・3回の像はわずかに歪みます</li>
+        <li><b>返ってくる像（3回）の大きさ</b>は覗き穴の距離にとても敏感です ── 焦点のすぐ外側に物体があるためで、
+            実写でも撮るたびに変わります。<b>位置のほうは安定しています。</b></li>
+        <li>主鏡の押しネジは<b>傾きだけ</b>を効かせています。3本を同じだけ回すと本当はピントが前後しますが、
+            そうすると 3回反射の像の大きさが暴れて見づらいので入れていません</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<script src="app.js?v=1.0.0"></script>
+</body>
+</html>
