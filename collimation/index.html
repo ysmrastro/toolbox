@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.8.0">
+  <link rel="stylesheet" href="style.css?v=1.9.0">
 </head>
 <body>
 
@@ -90,7 +90,9 @@
   <div class="cl-side">
     <section class="cl-card">
       <h2>調整パラメータ</h2>
-      <p class="cl-hint">まんなかが合っている状態。左右どちらにも振れます。<b>数字をタップすると 0 に戻ります。</b><br>ずれ方のボタンは、<b>押すたびに別のずれ方</b>になります。見出しをタップすると畳めます。</p>
+      <p class="cl-hint">つまみは<b>「始めた位置から、どれだけ回したか」</b>です。数字をタップすると始めた位置に戻ります。<br>
+         ずれ方のボタンは押すたびに別のずれ方になり、<b>つまみはいつもまんなかから</b>始まります ──
+         どれだけずれているかは、覗いて確かめてください。合わせ切ると<b>「完全に合っている」が光ります</b>。</p>
 
       <div class="cl-btns">
         <button type="button" class="cl-btn" data-preset="zero"   aria-pressed="true">完全に合っている</button>
@@ -121,6 +123,13 @@
   <details>
     <summary>このモデルについて</summary>
     <div class="cl-notes__body">
+      <h3>つまみの読み方</h3>
+      <p>つまみは<b>「始めた位置から、どれだけ回したか」</b>です。ずれ方のボタンを押すと
+         ずれた状態から始まりますが、<b>つまみはどれもまんなかに置かれます</b> ──
+         実際の光軸合わせと同じで、いまどれだけずれているかは覗いて確かめるしかありません。</p>
+      <p>ずれの量はつまみの刻みに乗せてあるので、<b>逆に同じだけ回せばちょうど合います</b>。
+         合わせ切ると「完全に合っている」が光ります。</p>
+
       <h3>どう計算しているか</h3>
       <p>斜鏡は<b>平面の鏡</b>として厳密に、主鏡は<b>近軸の凹面鏡</b>（f=650mm）として結像させています。
          覗いている目を斜鏡の面で折り返した点をひとつ作れば、あとは全部の層をそこから投影するだけで済みます。</p>
@@ -176,6 +185,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.8.0"></script>
+<script src="app.js?v=1.9.0"></script>
 </body>
 </html>
