@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.3.1">
+  <link rel="stylesheet" href="style.css?v=1.4.0">
 </head>
 <body>
 
@@ -133,14 +133,19 @@
          だから回転は、傾きより先に決めるものです。</b></p>
 
       <h3>数値の前提</h3>
-      <p>BKP130（口径 130mm・焦点距離 650mm・F5・斜鏡短径 45mm・差込口 2インチ）。
-         <b>この寸法以外は、すべて仮の値です。</b></p>
+      <p>BKP130。<b>確かなのは口径 130mm と焦点距離 650mm だけです。</b>
+         ほかは、こちらが置いた仮の値です。</p>
       <table class="cl-read">
+        <tr><th>斜鏡の短径</th><td>45mm</td></tr>
         <tr><th>交点から焦点面まで</th><td>190mm</td></tr>
         <tr><th>オフセット</th><td>2.714mm（上の値から決まります）</td></tr>
-        <tr><th>覗き穴から交点まで</th><td>199mm</td></tr>
+        <tr><th>覗き穴（センタリングアイピースの位置）から交点まで</th><td>199mm ── つまみで動きます</td></tr>
+        <tr><th>ドローチューブの先から交点まで</th><td>46mm ── 覗き穴と一緒に動きます</td></tr>
+        <tr><th>ドローチューブの縁の内径</th><td>50.8mm ── 差込口の呼び径。実際の開口はもう少し大きいかもしれません</td></tr>
         <tr><th>アイピースの裏側／覗き穴の半径</th><td>9.52mm／4.03mm</td></tr>
       </table>
+      <p><b>絵の中の比率は、これらの値しだいで変わります。</b>
+         このページで確かなのは、<b>どのネジを回すとどの層が動くか</b>という関係のほうです。</p>
 
       <h3>近似</h3>
       <ul>
@@ -153,6 +158,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.3.1"></script>
+<script src="app.js?v=1.4.0"></script>
 </body>
 </html>

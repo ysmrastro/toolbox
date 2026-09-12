@@ -26,8 +26,8 @@ const P = {
   L      : 460,     // 交点の z（＝650 − 交点から焦点面まで 190。第1回の仮定）
   EYE    : 199,     // 覗き穴の、交点からの距離（仮の値・未実測）
   OFFSET : 2.714,   // オフセット（面に沿って、主鏡側へ。第1回の値）
-  R_FIELD: 25.4,    // ドローチューブの内半径（2インチ）
-  D_FIELD: 46,      // 視野環（ドローチューブの先）の、交点からの距離
+  R_FIELD: 25.4,    // ドローチューブの縁の内半径（仮の値・未実測）
+  D_FIELD: 46,      // ドローチューブの先の、交点からの距離（繰り出し 0 のとき）
   R_TUBE : 75,      // 筒の内半径
   R_SSCR : 15,      // 斜鏡の押しネジの配置半径
   R_PSCR : 55,      // 主鏡の押しネジの配置半径
@@ -45,7 +45,10 @@ const FACE_V0 = [0,1,0];            // 面内・上が +
 // スパイダーの台（ハブ）は筒の中心軸の上にある。オフセットはここでは足さない ──
 // 鏡を土台のどこに貼るかで作るものなので、geometry() の最後で足す。
 const HUB0  = [0,0,P.L];
-const EYE_P = [P.EYE, 0, P.L];      // 覗き穴（目）
+// 覗き穴（＝センタリングアイピースの位置）とドローチューブの先は、
+// どちらもドローチューブに乗っている。繰り出すと一緒に動く。
+const eyePoint  = d => [P.EYE + d, 0, P.L];
+const drawFront = d => P.D_FIELD + d;
 
 // 単位ベクトル a を b に重ねる最小の回転（ロドリゲス）
 function rotBetween(a,b){
@@ -63,10 +66,16 @@ const R_HAT = [0,0,-1];   // 画面の右（＝主鏡側）
 /* ============================================================
    状態
    ============================================================ */
-const DEF = {spiderX:0,spiderY:0,secA:0,secB:0,secC:0,secPull:0,secRot:0,pmA:0,pmB:0,pmC:0};
+const DEF = {draw:0,spiderX:0,spiderY:0,secA:0,secB:0,secC:0,secPull:0,secRot:0,pmA:0,pmB:0,pmC:0};
+const ALIGN_KEYS = Object.keys(DEF).filter(k=>k!=='draw');   // 繰り出しは光軸の調整ではない
 const state = Object.assign({},DEF);
 
 const SLIDERS = [
+  {group:"ドローチューブ（覗き方）",
+   note:"センタリングアイピースごと前後します。目が交点から遠ざかると、遠近法が弱まります。",
+   items:[
+     {k:"draw",label:"出し入れ",min:-40,max:90,step:1,unit:"mm",lo:"押し込む",hi:"繰り出す"}
+   ]},
   {group:"スパイダー（斜鏡そのものの位置）",
    note:"4本は均一に張り、台は筒の中心軸の上に置きます。振ると台が軸から外れます。",
    items:[
@@ -144,8 +153,9 @@ function geometry(s){
   const pv = V.cross(nPm, pu);
 
   // 目を斜鏡の面で折り返す
-  const e1 = reflectPoint(EYE_P, cSec, nSec);
-  return {hub,Q,cSec,nSec,fu,fv,major,minor,nPm,vPm,pu,pv,e1,rot,
+  const eye = eyePoint(s.draw), dfront = drawFront(s.draw);
+  const e1 = reflectPoint(eye, cSec, nSec);
+  return {hub,Q,cSec,nSec,fu,fv,major,minor,nPm,vPm,pu,pv,e1,rot,eye,dfront,
           secTilt:Math.hypot(f.a,f.b), pmTilt:Math.hypot(g.a,g.b)};
 }
 
@@ -202,7 +212,7 @@ function build(g){
   const N=180, o={};
 
   // 0回 ── ドローチューブの縁（視野をふちどる）
-  o.field = mapPts(ring([P.D_FIELD,0,P.L],[0,1,0],[0,0,1],P.R_FIELD,P.R_FIELD,N), view0, g);
+  o.field = mapPts(ring([g.dfront,0,P.L],[0,1,0],[0,0,1],P.R_FIELD,P.R_FIELD,N), view0, g);
   // 0回 ── 斜鏡の鏡面の縁
   o.secRim = mapPts(ring(g.cSec,g.major,g.minor,P.SEC_A,P.SEC_B,N), view0, g);
 
@@ -234,8 +244,8 @@ function build(g){
 
   // 3回 ── アイピースの裏側と覗き穴
   o.spiderHub = view2(g.hub,g);                 // スパイダーの交点（2回）
-  o.epBack = mapPts(ring(EYE_P,[0,1,0],[0,0,1],P.EPB_R,P.EPB_R,N), view3, g);
-  o.epHole = mapPts(ring(EYE_P,[0,1,0],[0,0,1],P.EPB_H,P.EPB_H,N), view3, g);
+  o.epBack = mapPts(ring(g.eye,[0,1,0],[0,0,1],P.EPB_R,P.EPB_R,N), view3, g);
+  o.epHole = mapPts(ring(g.eye,[0,1,0],[0,0,1],P.EPB_H,P.EPB_H,N), view3, g);
 
   return o;
 }
@@ -243,7 +253,8 @@ function build(g){
 /* ============================================================
    描画（視野）
    ============================================================ */
-const FIELD_TAN = P.R_FIELD/(P.EYE-P.D_FIELD);   // 視野の半径（タンジェント）
+// 目とドローチューブの先が一緒に動くので、視野の広さは繰り出しでは変わらない
+const FIELD_TAN = P.R_FIELD/(P.EYE-P.D_FIELD);
 const cvView = document.getElementById('cv-view');
 
 // スマホでは絵を上に貼りつけるので、高さを画面の一部に抑える
@@ -406,13 +417,14 @@ function drawSide(g,showRay){
 
   // ドローチューブ
   ctx.strokeStyle='#33434C';
-  ctx.beginPath(); mv(P.R_TUBE,P.L-P.R_FIELD); ln(P.EYE+16,P.L-P.R_FIELD); ctx.stroke();
-  ctx.beginPath(); mv(P.R_TUBE,P.L+P.R_FIELD); ln(P.EYE+16,P.L+P.R_FIELD); ctx.stroke();
+  ctx.beginPath(); mv(g.dfront,P.L-P.R_FIELD); ln(g.eye[0]+16,P.L-P.R_FIELD); ctx.stroke();
+  ctx.beginPath(); mv(g.dfront,P.L+P.R_FIELD); ln(g.eye[0]+16,P.L+P.R_FIELD); ctx.stroke();
+  ctx.beginPath(); mv(g.dfront,P.L-P.R_FIELD); ln(g.dfront,P.L+P.R_FIELD); ctx.stroke();  // 先端
 
   // 筒の中心軸・接眼部の中心軸
   ctx.setLineDash([4,5]); ctx.strokeStyle='#2A3A44'; ctx.lineWidth=1;
   ctx.beginPath(); mv(0,-40); ln(0,550); ctx.stroke();
-  ctx.beginPath(); mv(-90,P.L); ln(P.EYE+20,P.L); ctx.stroke();
+  ctx.beginPath(); mv(-90,P.L); ln(g.eye[0]+20,P.L); ctx.stroke();
   ctx.setLineDash([]);
 
   // 主鏡（傾く。中心は動かない）
@@ -432,7 +444,7 @@ function drawSide(g,showRay){
     ctx.beginPath(); mv(start[0],start[2]);
     if(hit){ ln(hit.p[0],hit.p[2]);
       const d2=reflectDir(dir,g.nSec);
-      const t2=(P.EYE+10-hit.p[0])/(d2[0]||1e-9);
+      const t2=(g.eye[0]+10-hit.p[0])/(d2[0]||1e-9);
       if(t2>0){const e=V.add(hit.p,V.mul(d2,t2)); ln(e[0],e[2]);}
     } else ln(start[0]+dir[0]*600, start[2]+dir[2]*600);
     ctx.stroke();
@@ -455,13 +467,13 @@ function drawSide(g,showRay){
   ctx.moveTo(ip[0],ip[1]-5); ctx.lineTo(ip[0],ip[1]+5); ctx.stroke();
 
   // 覗き穴
-  const ep=T(P.EYE,P.L);
+  const ep=T(g.eye[0],P.L);
   ctx.fillStyle='#E8748F'; ctx.beginPath(); ctx.arc(ep[0],ep[1],3.2,0,7); ctx.fill();
 
   // 視線
   let miss=null;
   if(showRay){
-    const path=[EYE_P]; let p=EYE_P, d=[-1,0,0], ok=true;
+    const path=[g.eye]; let p=g.eye, d=[-1,0,0], ok=true;
     const steps=[{c:g.cSec,n:g.nSec},{c:g.vPm,n:g.nPm},{c:g.cSec,n:g.nSec}];
     for(const st of steps){
       const hit=planeHit(p,d,st.c,st.n);
@@ -469,10 +481,10 @@ function drawSide(g,showRay){
       path.push(hit.p); p=hit.p; d=reflectDir(d,st.n);
     }
     if(ok){
-      const tEnd=(P.EYE-p[0])/(d[0]||1e-9);
+      const tEnd=(g.eye[0]-p[0])/(d[0]||1e-9);
       const end = tEnd>0 ? V.add(p,V.mul(d,tEnd)) : V.add(p,V.mul(d,240));
       path.push(end);
-      if(tEnd>0) miss=Math.hypot(end[1]-EYE_P[1], end[2]-EYE_P[2]);
+      if(tEnd>0) miss=Math.hypot(end[1]-g.eye[1], end[2]-g.eye[2]);
     }
     ctx.strokeStyle='#E8748F'; ctx.lineWidth=1.3;
     ctx.beginPath(); mv(path[0][0],path[0][2]);
@@ -493,7 +505,7 @@ function drawSide(g,showRay){
   ctx.fillStyle='#7B8D97';
   lb('斜鏡', g.cSec[0]-t[0]*half, g.cSec[2]-t[2]*half, -34, -6);   // 鏡の筒先側の端
   lb('交点', 0, P.L, 9, 17);
-  lb('覗き穴', P.EYE, P.L, 9, 4);
+  lb('覗き穴', g.eye[0], P.L, 9, 4);
   return miss;
 }
 
@@ -652,6 +664,7 @@ function readout(g,o,miss){
     if(ratio) rows.push(['太いのは', dirName(thMax), false]);
   }
 
+  rows.push(['覗き穴から交点まで', g.eye[0].toFixed(0)+' mm', false]);
   rows.push(['斜鏡の傾き', (Math.atan(g.secTilt)*180/Math.PI).toFixed(2)+' °', false]);
   rows.push(['主鏡の傾き', (Math.atan(g.pmTilt)*180/Math.PI).toFixed(2)+' °', false]);
   if(miss!==null && miss!==undefined)
@@ -703,7 +716,7 @@ const PRESETS={
 // いまのつまみの値が、どのプリセットと一致しているか
 function stateMatches(preset){
   const t = Object.assign({}, DEF, preset||{});
-  return Object.keys(DEF).every(k=>Math.abs(state[k]-t[k])<1e-9);
+  return ALIGN_KEYS.every(k=>Math.abs(state[k]-t[k])<1e-9);
 }
 function markActivePreset(){
   document.querySelectorAll('button[data-preset]').forEach(b=>{
@@ -716,7 +729,9 @@ function markActivePreset(){
 }
 
 function applyPreset(name){
+  const keep = state.draw;                 // 覗き方は保つ
   Object.assign(state,DEF);
+  state.draw = keep;
   if(name==='rand'){
     const r=(a)=>+( (Math.random()*2-1)*a ).toFixed(2);
     Object.assign(state,{spiderX:r(1.6),spiderY:r(1.6),
