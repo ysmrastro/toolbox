@@ -320,6 +320,7 @@ function lineOf(ctx,pts,tx){
 }
 
 function drawView(g,o,guide,cross){
+  const L1=opt('opt-r1'), L2=opt('opt-r2'), L3=opt('opt-r3');   // 見せる層
   const s0=setup(cvView,1,1,640); if(!s0) return;
   const {ctx,w,h}=s0;
   const cx=w/2, cy=h/2, S=Math.min(w,h)/2/FIELD_TAN*0.94;
@@ -339,31 +340,40 @@ function drawView(g,o,guide,cross){
 
     // 1回 ── 主鏡の縁の中身（明るい面）
     if(pathOf(ctx,o.pmRim,tx)){
-      ctx.fillStyle='#E9EFF2'; ctx.fill();
+      // 消しても、奥の層が見えるように暗い面は残す
+      ctx.fillStyle = L1 ? '#E9EFF2' : '#12191E'; ctx.fill();
       ctx.save(); ctx.clip();
 
       // 押さえの爪
-      ctx.fillStyle='#20282D';
-      for(const c of o.clips){ if(pathOf(ctx,c,tx)) ctx.fill(); }
+      if(L1){
+        ctx.fillStyle='#20282D';
+        for(const c of o.clips){ if(pathOf(ctx,c,tx)) ctx.fill(); }
+      }
 
-      // 2回 ── スパイダー
-      ctx.strokeStyle='#5E6D76'; ctx.lineWidth=Math.max(1.4,S*0.0016);
-      for(const sp of o.spider){ if(lineOf(ctx,sp,tx)) ctx.stroke(); }
+      if(L2){
+        // 2回 ── スパイダー
+        ctx.strokeStyle='#5E6D76'; ctx.lineWidth=Math.max(1.4,S*0.0016);
+        for(const sp of o.spider){ if(lineOf(ctx,sp,tx)) ctx.stroke(); }
 
-      // 2回 ── 斜鏡のシルエット
-      if(pathOf(ctx,o.sil,tx)){ ctx.fillStyle='#0B1116'; ctx.fill(); }
+        // 2回 ── 斜鏡のシルエット
+        if(pathOf(ctx,o.sil,tx)){ ctx.fillStyle='#0B1116'; ctx.fill(); }
+      }
 
       // 3回 ── アイピースの裏側と覗き穴
-      if(pathOf(ctx,o.epBack,tx)){ ctx.fillStyle='#C6D2D8'; ctx.fill(); }
-      if(pathOf(ctx,o.epHole,tx)){ ctx.fillStyle='#10171C'; ctx.fill(); }
+      if(L3){
+        if(pathOf(ctx,o.epBack,tx)){ ctx.fillStyle='#C6D2D8'; ctx.fill(); }
+        if(pathOf(ctx,o.epHole,tx)){ ctx.fillStyle='#10171C'; ctx.fill(); }
+      }
 
       // 1回 ── センターマーク（外周と穴のあいだだけが不透明）
-      if(o.markOut && o.markIn && pathOf(ctx,o.markOut,tx)){
+      if(L1 && o.markOut && o.markIn && pathOf(ctx,o.markOut,tx)){
         const p=new Path2D();
         const a=o.markOut.map(tx), b=o.markIn.map(tx);
         p.moveTo(a[0][0],a[0][1]); for(let i=1;i<a.length;i++)p.lineTo(a[i][0],a[i][1]); p.closePath();
         p.moveTo(b[0][0],b[0][1]); for(let i=b.length-1;i>=0;i--)p.lineTo(b[i][0],b[i][1]); p.closePath();
-        ctx.fillStyle='#151C21'; ctx.fill(p,'evenodd');
+        // 合っているとアイピースの裏（明るい）と覗き穴（暗い）に重なる。
+        // どちらの上でも見えるよう、中間の明るさにしてある
+        ctx.fillStyle='#829099'; ctx.fill(p,'evenodd');
       }
       ctx.restore();
     }
@@ -380,14 +390,16 @@ function drawView(g,o,guide,cross){
       ctx.closePath(); ctx.setLineDash(dash||[]); ctx.strokeStyle=col;
       ctx.lineWidth=1.6; ctx.globalAlpha=.95; ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1; };
     st(o.field,C[0],[6,5]); st(o.secRim,C[0]);
-    st(o.pmRim,C[1]); st(o.markOut,C[1]);
-    st(o.sil,C[2]);
+    if(L1){ st(o.pmRim,C[1]); st(o.markOut,C[1]); }
+    if(L2){ st(o.sil,C[2]); }
     st(o.epBack,C[3],[5,4]); st(o.epHole,C[3]);
     // 中心（十字）
     const cr=(p,col)=>{ if(!p)return; const c=tx(p); ctx.strokeStyle=col; ctx.lineWidth=1.4;
       ctx.beginPath(); ctx.moveTo(c[0]-7,c[1]); ctx.lineTo(c[0]+7,c[1]);
       ctx.moveTo(c[0],c[1]-7); ctx.lineTo(c[0],c[1]+7); ctx.stroke(); };
-    cr(center(o.pmRim),C[1]); cr(center(o.sil),C[2]); cr(center(o.epHole),C[3]);
+    if(L1) cr(center(o.pmRim),C[1]);
+    if(L2) cr(center(o.sil),C[2]);
+    if(L3) cr(center(o.epHole),C[3]);
   }
 
   // 十字線（シミュレーターの補助。実物にはない）
@@ -934,7 +946,7 @@ function applyPreset(name){
 }
 document.querySelectorAll('button[data-preset]').forEach(b=>
   b.addEventListener('click',()=>applyPreset(b.dataset.preset)));
-['opt-offset','opt-cross','opt-guide','opt-ray'].forEach(id=>
+['opt-offset','opt-cross','opt-guide','opt-ray','opt-r1','opt-r2','opt-r3'].forEach(id=>
   document.getElementById(id).addEventListener('change',render));
 
 /* ============================================================

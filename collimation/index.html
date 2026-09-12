@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.9.1">
+  <link rel="stylesheet" href="style.css?v=1.10.0">
 </head>
 <body>
 
@@ -103,6 +103,13 @@
         <button type="button" class="cl-btn" data-preset="rand">ランダム</button>
       </div>
 
+      <div class="cl-layers" role="group" aria-label="反射の回数ごとの表示">
+        <span>見せる層</span>
+        <label class="cl-chk"><input type="checkbox" id="opt-r1" checked><i style="background:#E5A052"></i>1回</label>
+        <label class="cl-chk"><input type="checkbox" id="opt-r2" checked><i style="background:#B39BDB"></i>2回</label>
+        <label class="cl-chk"><input type="checkbox" id="opt-r3" checked><i style="background:#E8748F"></i>3回</label>
+      </div>
+
       <div id="controls"></div>
 
       <label class="cl-chk"><input type="checkbox" id="opt-offset" checked> 斜鏡をオフセットする</label>
@@ -123,6 +130,12 @@
   <details>
     <summary>このモデルについて</summary>
     <div class="cl-notes__body">
+      <h3>見せる層</h3>
+      <p>反射の回数ごとに消せます。<b>2回を消すと、斜鏡のシルエットとスパイダーが消えて
+         センターマークがはっきり見えます。</b>3回を消すと、アイピースの映り込みが消えます ──
+         斜鏡を合わせているあいだは、そのほうが見やすいはずです。
+         <b>実物では消せません。</b>練習の支えとしてだけ使ってください。</p>
+
       <h3>つまみの読み方</h3>
       <p>つまみは<b>「始めた位置から、どれだけ回したか」</b>です。ずれ方のボタンを押すと
          ずれた状態から始まりますが、<b>つまみはどれもまんなかに置かれます</b> ──
@@ -187,6 +200,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.9.1"></script>
+<script src="app.js?v=1.10.0"></script>
 </body>
 </html>
