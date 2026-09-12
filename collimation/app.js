@@ -82,12 +82,18 @@ const live  = ()=>{const o={}; for(const k in DEF) o[k]=base[k]+state[k]; return
 // 折りたためる塊（fold）ごとに、小見出し（group）を並べる。
 // 順番は、ふだんさわる順。ドローチューブは基本さわらないので一番下で、畳んである。
 const SLIDERS = [
+ // 斜鏡まわりは、実際に合わせる順に並べる ── スパイダー → 回転 → 押し引き
  {fold:"斜鏡まわり", open:true, groups:[
   {group:"スパイダー（斜鏡そのものの位置）",
    note:"4本は均一に張り、台は筒の中心軸の上に置きます。振ると台が軸から外れます。",
    items:[
      {k:"spiderX",label:"押し引き X",min:-4,max:4,step:.05,unit:"mm",lo:"接眼部から遠ざける",hi:"接眼部へ寄せる"},
      {k:"spiderY",label:"押し引き Y",min:-4,max:4,step:.05,unit:"mm",lo:"下へ",hi:"上へ"}
+   ]},
+  {group:"斜鏡の回転",
+   note:"中央の引きネジをゆるめて、土台の柱ごと回す。面が円錐を描くので視野ごと動きます。",
+   items:[
+     {k:"secRot",label:"回転",min:-6,max:6,step:.05,unit:"°"}
    ]},
   {group:"斜鏡の押しネジ（3本）",
    note:"ステム軸に沿って効きます。3本を同じだけ回しても傾かず、前後に動くだけです。",
@@ -101,11 +107,7 @@ const SLIDERS = [
    items:[
      {k:"secPull",label:"引きネジ",min:-2.5,max:2.5,step:.02,unit:"mm",lo:"ゆるめる",hi:"締める"}
    ]},
-  {group:"斜鏡の回転",
-   note:"中央の引きネジをゆるめて、土台の柱ごと回す。面が円錐を描くので視野ごと動きます。",
-   items:[
-     {k:"secRot",label:"回転",min:-6,max:6,step:.05,unit:"°"}
-   ]}
+
  ]},
  {fold:"主鏡の押しネジ（3本）", open:true, groups:[
   {note:"主鏡は傾くだけで、中心は動きません。だから 1回反射の層は動きません。",
