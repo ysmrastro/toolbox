@@ -739,15 +739,11 @@ function faceNote(g){
   const rp=coneRadius(g,g.fu), rm=coneRadius(g,V.mul(g.fu,-1));
   if(rp===null||rm===null){ el.textContent=''; return; }
   const d=(rp-rm)/2;
-  const base =
-    '光の切り口が鏡のまんなかにちょうど来るオフセットは <b>'+OFFSET_IDEAL.toFixed(3)+'mm</b>'+
-    '（交点から焦点面までを '+(P.F_PM-P.L).toFixed(0)+'mm と置いた場合）。'+
-    'ここではその値を使っています。';
   el.innerHTML = Math.abs(d)<0.05
-    ? base+'<b>だから切り口は、鏡のまんなかに収まります。</b>'+
+    ? '<b>切り口は、鏡のまんなかに収まっています。</b>'+
       'オフセットは、この2つの中心を合わせるための操作でした。'
-    : base+'いまは <b>'+P.OFFSET.toFixed(3)+'mm</b> なので、'+
-      '切り口が '+Math.abs(d).toFixed(2)+'mm だけ'+(d>0?'筒先側':'主鏡側')+'へ寄っています。';
+    : '切り口が '+Math.abs(d).toFixed(2)+'mm だけ'+(d>0?'筒先側':'主鏡側')+'へ寄っています。'+
+      'まんなかに来るのはオフセットが '+OFFSET_IDEAL.toFixed(3)+'mm のときです。';
 }
 
 function render(){
