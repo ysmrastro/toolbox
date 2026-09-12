@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.1.1">
+  <link rel="stylesheet" href="style.css?v=1.2.0">
 </head>
 <body>
 
@@ -72,6 +72,7 @@
         <h2>斜鏡を面の正面から</h2>
         <p class="cl-hint">鏡の楕円と、主鏡から来る光の切り口。</p>
         <canvas id="cv-face"></canvas>
+        <p class="cl-hint" id="face-note" style="margin:var(--tb-space-sm) 0 0"></p>
       </section>
     </div>
   </div>
@@ -132,6 +133,13 @@
          1° 回すだけで、主鏡の像は視野の 12.8%（主鏡の見かけの半径に対して）ずれます。
          だから回転は、傾きを合わせる前に決めておくものです。</p>
 
+      <p><b>合っている状態でも、光の切り口は鏡のまんなかに来ません。</b>
+         切り口が鏡の中心にちょうど来るオフセットは <b>2.54mm</b> ですが、ここでは <b>3.95mm</b> を
+         仮定しているためです。この 3.95mm は実測ではなく、<b>覗いた写真からの逆算</b>
+         ── 斜鏡の縁がどれだけ主鏡側へ寄って見えるかから求めた値です。
+         第1回で説明した「明るさが対称になる量」より多い、というのが実機を測って出てきた話で、
+         <b>覗き穴から交点までの距離を測れば一点に決まります。</b></p>
+
       <h3>実機と照合した</h3>
       <p>BKP130（口径 130mm・焦点距離 650mm・F5・斜鏡短径 45mm・差込口 2インチ）。
          合っている状態の見え方を、実写を測った値と突き合わせてあります。</p>
@@ -156,6 +164,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.1.1"></script>
+<script src="app.js?v=1.2.0"></script>
 </body>
 </html>
