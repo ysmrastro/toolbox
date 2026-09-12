@@ -586,6 +586,25 @@ function coneRadius(g,e){
   return (r>0 && r<400) ? r : null;
 }
 
+// 光の切り口が鏡の中心にちょうど来るオフセット量。
+// 幾何だけで決まるので、起動時に一度だけ二分法で解く。
+const OFFSET_IDEAL = (function(){
+  const g0 = geometry(DEF);
+  const back = V.mul(g0.fu,-1);
+  const diff = o => {
+    const gg = Object.assign({}, g0, {cSec: V.sub(HUB0, V.mul(g0.fu,o))});
+    const a = coneRadius(gg,g0.fu), b = coneRadius(gg,back);
+    return (a===null||b===null) ? null : a-b;
+  };
+  let lo=0, hi=12;
+  for(let i=0;i<60;i++){
+    const m=(lo+hi)/2, d=diff(m);
+    if(d===null) break;
+    if(d>0) hi=m; else lo=m;
+  }
+  return (lo+hi)/2;
+})();
+
 /* ============================================================
    読み取り
    ============================================================ */
@@ -714,6 +733,22 @@ document.getElementById('opt-ray').addEventListener('change',render);
 /* ============================================================
    まわす
    ============================================================ */
+// 斜鏡ペインの下に、切り口が中心から外れる理由を出す
+function faceNote(g){
+  const el=document.getElementById('face-note'); if(!el) return;
+  const rp=coneRadius(g,g.fu), rm=coneRadius(g,V.mul(g.fu,-1));
+  if(rp===null||rm===null){ el.textContent=''; return; }
+  const d=(rp-rm)/2;
+  const side = d>0 ? '筒先側' : '主鏡側';
+  el.innerHTML =
+    'オフセットは <b>'+P.OFFSET.toFixed(2)+'mm</b> と仮定しています。'+
+    '光の切り口が鏡のまんなかにちょうど来るのは <b>'+OFFSET_IDEAL.toFixed(2)+'mm</b> ── '+
+    'つまり<b>この鏡は、そのぶん多くずらして貼ってある</b>ことになります。'+
+    'だから合っていても、切り口は '+Math.abs(d).toFixed(2)+'mm だけ'+side+'へ寄ります。'+
+    '<br>この 2つの差は実測ではなく、覗いた写真からの逆算です。'+
+    '<b>覗き穴から交点までの距離を実機で測れば、一点に決まります。</b>';
+}
+
 function render(){
   markActivePreset();
   const g=geometry(state);
@@ -721,6 +756,7 @@ function render(){
   drawView(g,o,document.getElementById('opt-guide').checked);
   const miss=drawSide(g,document.getElementById('opt-ray').checked);
   drawFace(g);
+  faceNote(g);
   readout(g,o,miss);
 }
 // スマホでは上のペインを1枚ずつ出す
