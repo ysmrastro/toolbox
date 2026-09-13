@@ -320,7 +320,8 @@ function lineOf(ctx,pts,tx){
 }
 
 function drawView(g,o,guide,cross){
-  const L1=opt('opt-r1'), L2=opt('opt-r2'), L3=opt('opt-r3');   // 見せる層
+  const L0=opt('opt-r0'), L1=opt('opt-r1'),
+        L2=opt('opt-r2'), L3=opt('opt-r3');                     // 見せる層
   const s0=setup(cvView,1,1,640); if(!s0) return;
   const {ctx,w,h}=s0;
   const cx=w/2, cy=h/2, S=Math.min(w,h)/2/FIELD_TAN*0.94;
@@ -335,7 +336,8 @@ function drawView(g,o,guide,cross){
 
   // --- 斜鏡の鏡面 ---
   if(pathOf(ctx,o.secRim,tx)){
-    ctx.fillStyle='#1B242A'; ctx.fill();
+    // 消すと、ドローチューブの内壁と同じ色になって縁が見えなくなる
+    ctx.fillStyle = L0 ? '#1B242A' : '#0A1015'; ctx.fill();
     ctx.save(); ctx.clip();
 
     // 1回 ── 主鏡の縁の中身（明るい面）
@@ -378,7 +380,7 @@ function drawView(g,o,guide,cross){
       ctx.restore();
     }
     // 斜鏡の縁の線
-    if(pathOf(ctx,o.secRim,tx)){ ctx.strokeStyle='#39464E'; ctx.lineWidth=1.2; ctx.stroke(); }
+    if(L0 && pathOf(ctx,o.secRim,tx)){ ctx.strokeStyle='#39464E'; ctx.lineWidth=1.2; ctx.stroke(); }
     ctx.restore();
   }
   ctx.restore();
@@ -389,10 +391,10 @@ function drawView(g,o,guide,cross){
     const st=(pts,col,dash)=>{ if(!lineOf(ctx,pts,tx))return;
       ctx.closePath(); ctx.setLineDash(dash||[]); ctx.strokeStyle=col;
       ctx.lineWidth=1.6; ctx.globalAlpha=.95; ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1; };
-    st(o.field,C[0],[6,5]); st(o.secRim,C[0]);
+    if(L0){ st(o.field,C[0],[6,5]); st(o.secRim,C[0]); }
     if(L1){ st(o.pmRim,C[1]); st(o.markOut,C[1]); }
     if(L2){ st(o.sil,C[2]); }
-    st(o.epBack,C[3],[5,4]); st(o.epHole,C[3]);
+    if(L3){ st(o.epBack,C[3],[5,4]); st(o.epHole,C[3]); }
     // 中心（十字）
     const cr=(p,col)=>{ if(!p)return; const c=tx(p); ctx.strokeStyle=col; ctx.lineWidth=1.4;
       ctx.beginPath(); ctx.moveTo(c[0]-7,c[1]); ctx.lineTo(c[0]+7,c[1]);
@@ -946,7 +948,7 @@ function applyPreset(name){
 }
 document.querySelectorAll('button[data-preset]').forEach(b=>
   b.addEventListener('click',()=>applyPreset(b.dataset.preset)));
-['opt-offset','opt-cross','opt-guide','opt-ray','opt-r1','opt-r2','opt-r3'].forEach(id=>
+['opt-offset','opt-cross','opt-guide','opt-ray','opt-r0','opt-r1','opt-r2','opt-r3'].forEach(id=>
   document.getElementById(id).addEventListener('change',render));
 
 /* ============================================================
