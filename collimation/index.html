@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.10.0">
+  <link rel="stylesheet" href="style.css?v=1.11.0">
 </head>
 <body>
 
@@ -105,6 +105,7 @@
 
       <div class="cl-layers" role="group" aria-label="反射の回数ごとの表示">
         <span>見せる層</span>
+        <label class="cl-chk"><input type="checkbox" id="opt-r0" checked><i style="background:#63B6D8"></i>0回</label>
         <label class="cl-chk"><input type="checkbox" id="opt-r1" checked><i style="background:#E5A052"></i>1回</label>
         <label class="cl-chk"><input type="checkbox" id="opt-r2" checked><i style="background:#B39BDB"></i>2回</label>
         <label class="cl-chk"><input type="checkbox" id="opt-r3" checked><i style="background:#E8748F"></i>3回</label>
@@ -134,7 +135,10 @@
       <p>反射の回数ごとに消せます。<b>2回を消すと、斜鏡のシルエットとスパイダーが消えて
          センターマークがはっきり見えます。</b>3回を消すと、アイピースの映り込みが消えます ──
          斜鏡を合わせているあいだは、そのほうが見やすいはずです。
+         0回を消すと、ドローチューブの縁と斜鏡の縁が消えます。
          <b>実物では消せません。</b>練習の支えとしてだけ使ってください。</p>
+      <p>消えるのは<b>見た目だけ</b>です。<b>隠れる関係はそのまま残します</b> ──
+         斜鏡の縁を消しても、そこからはみ出した主鏡は見えないままです。</p>
 
       <h3>つまみの読み方</h3>
       <p>つまみは<b>「始めた位置から、どれだけ回したか」</b>です。ずれ方のボタンを押すと
@@ -200,6 +204,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.10.0"></script>
+<script src="app.js?v=1.11.0"></script>
 </body>
 </html>

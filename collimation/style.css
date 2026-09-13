@@ -267,7 +267,7 @@ input[type=range]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(-
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 var(--tb-space-md);
+  gap: 0 var(--tb-space-sm);
   margin-bottom: var(--tb-space-sm);
   padding-bottom: var(--tb-space-xs);
   border-bottom: 1px solid var(--tb-border);
@@ -276,7 +276,8 @@ input[type=range]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(-
   font-size: var(--tb-font-size-xs);
   color: var(--tb-text-muted);
 }
-.cl-layers .cl-chk { gap: var(--tb-space-xs); }
+.cl-layers .cl-chk { gap: 0.25rem; white-space: nowrap; }
+.cl-layers .cl-chk input { margin: 0; }
 .cl-layers i {
   display: inline-block;
   width: 0.625rem; height: 0.625rem;
