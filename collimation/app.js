@@ -56,7 +56,9 @@ const drawFront = d => P.D_FIELD + d;             // ドローチューブの先
 // 単位ベクトル a を b に重ねる最小の回転（ロドリゲス）
 function rotBetween(a,b){
   const v=V.cross(a,b), c=V.dot(a,b);
-  if(c>0.9999999) return q=>q.slice();
+  // ここを緩めると小さい回転が丸ごと消える。押しネジ 0.01mm は 4.4e-4 rad で、
+  // 以前の 0.9999999 では 1目盛りぶんがそっくり効かなくなっていた
+  if(c>1-1e-12) return q=>q.slice();
   const k=1/(1+c);
   return q=>{const w=V.cross(v,q); return V.add(V.add(q,w), V.mul(V.cross(v,w),k));};
 }
@@ -858,7 +860,8 @@ function buildControls(){
     '</details>').join('');
   host.querySelectorAll('input[type=range]').forEach(el=>{
     el.addEventListener('input',()=>{
-      state[el.dataset.k]=parseFloat(el.value); activePreset=null; syncFlags(); render(); });
+      state[el.dataset.k]=parseFloat(el.value);
+      activePreset=null; syncOut(el.dataset.k); syncFlags(); render(); });
   });
   host.querySelectorAll('output[data-k]').forEach(el=>{
     el.addEventListener('click',()=>{
@@ -877,13 +880,18 @@ function syncFlags(){
     fl.title = '始めた位置から回したつまみが '+n+' 個あります';
   });
 }
+// つまみ1つ分の数字。動かしている最中もここを通す ──
+// これを忘れると、つまみは動くのに数字が 0.00 のまま残る
+function syncOut(k){
+  const it=ITEM[k], ou=document.getElementById('o-'+k);
+  const dec = it.unit==='°'?1:2;
+  ou.textContent=state[k].toFixed(dec)+' '+it.unit;
+  ou.classList.toggle('is-off', Math.abs(state[k])>1e-9);
+}
 function syncControls(){
   for(const sec of SLIDERS) for(const gp of sec.groups) for(const it of gp.items){
-    const el=document.getElementById('s-'+it.k), ou=document.getElementById('o-'+it.k);
-    el.value=state[it.k];
-    const dec = it.unit==='°'?1:2;
-    ou.textContent=state[it.k].toFixed(dec)+' '+it.unit;
-    ou.classList.toggle('is-off', Math.abs(state[it.k])>1e-9);
+    document.getElementById('s-'+it.k).value=state[it.k];
+    syncOut(it.k);
   }
   syncFlags();
 }
