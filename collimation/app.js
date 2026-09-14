@@ -261,6 +261,18 @@ function build(g){
 
   // 2回 ── 斜鏡のシルエット
   o.sil = mapPts(ring(g.cSec,g.major,g.minor,P.SEC_A,P.SEC_B,N), view2, g);
+  // 2回 ── ドローチューブ。筒の中へ突き出した口を、主鏡が映して返す。
+  // 2回反射は筒の中心軸に沿った影に近いので、口の輪は真横を向いていて線に潰れる。
+  // 輪だけでは何も見えないので、筒の壁まで伸びる2本の縁とあわせて口の形を描く。
+  {
+    const seg=[], M=48;
+    seg.push([P.R_TUBE, P.R_FIELD,P.L]);                       // 筒の壁ぎわ（上）
+    seg.push([g.dfront, P.R_FIELD,P.L]);                       // 口の縁へ
+    for(let i=0;i<=M;i++){const a=Math.PI*i/M;                 // 口の輪の半分
+      seg.push([g.dfront, P.R_FIELD*Math.cos(a), P.L+P.R_FIELD*Math.sin(a)]);}
+    seg.push([P.R_TUBE,-P.R_FIELD,P.L]);                       // 筒の壁ぎわ（下）
+    o.dtube = mapPts(seg, view2, g);
+  }
   // 2回 ── スパイダー（4本。台は動くが、筒壁の取りつけ位置は動かない）
   o.spider=[];
   const hz=g.hub[2], H=[g.hub[0],g.hub[1],hz];
@@ -324,22 +336,28 @@ function lineOf(ctx,pts,tx){
 function drawView(g,o,guide,cross){
   const L0=opt('opt-r0'), L1=opt('opt-r1'),
         L2=opt('opt-r2'), L3=opt('opt-r3');                     // 見せる層
+  // 筒の中に白い紙を入れると、斜鏡の向こうが白くなる。
+  // 斜鏡の鏡面は主鏡のほうを向いていて紙を映さないので、暗いまま ──
+  // だから鏡の縁が、白地の上の暗い輪として出る（実機で使うコツ）
+  const paper = opt('opt-paper');
+  const C_WALL = paper ? '#B9C0C4' : '#05090B';   // ドローチューブの内壁（視野の外）
+  const C_TUBE = paper ? '#EDEFF1' : '#0A1015';   // 筒の中（斜鏡の外）
   const s0=setup(cvView,1,1,640); if(!s0) return;
   const {ctx,w,h}=s0;
   const cx=w/2, cy=h/2, S=Math.min(w,h)/2/FIELD_TAN*0.94;
   const tx = p=>[cx+p[0]*S, cy-p[1]*S];
 
-  ctx.fillStyle='#05090B'; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle=C_WALL; ctx.fillRect(0,0,w,h);
 
   // 視野の外側（ドローチューブの内壁）
   if(!pathOf(ctx,o.field,tx)) return;
   ctx.save(); ctx.clip();
-  ctx.fillStyle='#0A1015'; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle=C_TUBE; ctx.fillRect(0,0,w,h);
 
   // --- 斜鏡の鏡面 ---
   if(pathOf(ctx,o.secRim,tx)){
-    // 消すと、ドローチューブの内壁と同じ色になって縁が見えなくなる
-    ctx.fillStyle = L0 ? '#1B242A' : '#0A1015'; ctx.fill();
+    // 消すと、筒の中と同じ色になって縁が見えなくなる
+    ctx.fillStyle = L0 ? '#1B242A' : C_TUBE; ctx.fill();
     ctx.save(); ctx.clip();
 
     // 1回 ── 主鏡の縁の中身（明るい面）
@@ -355,6 +373,9 @@ function drawView(g,o,guide,cross){
       }
 
       if(L2){
+        // 2回 ── ドローチューブ。口の中は暗いので、影として塗る
+        if(pathOf(ctx,o.dtube,tx)){ ctx.fillStyle='#20282D'; ctx.fill(); }
+
         // 2回 ── スパイダー
         ctx.strokeStyle='#5E6D76'; ctx.lineWidth=Math.max(1.4,S*0.0016);
         for(const sp of o.spider){ if(lineOf(ctx,sp,tx)) ctx.stroke(); }
@@ -395,7 +416,7 @@ function drawView(g,o,guide,cross){
       ctx.lineWidth=1.6; ctx.globalAlpha=.95; ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1; };
     if(L0){ st(o.field,C[0],[6,5]); st(o.secRim,C[0]); }
     if(L1){ st(o.pmRim,C[1]); st(o.markOut,C[1]); }
-    if(L2){ st(o.sil,C[2]); }
+    if(L2){ st(o.sil,C[2]); st(o.dtube,C[2],[5,4]); }
     if(L3){ st(o.epBack,C[3],[5,4]); st(o.epHole,C[3]); }
     // 中心（十字）
     const cr=(p,col)=>{ if(!p)return; const c=tx(p); ctx.strokeStyle=col; ctx.lineWidth=1.4;
@@ -956,7 +977,8 @@ function applyPreset(name){
 }
 document.querySelectorAll('button[data-preset]').forEach(b=>
   b.addEventListener('click',()=>applyPreset(b.dataset.preset)));
-['opt-offset','opt-cross','opt-guide','opt-ray','opt-r0','opt-r1','opt-r2','opt-r3'].forEach(id=>
+['opt-offset','opt-cross','opt-guide','opt-ray','opt-paper',
+ 'opt-r0','opt-r1','opt-r2','opt-r3'].forEach(id=>
   document.getElementById(id).addEventListener('change',render));
 
 /* ============================================================
