@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.14.5">
+  <link rel="stylesheet" href="style.css?v=1.15.0">
 </head>
 <body>
 
@@ -52,45 +52,45 @@
     </div>
 
     <div class="cl-panes">
-      <section class="cl-pane is-active" data-pane="view">
-        <h2>センタリングアイピースの視野</h2>
-        <p class="cl-hint">覗き穴から見た景色。<b>左が筒先側、右が主鏡側</b>です。</p>
-        <canvas id="cv-view"></canvas>
-        <ul class="cl-key">
-          <li><i style="background:#63B6D8"></i>0回<span> ドローチューブの縁・斜鏡の鏡面の縁・斜鏡を支えている柱</span></li>
-          <li><i style="background:#E5A052"></i>1回<span> 主鏡の縁・爪・センターマーク</span></li>
-          <li><i style="background:#B39BDB"></i>2回<span> 斜鏡のシルエット・スパイダー・ドローチューブの縁</span></li>
-          <li><i style="background:#E8748F"></i>3回<span> アイピースの裏側・覗き穴</span></li>
-        </ul>
-      </section>
-
-      <section class="cl-pane" data-pane="side">
-        <h2>筒の断面</h2>
-        <p class="cl-hint">主鏡＝右／筒先＝左／接眼部＝下。細い線は覗き穴から出した視線です。</p>
-        <canvas id="cv-side"></canvas>
-      </section>
-
-      <section class="cl-pane" data-pane="face">
-        <h2>斜鏡を面の正面から</h2>
-        <p class="cl-hint">鏡の楕円と、主鏡から来る光の切り口。</p>
-        <canvas id="cv-face"></canvas>
-        <p class="cl-hint" id="face-note" style="margin:var(--tb-space-sm) 0 0"></p>
-      </section>
-
-      <section class="cl-pane" data-pane="front">
-        <h2>筒先から筒の中を見る</h2>
-        <p class="cl-hint">スパイダーを合わせるときの向きです。<b>上が接眼部側</b>。<br>
-           まんなかに来ているか見るのは<b>柱のほう</b>で、<b>鏡はオフセットのぶんだけ中心からずれます。</b></p>
-        <canvas id="cv-front"></canvas>
-      </section>
-
-      <section class="cl-pane" data-pane="stem">
-        <h2>土台をドローチューブ側から</h2>
-        <p class="cl-hint">45°に切った柱の先に、鏡を<b>中心からずらして</b>貼ってあります。
-           柱の回転が見えるよう、<b>少しだけ斜めから</b>見ています。</p>
-        <canvas id="cv-stem"></canvas>
-        <p class="cl-hint" id="stem-note" style="margin:var(--tb-space-sm) 0 0"></p>
-      </section>
+      <div class="cl-col">
+        <section class="cl-pane is-active" data-pane="view">
+          <h2>センタリングアイピースの視野</h2>
+          <p class="cl-hint">覗き穴から見た景色。<b>左が筒先側、右が主鏡側</b>です。</p>
+          <canvas id="cv-view"></canvas>
+          <ul class="cl-key">
+            <li><i style="background:#63B6D8"></i>0回<span> ドローチューブの縁・斜鏡の鏡面の縁・斜鏡を支えている柱</span></li>
+            <li><i style="background:#E5A052"></i>1回<span> 主鏡の縁・爪・センターマーク</span></li>
+            <li><i style="background:#B39BDB"></i>2回<span> 斜鏡のシルエット・スパイダー・ドローチューブの縁</span></li>
+            <li><i style="background:#E8748F"></i>3回<span> アイピースの裏側・覗き穴</span></li>
+          </ul>
+        </section>
+        <section class="cl-pane" data-pane="side">
+          <h2>筒の断面</h2>
+          <p class="cl-hint">主鏡＝右／筒先＝左／接眼部＝下。細い線は覗き穴から出した視線です。</p>
+          <canvas id="cv-side"></canvas>
+        </section>
+      </div>
+      <div class="cl-col">
+        <section class="cl-pane" data-pane="front">
+          <h2>筒先から筒の中を見る</h2>
+          <p class="cl-hint">スパイダーを合わせるときの向きです。<b>上が接眼部側</b>。<br>
+             まんなかに来ているか見るのは<b>柱のほう</b>で、<b>鏡はオフセットのぶんだけ中心からずれます。</b></p>
+          <canvas id="cv-front"></canvas>
+        </section>
+        <section class="cl-pane" data-pane="face">
+          <h2>斜鏡を面の正面から</h2>
+          <p class="cl-hint">鏡の楕円と、主鏡から来る光の切り口。</p>
+          <canvas id="cv-face"></canvas>
+          <p class="cl-hint" id="face-note" style="margin:var(--tb-space-sm) 0 0"></p>
+        </section>
+        <section class="cl-pane" data-pane="stem">
+          <h2>土台をドローチューブ側から</h2>
+          <p class="cl-hint">45°に切った柱の先に、鏡を<b>中心からずらして</b>貼ってあります。
+             柱の回転が見えるよう、<b>少しだけ斜めから</b>見ています。</p>
+          <canvas id="cv-stem"></canvas>
+          <p class="cl-hint" id="stem-note" style="margin:var(--tb-space-sm) 0 0"></p>
+        </section>
+      </div>
     </div>
   </div>
 
@@ -213,6 +213,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.14.5"></script>
+<script src="app.js?v=1.15.0"></script>
 </body>
 </html>
