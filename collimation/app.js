@@ -309,11 +309,14 @@ function build(g){
   // 輪だけでは何も見えないので、筒の壁まで伸びる2本の縁とあわせて口の形を描く。
   {
     const seg=[], M=48;
-    seg.push([P.R_TUBE, P.R_FIELD,P.L]);                       // 筒の壁ぎわ（上）
+    // 壁ぎわで切ると、主鏡を大きく傾けたとき口の絵が視野の中に浮いて見える。
+    // 実際のドローチューブは壁の外まで続いているので、そこまで伸ばして縁で切らせる
+    const REACH = P.R_TUBE*3;
+    seg.push([REACH, P.R_FIELD,P.L]);                          // 壁の外まで（上）
     seg.push([g.dfront, P.R_FIELD,P.L]);                       // 口の縁へ
     for(let i=0;i<=M;i++){const a=Math.PI*i/M;                 // 口の輪の半分
       seg.push([g.dfront, P.R_FIELD*Math.cos(a), P.L+P.R_FIELD*Math.sin(a)]);}
-    seg.push([P.R_TUBE,-P.R_FIELD,P.L]);                       // 筒の壁ぎわ（下）
+    seg.push([REACH,-P.R_FIELD,P.L]);                          // 壁の外まで（下）
     o.dtube = mapPts(seg, view2, g);
   }
   // 2回 ── スパイダー（4本。台は動くが、筒壁の取りつけ位置は動かない）
