@@ -381,7 +381,8 @@ function drawView(g,o,guide,cross){
   // 斜鏡の鏡面は主鏡のほうを向いていて紙を映さないので、暗いまま ──
   // だから鏡の縁が、白地の上の暗い輪として出る（実機で使うコツ）
   const paper = opt('opt-paper');
-  const C_WALL = paper ? '#B9C0C4' : '#05090B';   // ドローチューブの内壁（視野の外）
+  // 紙を入れるのは筒の中なので、ドローチューブの内壁（視野の外）は暗いまま
+  const C_WALL = '#05090B';                       // ドローチューブの内壁（視野の外）
   const C_TUBE = paper ? '#EDEFF1' : '#0A1015';   // 筒の中（斜鏡の外）
   const s0=setup(cvView,1,1,640); if(!s0) return;
   const {ctx,w,h}=s0;
