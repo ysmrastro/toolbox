@@ -400,15 +400,16 @@ function drawView(g,o,guide,cross){
   if(L0 && pathOf(ctx,o.holder,tx)){ ctx.fillStyle = paper ? '#8A9399' : '#141C22'; ctx.fill(); }
 
   // --- 斜鏡の鏡面 ---
+  const C_SEC = L0 ? '#1B242A' : C_TUBE;          // 消すと、筒の中と同じ色になって縁が見えなくなる
   if(pathOf(ctx,o.secRim,tx)){
-    // 消すと、筒の中と同じ色になって縁が見えなくなる
-    ctx.fillStyle = L0 ? '#1B242A' : C_TUBE; ctx.fill();
+    ctx.fillStyle = C_SEC; ctx.fill();
     ctx.save(); ctx.clip();
 
     // 1回 ── 主鏡の縁の中身（明るい面）
     if(pathOf(ctx,o.pmRim,tx)){
-      // 消しても、奥の層が見えるように暗い面は残す
-      ctx.fillStyle = L1 ? '#E9EFF2' : '#12191E'; ctx.fill();
+      // 消しても、奥に 2回・3回が残っているなら、それが見えるように暗い面は敷く。
+      // 全部消したときは鏡の面と同じ色にして、主鏡の円も見えなくする
+      ctx.fillStyle = L1 ? '#E9EFF2' : ((L2||L3) ? '#12191E' : C_SEC); ctx.fill();
       ctx.save(); ctx.clip();
 
       // 押さえの爪
