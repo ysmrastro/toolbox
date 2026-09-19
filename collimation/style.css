@@ -33,11 +33,7 @@
   gap: var(--tb-space-md);
   align-items: start;
 }
-.cl-pane[data-pane="view"]  { grid-column: 1; grid-row: 1 / 4; }
-.cl-pane[data-pane="front"] { grid-column: 2; grid-row: 1; }
-.cl-pane[data-pane="face"]  { grid-column: 2; grid-row: 2; }
-.cl-pane[data-pane="stem"]  { grid-column: 2; grid-row: 3; }
-.cl-pane[data-pane="side"]  { grid-column: 1 / -1; grid-row: 4; }
+.cl-col { display: grid; gap: var(--tb-space-md); align-content: start; min-width: 0; }
 
 .cl-side {
   display: grid;
@@ -381,11 +377,7 @@ input[type=range]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(-
   .cl-panes { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .cl-pane { display: none; }
   .cl-pane.is-active { display: block; }
-  .cl-pane[data-pane="view"],
-  .cl-pane[data-pane="front"],
-  .cl-pane[data-pane="face"],
-  .cl-pane[data-pane="stem"],
-  .cl-pane[data-pane="side"] { grid-column: auto; grid-row: auto; }
+  .cl-col { display: contents; }
 
   /* 貼りついている側は詰める。画面の半分を絵に使わせない */
   .cl-pane h2 { display: none; }
