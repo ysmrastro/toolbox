@@ -800,6 +800,75 @@ function drawStem(g,gr,ok){
   ctx.fillText('○ 土台の軸 ／ ＋ 鏡の中心', 8, h-8-fF*1.7);
 }
 
+
+/* ============================================================
+   筒先から筒の中を見る ── スパイダーを合わせるときの向き
+   画面の上が接眼部側。筒の中心軸に沿って、まっすぐ覗きこんだ形。
+   ============================================================ */
+const cvFront = document.getElementById('cv-front');
+const FR_R = [0,-1,0];   // 画面の右
+const FR_U = [1,0,0];    // 画面の上（＝接眼部側）
+
+function drawTubeFront(g,gr,ok){
+  const s0=setup(cvFront,180,180,300); if(!s0) return;
+  const {ctx,w,h}=s0;
+  ctx.fillStyle='#05090B'; ctx.fillRect(0,0,w,h);
+  const s=w/180, cx=w/2, cy=h/2;
+  const pr = p => [cx+V.dot(p,FR_R)*s, cy-V.dot(p,FR_U)*s];
+  const path = pts => {ctx.beginPath();
+    pts.forEach((p,i)=>{const q=pr(p); i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]);});
+    ctx.closePath();};
+  const seg = (p0,p1)=>{const a=pr(p0),b=pr(p1);
+    ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke();};
+
+  // 筒の内側
+  ctx.beginPath(); ctx.arc(cx,cy,P.R_TUBE*s,0,7);
+  ctx.fillStyle='#0A1015'; ctx.fill();
+  ctx.strokeStyle='#3B5763'; ctx.lineWidth=2; ctx.stroke();
+
+  // ドローチューブ ── 筒の中に入りこんだ先。繰り出すと伸びてくる
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,P.R_TUBE*s-1,0,7); ctx.clip();
+  ctx.strokeStyle='#2A353C'; ctx.lineWidth=1.4;
+  const dfx=g.dfront, far=P.R_TUBE+14;
+  seg([dfx,-P.R_FIELD,0],[far,-P.R_FIELD,0]);
+  seg([dfx, P.R_FIELD,0],[far, P.R_FIELD,0]);
+  seg([dfx,-P.R_FIELD,0],[dfx, P.R_FIELD,0]);
+  ctx.restore();
+
+  // スパイダー4本 ── 筒壁の取りつけ位置は動かない。台だけが動く
+  ctx.strokeStyle='#54666F'; ctx.lineWidth=1.6;
+  for(const wv of [[P.R_TUBE,0],[0,P.R_TUBE],[-P.R_TUBE,0],[0,-P.R_TUBE]])
+    seg([wv[0],wv[1],0],[g.hub[0],g.hub[1],0]);
+
+  // 合っているときの鏡（点線）
+  if(!ok){
+    path(ring(gr.cSec,gr.fu,gr.fv,P.SEC_A,P.SEC_B,96));
+    ctx.strokeStyle='rgba(123,141,151,.8)'; ctx.lineWidth=1.2;
+    ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // 鏡 ── 45°の楕円は、ここから見るとちょうど円になる。傾けば形が崩れる
+  path(ring(g.cSec,g.fu,g.fv,P.SEC_A,P.SEC_B,96));
+  ctx.fillStyle='#1B242A'; ctx.fill();
+  ctx.strokeStyle='#63B6D8'; ctx.lineWidth=2; ctx.stroke();
+
+  // 柱 ── 鏡の裏なので本当は見えない。まんなかに来ているかを見るために重ねる
+  const hb=pr([g.hub[0],g.hub[1],0]);
+  ctx.strokeStyle='#7B8D97'; ctx.lineWidth=1.4; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.arc(hb[0],hb[1],P.STEM_R*s,0,7); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 筒の中心（＋）
+  ctx.strokeStyle='#3B5763'; ctx.lineWidth=1.2;
+  ctx.beginPath(); ctx.moveTo(cx-7,cy); ctx.lineTo(cx+7,cy);
+  ctx.moveTo(cx,cy-7); ctx.lineTo(cx,cy+7); ctx.stroke();
+
+  const fF=Math.max(9,Math.min(11,w/30));
+  ctx.fillStyle='#5C6E78'; ctx.font=fF+'px system-ui';
+  ctx.fillText('▲ 接眼部側', 8, fF*1.6);
+  ctx.fillText('○ 柱 ／ ＋ 筒の中心', 8, h-8);
+}
+
 // 土台のペインの下の一言
 function stemNote(g,gr){
   const el=document.getElementById('stem-note'); if(!el) return;
@@ -1054,6 +1123,7 @@ function render(){
   drawFace(g);
   faceNote(g);
   drawStem(g,gr,alignedNow(g,gr));
+  drawTubeFront(g,gr,alignedNow(g,gr));
   stemNote(g,gr);
   readout(g,o,miss);
 }
