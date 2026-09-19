@@ -654,10 +654,11 @@ function planeHit(p0,d,c,n){
    ============================================================ */
 const cvFace = document.getElementById('cv-face');
 function drawFace(g){
-  const s0=setup(cvFace,1,1,300); if(!s0) return;
+  // 鏡は横長なので、正方形にすると上下が大きく余る。中身に合わせた高さにする
+  const s0=setup(cvFace,1,0.74,300); if(!s0) return;
   const {ctx,w,h}=s0;
   ctx.fillStyle='#05090B'; ctx.fillRect(0,0,w,h);
-  const s=Math.min(w,h)/2/42*0.92, cx=w/2, cy=h/2;
+  const s=w/2/42*0.92, cx=w/2, cy=h*0.45;
   // 面内の座標（fu を右、fv を上）
   const T=(u,v)=>[cx+u*s, cy-v*s];
 
