@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.13.2">
+  <link rel="stylesheet" href="style.css?v=1.14.0">
 </head>
 <body>
 
@@ -48,6 +48,7 @@
       <button class="cl-tab"           role="tab" aria-selected="false" data-pane="side">断面</button>
       <button class="cl-tab"           role="tab" aria-selected="false" data-pane="face">斜鏡</button>
       <button class="cl-tab"           role="tab" aria-selected="false" data-pane="stem">土台</button>
+      <button class="cl-tab"           role="tab" aria-selected="false" data-pane="front">筒先</button>
     </div>
 
     <div class="cl-panes">
@@ -74,6 +75,13 @@
         <p class="cl-hint">鏡の楕円と、主鏡から来る光の切り口。</p>
         <canvas id="cv-face"></canvas>
         <p class="cl-hint" id="face-note" style="margin:var(--tb-space-sm) 0 0"></p>
+      </section>
+
+      <section class="cl-pane" data-pane="front">
+        <h2>筒先から筒の中を見る</h2>
+        <p class="cl-hint">スパイダーを合わせるときの向きです。<b>上が接眼部側</b>。<br>
+           まんなかに来ているか見るのは<b>柱のほう</b>で、<b>鏡はオフセットのぶんだけ中心からずれます。</b></p>
+        <canvas id="cv-front"></canvas>
       </section>
 
       <section class="cl-pane" data-pane="stem">
@@ -205,6 +213,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.13.2"></script>
+<script src="app.js?v=1.14.0"></script>
 </body>
 </html>
