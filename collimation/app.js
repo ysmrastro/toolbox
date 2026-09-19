@@ -654,10 +654,11 @@ function planeHit(p0,d,c,n){
    ============================================================ */
 const cvFace = document.getElementById('cv-face');
 function drawFace(g){
-  const s0=setup(cvFace,1,1,300); if(!s0) return;
+  // 鏡は横長なので、正方形にすると上下が大きく余る。中身に合わせた高さにする
+  const s0=setup(cvFace,1,0.74,300); if(!s0) return;
   const {ctx,w,h}=s0;
   ctx.fillStyle='#05090B'; ctx.fillRect(0,0,w,h);
-  const s=Math.min(w,h)/2/42*0.92, cx=w/2, cy=h/2;
+  const s=w/2/42*0.92, cx=w/2, cy=h*0.45;
   // 面内の座標（fu を右、fv を上）
   const T=(u,v)=>[cx+u*s, cy-v*s];
 
@@ -815,7 +816,7 @@ const FR_R = [0,-1,0];   // 画面の右
 const FR_U = [1,0,0];    // 画面の上（＝接眼部側）
 
 function drawTubeFront(g,gr,ok){
-  const AW=180, AH=244;                       // 上が筒、下が拡大の帯
+  const AW=180, AH=184;
   const s0=setup(cvFront,AW,AH,300); if(!s0) return;
   const {ctx,w,h}=s0;
   ctx.fillStyle='#05090B'; ctx.fillRect(0,0,w,h);
@@ -868,29 +869,10 @@ function drawTubeFront(g,gr,ok){
   ctx.strokeStyle='#9AACB6'; ctx.lineWidth=1.4; ctx.stroke();
   cross([cx,cy],7,'#3B5763',1.2);
 
-  // ── 下の帯：中心まわりの拡大 ──────────────────
-  // オフセットは筒の大きさに対して小さいので、そのままでは絵に出ない
-  const by=AW*s+8, bh=h-by-16, bx=w*0.22, bw=w*0.56;
-  ctx.fillStyle='#0A1015'; ctx.fillRect(bx,by,bw,bh);
-  ctx.strokeStyle='#26333A'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bw,bh);
-  const bc=[bx+bw/2, by+bh/2], si=bh/11;          // 縦に ±5.5mm ぶん
-  const bpr = q => [bc[0]-q[1]*si, bc[1]-q[0]*si];
-  cross(bc,8,'#54666F',1.2);                       // 筒の中心
-  const bhb=bpr(g.hub), bms=bpr(g.cSec);
-  ctx.strokeStyle='rgba(99,182,216,.5)'; ctx.lineWidth=1; ctx.setLineDash([2,3]);
-  ctx.beginPath(); ctx.moveTo(bhb[0],bhb[1]); ctx.lineTo(bms[0],bms[1]); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.beginPath(); ctx.arc(bhb[0],bhb[1],5,0,7);
-  ctx.fillStyle='#26333A'; ctx.fill();
-  ctx.strokeStyle='#9AACB6'; ctx.lineWidth=1.4; ctx.stroke();
-  cross(bms,8,'#63B6D8',1.6);                      // 鏡の中心
-
   const fF=Math.max(9,Math.min(11,w/30));
   ctx.fillStyle='#5C6E78'; ctx.font=fF+'px system-ui';
   ctx.fillText('▲ 接眼部側', 8, fF*1.6);
-  ctx.fillText('○ 柱 ／ ＋ 筒の中心', 8, AW*s-6);
-  const bl='中心まわりを拡大　○ 柱 ／ ＋ 筒の中心 ／ ＋ 鏡の中心';
-  ctx.fillText(bl, Math.max(4,(w-ctx.measureText(bl).width)/2), h-4);
+  ctx.fillText('○ 柱 ／ ＋ 筒の中心', 8, h-8);
 }
 
 // 土台のペインの下の一言
