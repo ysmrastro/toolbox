@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.12.1">
+  <link rel="stylesheet" href="style.css?v=1.13.0">
 </head>
 <body>
 
@@ -56,7 +56,7 @@
         <p class="cl-hint">覗き穴から見た景色。<b>左が筒先側、右が主鏡側</b>です。</p>
         <canvas id="cv-view"></canvas>
         <ul class="cl-key">
-          <li><i style="background:#63B6D8"></i>0回<span> ドローチューブの縁・斜鏡の鏡面の縁</span></li>
+          <li><i style="background:#63B6D8"></i>0回<span> ドローチューブの縁・斜鏡の鏡面の縁・斜鏡を支えている柱</span></li>
           <li><i style="background:#E5A052"></i>1回<span> 主鏡の縁・爪・センターマーク</span></li>
           <li><i style="background:#B39BDB"></i>2回<span> 斜鏡のシルエット・スパイダー・ドローチューブの縁</span></li>
           <li><i style="background:#E8748F"></i>3回<span> アイピースの裏側・覗き穴</span></li>
@@ -136,7 +136,7 @@
       <p>反射の回数ごとに消せます。<b>2回を消すと、斜鏡のシルエットとスパイダーが消えて
          センターマークがはっきり見えます。</b>3回を消すと、アイピースの映り込みが消えます ──
          斜鏡を合わせているあいだは、そのほうが見やすいはずです。
-         0回を消すと、ドローチューブの縁と斜鏡の縁が消えます。
+         0回を消すと、ドローチューブの縁と斜鏡の縁、斜鏡を支えている柱が消えます。
          <b>実物では消せません。</b>練習の支えとしてだけ使ってください。</p>
       <p>消えるのは<b>見た目だけ</b>です。<b>隠れる関係はそのまま残します</b> ──
          斜鏡の縁を消しても、そこからはみ出した主鏡は見えないままです。</p>
@@ -152,7 +152,7 @@
       <p>斜鏡は<b>平面の鏡</b>として厳密に、主鏡は<b>近軸の凹面鏡</b>（f=650mm）として結像させています。
          覗いている目を斜鏡の面で折り返した点をひとつ作れば、あとは全部の層をそこから投影するだけで済みます。</p>
       <table class="cl-read">
-        <tr><th>0回</th><td>ドローチューブの縁・斜鏡の鏡面の縁 ── 物体を斜鏡の面で折り返したもの</td></tr>
+        <tr><th>0回</th><td>ドローチューブの縁・斜鏡の鏡面の縁・斜鏡を支えている柱 ── 物体を斜鏡の面で折り返したもの</td></tr>
         <tr><th>1回</th><td>主鏡の縁・爪・センターマーク ── 物体そのもの</td></tr>
         <tr><th>2回</th><td>斜鏡のシルエット・スパイダー ── 主鏡が結んだ像</td></tr>
         <tr><th>3回</th><td>アイピースの裏側・覗き穴 ── 斜鏡で折り返してから、主鏡が結んだ像</td></tr>
@@ -205,6 +205,6 @@
   </details>
 </div>
 
-<script src="app.js?v=1.12.1"></script>
+<script src="app.js?v=1.13.0"></script>
 </body>
 </html>

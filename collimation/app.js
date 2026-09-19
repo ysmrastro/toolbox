@@ -30,6 +30,8 @@ const P = {
   R_TUBE : 75,      // 筒の内半径
   R_SSCR : 15,      // 斜鏡の押しネジの配置半径
   HOLD_L : 28,      // 斜鏡の土台の本体の長さ（絵のためだけの仮の値・未実測）
+  HOLD_V : 400,     // 視野に出すときの柱の長さ。実機では視野の外まで続いて見えるので、
+                    // 縁を確実に超えるところまで伸ばす（長さそのものは絵に出ない）
   STEM_R : 4.5,     // 柱（中央の引きネジ）の半径（絵のためだけの仮の値・未実測）
   R_PSCR : 55,      // 主鏡の押しネジの配置半径
   MARK_IN: 2.13,    // センターマークの穴の半径
@@ -236,6 +238,27 @@ function mapPts(pts,fn,g){
   return out;
 }
 
+// 点群を包む凸多角形（Andrew's monotone chain）。
+// 円柱の壁は「45°に切った口」と「筒先側の端」の2つの輪でできている。
+// ほぼ真横から見ることになるので、2つまとめて包むと帯の形になる。
+function hull(pts){
+  if(!pts || pts.length<3) return null;
+  const p=pts.slice().sort((a,b)=>a[0]-b[0] || a[1]-b[1]);
+  const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
+  const lo=[], up=[];
+  for(const q of p){
+    while(lo.length>=2 && cr(lo[lo.length-2],lo[lo.length-1],q)<=0) lo.pop();
+    lo.push(q);
+  }
+  for(let i=p.length-1;i>=0;i--){
+    const q=p[i];
+    while(up.length>=2 && cr(up[up.length-2],up[up.length-1],q)<=0) up.pop();
+    up.push(q);
+  }
+  lo.pop(); up.pop();
+  return lo.concat(up);
+}
+
 /* ============================================================
    視野に出すものを、まとめて組み立てる
    ============================================================ */
@@ -246,6 +269,21 @@ function build(g){
   o.field = mapPts(ring([g.dfront,0,P.L],[0,1,0],[0,0,1],P.R_FIELD,P.R_FIELD,N), view0, g);
   // 0回 ── 斜鏡の鏡面の縁
   o.secRim = mapPts(ring(g.cSec,g.major,g.minor,P.SEC_A,P.SEC_B,N), view0, g);
+
+  // 0回 ── 斜鏡を支えている円柱の壁。
+  // 土台の本体は、45°に切った口に鏡を貼り、そこから筒先側へ伸びる円柱。
+  // 覗くとほぼ真横から見ることになるので、帯に見える ──
+  // 口の輪と筒先側の端の輪を、まとめて包んで形をとる。
+  {
+    const M=48, seg=[];
+    const w1=g.fv, w2=V.cross(g.stem,g.fv);
+    const back=V.add(g.Q, V.mul(g.stem,P.HOLD_V));
+    for(let i=0;i<M;i++){const a=2*Math.PI*i/M;          // 筒先側の端（円）
+      seg.push(V.add(back, V.add(V.mul(w1,P.SEC_B*Math.cos(a)), V.mul(w2,P.SEC_B*Math.sin(a)))));}
+    for(let i=0;i<M;i++){const a=2*Math.PI*i/M;          // 45°に切った口（楕円）
+      seg.push(V.add(g.Q, V.add(V.mul(g.major,P.SEC_A*Math.cos(a)), V.mul(g.minor,P.SEC_B*Math.sin(a)))));}
+    o.holder = hull(mapPts(seg, view0, g));
+  }
 
   // 1回 ── 主鏡の縁・センターマーク
   o.pmRim  = mapPts(ring(g.vPm,g.pu,g.pv,P.R_PM,P.R_PM,N), view1, g);
@@ -356,6 +394,9 @@ function drawView(g,o,guide,cross){
   if(!pathOf(ctx,o.field,tx)) return;
   ctx.save(); ctx.clip();
   ctx.fillStyle=C_TUBE; ctx.fillRect(0,0,w,h);
+
+  // 0回 ── 斜鏡を支えている円柱の壁。鏡より奥にあるので、鏡より先に塗る
+  if(L0 && pathOf(ctx,o.holder,tx)){ ctx.fillStyle = paper ? '#8A9399' : '#141C22'; ctx.fill(); }
 
   // --- 斜鏡の鏡面 ---
   if(pathOf(ctx,o.secRim,tx)){
