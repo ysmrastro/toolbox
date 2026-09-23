@@ -36,6 +36,12 @@ const P = {
   HOLD_R : 11,      // 斜鏡を支えている柱の半径（仮の値・未実測）。筒先から見ると
                     // 斜鏡の見かけの半分ほどの太さに見える
   R_PSCR : 55,      // 主鏡の押しネジの配置半径
+  // 押しネジ A・B・C の向き（度）。筒の中心軸のまわりに、接眼部の向きを 0° として上へ回る。
+  // 斜鏡は BKP130 の実機で確かめた（2026-09-23）── 接眼部側に1本（スパイダーに沿う位置）、
+  // そこから 120° おきに2本。A が接眼部側、B が上、C が下。
+  SEC_SCREWS: [0,120,240],
+  // 主鏡は接眼部と直角の向きに1本、そこから 120° おきに2本（BKP130 の実機で確認）
+  PM_SCREWS : [90,210,330],
   MARK_IN: 2.13,    // センターマークの穴の半径
   MARK_OUT:3.90,    // センターマークの外半径
   EPB_R  : 9.52,    // アイピースの裏側（銀の面）の半径（仮の値・未実測）
@@ -107,9 +113,9 @@ const SLIDERS = [
   {group:"斜鏡の押しネジ（3本）",
    note:"ステム軸に沿って効きます。3本を同じだけ回しても傾かず、前後に動くだけです。",
    items:[
-     {k:"secA",label:"押しネジ A",min:-1,max:1,step:.01,unit:"mm"},
-     {k:"secB",label:"押しネジ B",min:-1,max:1,step:.01,unit:"mm"},
-     {k:"secC",label:"押しネジ C",min:-1,max:1,step:.01,unit:"mm"}
+     {k:"secA",label:"A（接眼部側）",min:-1,max:1,step:.01,unit:"mm"},
+     {k:"secB",label:"B（上）",min:-1,max:1,step:.01,unit:"mm"},
+     {k:"secC",label:"C（下）",min:-1,max:1,step:.01,unit:"mm"}
    ]},
   {group:"斜鏡の引きネジ（中央 1本）",
    note:"土台をステム軸に沿って前後させます。オフセットの効き方が変わります。",
@@ -145,9 +151,10 @@ const fitKnob = (k,v) => {
 /* ============================================================
    いまの姿勢を組み立てる
    ============================================================ */
-function threeScrewFit(d0,d1,d2,r){
+const rad = deg => deg*Math.PI/180;
+function threeScrewFit(d0,d1,d2,r,deg){
   // 120°おきに置いた3本のネジの出し入れから、傾き（a,b）と前後（piston）を出す
-  const ph=[Math.PI/2, Math.PI*7/6, Math.PI*11/6], d=[d0,d1,d2];
+  const ph=deg.map(rad), d=[d0,d1,d2];
   let a=0,b=0,p=0;
   for(let i=0;i<3;i++){a+=d[i]*Math.cos(ph[i]); b+=d[i]*Math.sin(ph[i]); p+=d[i];}
   return {a:a*2/(3*r), b:b*2/(3*r), piston:p/3};
@@ -166,7 +173,7 @@ function geometry(s){
   const rz = q=>[q[0]*cr - q[1]*sr, q[0]*sr + q[1]*cr, q[2]];
 
   // 中央の引きネジと3本の押しネジは、ステム軸（＝筒の中心軸）に沿って効く。
-  const f = threeScrewFit(s.secA,s.secB,s.secC,P.R_SSCR);
+  const f = threeScrewFit(s.secA,s.secB,s.secC,P.R_SSCR,P.SEC_SCREWS);
   const stem = V.norm([-f.a,-f.b,1]);
   const R = rotBetween([0,0,1],stem);
   const nSec = R(rz(N_SEC0));
@@ -181,7 +188,7 @@ function geometry(s){
   const cSec = V.sub(Q, V.mul(major, opt('opt-offset') ? P.OFFSET : 0));
 
   // ---- 主鏡 ----
-  const g = threeScrewFit(s.pmA,s.pmB,s.pmC,P.R_PSCR);
+  const g = threeScrewFit(s.pmA,s.pmB,s.pmC,P.R_PSCR,P.PM_SCREWS);
   const nPm = V.norm([-g.a,-g.b,1]);   // 頂点は動かさない（傾くだけ）
   const vPm = [0,0,0];
   const pu = V.norm(V.sub([1,0,0], V.mul(nPm, nPm[0])));
@@ -767,12 +774,20 @@ function drawStem(g,gr,ok){
   path(ring(back,su,sv,P.SEC_B,P.SEC_B,72));
   ctx.fillStyle='#141C22'; ctx.fill();
   ctx.strokeStyle='#3B5763'; ctx.lineWidth=1.2; ctx.stroke();
-  for(const t of [Math.PI/2, Math.PI*7/6, Math.PI*11/6]){
+  // つまみと突き合わせられるように、A・B・C を添える
+  const cq=pr(back);
+  P.SEC_SCREWS.forEach((deg,i)=>{
+    const t=rad(deg);
     const p=pr(V.add(back, V.add(V.mul(su,P.R_SSCR*Math.cos(t)), V.mul(sv,P.R_SSCR*Math.sin(t)))));
     ctx.beginPath(); ctx.arc(p[0],p[1],3,0,7);
     ctx.fillStyle='#26333A'; ctx.fill();
     ctx.strokeStyle='#7B8D97'; ctx.lineWidth=1; ctx.stroke();
-  }
+    const dx=p[0]-cq[0], dy=p[1]-cq[1], l=Math.hypot(dx,dy)||1;
+    ctx.fillStyle='#9AAAB3'; ctx.font='bold 11px system-ui';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('ABC'[i], p[0]+dx/l*11, p[1]+dy/l*11);
+  });
+  ctx.textAlign='start'; ctx.textBaseline='alphabetic';
 
   // 合っているときの鏡（点線）── 少しの回転でも、ここからのずれで見える
   if(!ok){
@@ -1041,9 +1056,9 @@ function syncControls(){
 const between = (lo,hi) => lo + Math.random()*(hi-lo);
 const signed  = (lo,hi) => (Math.random()<0.5?-1:1)*between(lo,hi);
 // 3本のネジで「傾きだけ」を作る。向きも大きさも毎回ちがう（前後は動かさない）
-function tiltScrews(lo,hi){
+function tiltScrews(lo,hi,deg){
   const A=between(lo,hi), ph=Math.random()*Math.PI*2;
-  return [Math.PI/2, Math.PI*7/6, Math.PI*11/6].map(t=>A*Math.cos(t-ph));
+  return deg.map(d=>A*Math.cos(rad(d)-ph));
 }
 function spiderShove(lo,hi){
   const r=between(lo,hi), th=Math.random()*Math.PI*2;
@@ -1053,12 +1068,12 @@ function spiderShove(lo,hi){
 // プリセットは「ずれ方の型」。押すたびに、その型のなかで別のずれを作る
 const PRESETS={
   zero  : ()=>({}),
-  sec   : ()=>{ const d=tiltScrews(.18,.34); return {secA:d[0],secB:d[1],secC:d[2]}; },
-  pm    : ()=>{ const d=tiltScrews(.50,1.15); return {pmA:d[0],pmB:d[1],pmC:d[2]}; },
+  sec   : ()=>{ const d=tiltScrews(.18,.34,P.SEC_SCREWS); return {secA:d[0],secB:d[1],secC:d[2]}; },
+  pm    : ()=>{ const d=tiltScrews(.50,1.15,P.PM_SCREWS); return {pmA:d[0],pmB:d[1],pmC:d[2]}; },
   spider: ()=>spiderShove(1.5,3.2),
   rot   : ()=>({secRot:signed(.7,2.4)}),
   rand  : ()=>{
-    const s=tiltScrews(.08,.28), p=tiltScrews(.25,.95);
+    const s=tiltScrews(.08,.28,P.SEC_SCREWS), p=tiltScrews(.25,.95,P.PM_SCREWS);
     return Object.assign(spiderShove(.4,2.4),
       {secA:s[0],secB:s[1],secC:s[2],secPull:signed(.1,.8),secRot:signed(.2,1.4),
        pmA:p[0],pmB:p[1],pmC:p[2]});
