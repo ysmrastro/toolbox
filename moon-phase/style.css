@@ -27,17 +27,17 @@
 .mp-app {
   max-width: 900px;
   margin: 0 auto;
-  padding: var(--tb-space-lg);
+  padding: var(--tb-space-md);
 }
 
 .mp-intro {
   text-align: center;
-  margin-bottom: var(--tb-space-lg);
+  margin-bottom: var(--tb-space-xs);
 }
 .mp-title {
   font-size: var(--tb-font-size-xl);
   color: var(--mp-primary);
-  margin-bottom: var(--tb-space-xs);
+  margin-bottom: 2px;
 }
 .mp-subtitle {
   font-size: var(--tb-font-size-base);
@@ -46,11 +46,14 @@
 
 /* ============================================================
    図
+   ── 1280×800 でも操作部までスクロールなしで収まるよう、svg の高さを
+      画面の高さ基準（vh）で頭打ちにする。横幅で決まる高さとどちらか
+      小さいほうが使われる（幅が十分あるスマホの横向きなどでも安全）。
    ============================================================ */
 .mp-stage {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--tb-space-lg);
+  gap: var(--tb-space-sm);
   align-items: start;
 }
 
@@ -58,26 +61,29 @@
   background: var(--mp-bg);
   border: 1px solid var(--tb-border);
   border-radius: var(--tb-radius-lg);
-  padding: var(--tb-space-md);
+  padding: var(--tb-space-sm) var(--tb-space-md);
   min-width: 0;
 }
 .mp-panel h2 {
   font-size: var(--tb-font-size-sm);
   font-weight: 700;
   color: var(--mp-text);
-  margin: 0 0 var(--tb-space-xs);
+  margin: 0 0 2px;
 }
 .mp-hint {
   font-size: var(--tb-font-size-xs);
   color: var(--mp-subtext);
-  margin: 0 0 var(--tb-space-sm);
-  line-height: 1.55;
+  margin: 0 0 var(--tb-space-xs);
+  line-height: 1.4;
 }
 
 .mp-panel svg {
   display: block;
-  width: 100%;
+  width: auto;
   height: auto;
+  max-width: 100%;
+  max-height: 27vh;
+  margin: 0 auto;
   touch-action: none;   /* ドラッグ中にページがスクロールしないように */
 }
 /* 軌道図の中の文字（「にほん」ラベル）は共通フォントに合わせる */
@@ -117,43 +123,47 @@
    ============================================================ */
 .mp-readout {
   text-align: center;
-  margin: var(--tb-space-lg) 0;
+  margin: var(--tb-space-xs) 0;
 }
 .mp-age {
-  font-size: var(--tb-font-size-lg);
+  font-size: var(--tb-font-size-base);
   color: var(--mp-subtext);
   font-variant-numeric: tabular-nums;
-  margin: 0 0 var(--tb-space-xs);
+  margin: 0;
 }
 .mp-name {
   font-size: var(--mp-font-size-name);
   font-weight: 700;
   color: var(--mp-gold);
-  margin: 0 0 var(--tb-space-xs);
-  min-height: 1.2em;
+  margin: 0;
+  min-height: 1.15em;
+  line-height: 1.15;
 }
 .mp-status {
-  font-size: var(--tb-font-size-lg);
+  font-size: var(--tb-font-size-base);
   color: var(--mp-text);
   margin: 0;
+  line-height: 1.4;
 }
 .mp-status ruby { color: var(--mp-primary); font-weight: 700; }
 
 /* ============================================================
    操作
+   ── つまみは「ラベル｜つまみ｜値｜◀｜▶」の1行、速さと再生も1行にして
+      縦を詰める（ユーザーから「縦が長い」との指摘）。
    ============================================================ */
 .mp-controls {
   display: grid;
-  gap: var(--tb-space-sm);
-  max-width: 560px;
+  gap: var(--tb-space-xs);
+  max-width: 640px;
   margin: 0 auto;
 }
 
 .mp-slider-row {
   display: grid;
-  grid-template-columns: 4rem minmax(0, 1fr) 4rem;
+  grid-template-columns: 3.2rem minmax(0, 1fr) 4rem 2.25rem 2.25rem;
   align-items: center;
-  gap: var(--tb-space-sm);
+  gap: var(--tb-space-xs);
 }
 .mp-slider-row label {
   font-size: var(--tb-font-size-sm);
@@ -167,21 +177,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-.mp-slider-group { margin-bottom: var(--tb-space-xs); }
-
-/* つまみの下の ◀ ▶（1コマ送り）。指でも押しやすい大きさにする */
-.mp-step-row {
-  display: flex;
-  justify-content: center;
-  gap: var(--tb-space-lg);
-  margin-top: 2px;
-}
+/* ◀ ▶（1コマ送り）。指でも押しやすい大きさを保ちつつ、1行に収める */
 .mp-step-btn {
   font: inherit;
-  font-size: var(--tb-font-size-base);
-  min-width: 3rem;
-  min-height: 2.5rem;
-  border-radius: var(--tb-radius-md);
+  font-size: var(--tb-font-size-sm);
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  border-radius: var(--tb-radius-sm);
   border: 1px solid var(--tb-border);
   background: var(--tb-bg-tertiary);
   color: var(--mp-text);
@@ -190,12 +193,13 @@
 .mp-step-btn:hover { border-color: var(--mp-primary); color: var(--mp-primary); }
 .mp-step-btn:active { background: var(--tb-bg-secondary); }
 
-.mp-speed {
+.mp-speed-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
   gap: var(--tb-space-xs);
-  margin: var(--tb-space-xs) 0;
+  margin-top: 2px;
 }
 .mp-speed-btn {
   font: inherit;
@@ -215,13 +219,28 @@
   background: rgba(126, 184, 218, .14);
 }
 
-.mp-play { justify-self: center; min-width: 10rem; white-space: nowrap; }
+.mp-play { min-width: 9rem; white-space: nowrap; }
 
 /* ============================================================
    スマホ ── 左（軌道図）が上、右（月の形）が下に積む
    ============================================================ */
 @media (max-width: 700px) {
-  .mp-app { padding: var(--tb-space-md) var(--tb-space-sm); }
+  .mp-app { padding: var(--tb-space-sm); }
   .mp-stage { grid-template-columns: 1fr; }
-  .mp-slider-row { grid-template-columns: 3.5rem minmax(0, 1fr) 3.5rem; }
+  .mp-panel svg { max-height: 34vh; }
+}
+
+/* さらに狭い幅では、つまみの行を「ラベル＋値＋◀▶」の上段／つまみの下段に折り返す
+   （1行だと、つまみ本体がほぼ無くなるほど狭くなるため）。 */
+@media (max-width: 480px) {
+  .mp-slider-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 2px;
+  }
+  .mp-slider-row label { order: 1; }
+  .mp-slider-row output { order: 2; margin-left: auto; }
+  .mp-slider-row .mp-step-btn { order: 3; margin-left: var(--tb-space-xs); }
+  .mp-slider-row input[type=range] { order: 4; flex-basis: 100%; width: 100%; }
 }
