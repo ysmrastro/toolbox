@@ -351,33 +351,49 @@ const hzX = az => HZ_W * (az - HZ_AZ_MIN) / (HZ_AZ_MAX - HZ_AZ_MIN);
 const hzY = alt => HZ_GROUND_Y * (1 - alt / 90);
 const hzInView = az => az >= HZ_AZ_MIN && az <= HZ_AZ_MAX;
 
-// 太陽の高度から空の色を作る（4点間を線形補間）。しきい値は指示どおり
-// 0°（朝焼け・夕焼けの終わり）・-6°（市民薄明）・-18°（天文薄明＝夜）に置き、
-// +6°で昼の空色に達するようにして、日の出入りの瞬間に色が飛ばないようにしている。
+// 太陽の高度から空の色を作る。上（天頂側）と地平線近くとで別の色を持たせ、
+// 縦のグラデーションにする ── 単色だと、夕方でも「灰色がかったピンク一色」に
+// なって夕方らしく見えない不具合があったため。しきい値は
+// -18°（天文薄明＝夜）・-4°（この下は薄明で地平線にわずかに色が残る程度）・
+// 0°（日の出入り＝いちばん焼ける）・+6°（昼の空色に達する）に置く。
 const SKY_STOPS = [
-  { alt: -18, rgb: [11, 16, 30] },     // 夜
-  { alt: -6, rgb: [58, 53, 96] },      // 薄明（紫がかった夕方・明け方）
-  { alt: 0, rgb: [232, 130, 90] },     // 朝焼け・夕焼け
-  { alt: 6, rgb: [143, 205, 236] }     // 昼
+  { alt: -18, top: [11, 16, 30], bottom: [11, 16, 30] },      // 夜（上下とも紺で一様）
+  { alt: -4, top: [20, 26, 50], bottom: [120, 80, 95] },      // 薄明（地平線にわずかに色が残る）
+  { alt: 0, top: [45, 55, 115], bottom: [230, 120, 70] },     // 日の出入り（地平線がいちばん焼ける）
+  { alt: 6, top: [30, 95, 175], bottom: [143, 205, 236] }     // 昼（上＝濃い青、下＝明るい水色）
 ];
-function skyColor(sunAlt) {
+function lerpColor(c0, c1, t) {
+  return c0.map((v, i) => Math.round(v + (c1[i] - v) * t));
+}
+function skyGradientColors(sunAlt) {
   const a = Math.max(SKY_STOPS[0].alt, Math.min(SKY_STOPS[SKY_STOPS.length - 1].alt, sunAlt));
   for (let i = 0; i < SKY_STOPS.length - 1; i++) {
     const s0 = SKY_STOPS[i], s1 = SKY_STOPS[i + 1];
     if (a <= s1.alt) {
       const t = (a - s0.alt) / (s1.alt - s0.alt);
-      const c = s0.rgb.map((v, j) => Math.round(v + (s1.rgb[j] - v) * t));
-      return `rgb(${c[0]},${c[1]},${c[2]})`;
+      return { top: lerpColor(s0.top, s1.top, t), bottom: lerpColor(s0.bottom, s1.bottom, t) };
     }
   }
-  const last = SKY_STOPS[SKY_STOPS.length - 1].rgb;
-  return `rgb(${last[0]},${last[1]},${last[2]})`;
+  const last = SKY_STOPS[SKY_STOPS.length - 1];
+  return { top: last.top, bottom: last.bottom };
 }
+const rgbStr = c => `rgb(${c[0]},${c[1]},${c[2]})`;
 
-let hzSky, hzGround, hzHorizonLine, hzSun, hzMoonGroup, hzMoonShape, hzTrackPath, hzTicksGroup;
+let hzSky, hzSkyTopStop, hzSkyBottomStop, hzGround, hzHorizonLine, hzSun, hzMoonGroup, hzMoonShape, hzTrackPath, hzTicksGroup;
 
 function buildHorizonScene() {
-  hzSky = el('rect', { x: 0, y: 0, width: HZ_W, height: HZ_GROUND_Y });
+  // 空は縦のグラデーション（上＝天頂側、下＝地平線近く）。objectBoundingBox（既定）
+  // なので、resizeHorizon() で hzSky の高さが変わっても比率は自動で合う。
+  const defs = el('defs');
+  const grad = el('linearGradient', { id: 'mp-sky-gradient', x1: 0, y1: 0, x2: 0, y2: 1 });
+  hzSkyTopStop = el('stop', { offset: '0%' });
+  hzSkyBottomStop = el('stop', { offset: '100%' });
+  grad.appendChild(hzSkyTopStop);
+  grad.appendChild(hzSkyBottomStop);
+  defs.appendChild(grad);
+  horizonSvg.appendChild(defs);
+
+  hzSky = el('rect', { x: 0, y: 0, width: HZ_W, height: HZ_GROUND_Y, fill: 'url(#mp-sky-gradient)' });
   horizonSvg.appendChild(hzSky);
 
   // 地面（暗い帯）と地平線。高さは resizeHorizon() → layoutHorizonStatic() で決める
@@ -386,7 +402,7 @@ function buildHorizonScene() {
   hzHorizonLine = el('line', { x1: 0, x2: HZ_W, stroke: 'var(--tb-border)', 'stroke-width': 1.5 });
   horizonSvg.appendChild(hzHorizonLine);
 
-  // その日の月の通り道（点線）と時刻の目盛り。日が変わるたびに作り直す
+  // いまの前後12時間の月の通り道（点線）と時刻の目盛り。render() のたびに作り直す
   hzTrackPath = el('path', {
     fill: 'none', stroke: 'var(--mp-moon-lit)', 'stroke-width': 1.5,
     'stroke-dasharray': '4 4', opacity: 0.5
@@ -432,16 +448,20 @@ function resizeHorizon() {
   HZ_H = newH;
   HZ_GROUND_Y = HZ_H * HZ_GROUND_FRAC;
   layoutHorizonStatic();
-  hzCacheDayKey = null;   // 通り道・目盛りは古い縮尺で作ってあるので作り直す
-  render();
+  render();   // 通り道・目盛りは毎回作り直しているので、ここで呼べば新しい縮尺で描き直る
 }
 
-// その日（00:00〜24:00、10分刻み）の月の方位・高度の並び
-function computeMoonTrack(dayDate) {
-  const start = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 0, 0, 0, 0);
+// 「いま」の前後12時間（10分刻み）の月の方位・高度の並び。
+// その日の 0:00〜24:00 で切ると、いま見えている月の弧が真夜中でちょうど2つに
+// 割れてしまう（0〜3時側は前の晩の弧、21〜24時側は今晩の弧で、別の弧なのに
+// 隣り合って見えて「途切れている」ように見える）。「いま」を中心にした窓なら、
+// いま見えている弧はその中に丸ごと収まる。
+const HZ_TRACK_SPAN_H = 12;
+function computeMoonTrack(centerDate) {
+  const startMs = centerDate.getTime() - HZ_TRACK_SPAN_H * 3600000;
   const pts = [];
-  for (let m = 0; m <= 24 * 60; m += 10) {
-    const t = new Date(start.getTime() + m * 60000);
+  for (let m = 0; m <= HZ_TRACK_SPAN_H * 2 * 60; m += 10) {
+    const t = new Date(startMs + m * 60000);
     const p = MS_ASTRO.moonPosition(t, FUKUOKA_LAT, FUKUOKA_LON);
     pts.push({ az: p.azimuth, alt: p.altitude });
   }
@@ -462,37 +482,47 @@ function trackPathD(pts) {
   return d.trim();
 }
 
-function updateTicks(dayDate) {
+// 3時間ごと（0, 3, 6, ...時）の目盛り。日付をまたいでも「0」「3」のように
+// 時だけを表示する（通り道と同じ、いまの前後12時間の範囲で拾う）。
+function updateTicks(centerDate) {
   while (hzTicksGroup.firstChild) hzTicksGroup.removeChild(hzTicksGroup.firstChild);
-  for (let h = 0; h < 24; h += 3) {
-    const t = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), h, 0, 0, 0);
-    const p = MS_ASTRO.moonPosition(t, FUKUOKA_LAT, FUKUOKA_LON);
+  const startMs = centerDate.getTime() - HZ_TRACK_SPAN_H * 3600000;
+  const endMs = centerDate.getTime() + HZ_TRACK_SPAN_H * 3600000;
+  const STEP_MS = 3 * 3600000;
+  const firstBoundary = Math.ceil(startMs / STEP_MS) * STEP_MS;
+  for (let t = firstBoundary; t <= endMs; t += STEP_MS) {
+    const dt = new Date(t);
+    const p = MS_ASTRO.moonPosition(dt, FUKUOKA_LAT, FUKUOKA_LON);
     if (p.altitude <= 0 || !hzInView(p.azimuth)) continue;
     const x = hzX(p.azimuth), y = hzY(p.altitude);
     hzTicksGroup.appendChild(el('circle', { cx: x, cy: y, r: 2, fill: 'var(--mp-subtext)' }));
     const label = el('text', {
       x, y: y - 7, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--mp-subtext)'
     });
-    label.textContent = String(h);
+    label.textContent = String(dt.getHours());
     hzTicksGroup.appendChild(label);
   }
 }
 
-// その日の出入り・月の通り道は日が変わったときだけ作り直す（毎フレームでは重いため）
+// その日の出入りは日が変わったときだけ作り直す（毎フレームでは重いため）。
+// 通り道・目盛りは「いま」が動くたびに窓自体が動くので、毎回作り直す
+// （10分刻み×24時間ぶんの評価で軽く、毎フレームでも問題にならない）。
 let hzCacheDayKey = null, hzCacheEvents = null;
 function ensureHorizonDayCache(date) {
   const key = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
   if (key === hzCacheDayKey) return;
   hzCacheDayKey = key;
   hzCacheEvents = MS_ASTRO.dayEvents(date, FUKUOKA_LAT, FUKUOKA_LON);
-  hzTrackPath.setAttribute('d', trackPathD(computeMoonTrack(date)));
-  updateTicks(date);
 }
 
 function updateHorizonScene(date, sun, moon) {
   ensureHorizonDayCache(date);
+  hzTrackPath.setAttribute('d', trackPathD(computeMoonTrack(date)));
+  updateTicks(date);
 
-  hzSky.setAttribute('fill', skyColor(sun.altitude));
+  const skyColors = skyGradientColors(sun.altitude);
+  hzSkyTopStop.setAttribute('stop-color', rgbStr(skyColors.top));
+  hzSkyBottomStop.setAttribute('stop-color', rgbStr(skyColors.bottom));
 
   if (sun.altitude > 0 && hzInView(sun.azimuth)) {
     hzSun.setAttribute('cx', hzX(sun.azimuth));
