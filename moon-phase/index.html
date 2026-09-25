@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.0.0">
+  <link rel="stylesheet" href="style.css?v=1.1.0">
 </head>
 <body>
 
@@ -31,31 +31,54 @@
   </section>
 
   <div class="mp-stage">
-    <section class="mp-panel">
+    <section class="mp-panel mp-panel--orbit">
       <h2><ruby>北極<rt>ほっきょく</rt></ruby>から<ruby>見<rt>み</rt></ruby><ruby>下<rt>おろ</rt></ruby>ろした図</h2>
-      <p class="mp-hint">太陽は左。月をドラッグしてうごかしてみよう。</p>
-      <svg id="mp-orbit" viewBox="0 0 400 400" role="img" aria-label="北極の上から見た、太陽・地球・月の位置"></svg>
+      <p class="mp-hint">太陽は左。<ruby>金色<rt>きんいろ</rt></ruby>が「にほん」。月をドラッグしてうごかしてみよう。</p>
+      <svg id="mp-orbit" viewBox="0 0 400 400" role="img" aria-label="北極の上から見た、太陽・地球（日本の位置つき）・月の位置"></svg>
     </section>
-    <section class="mp-panel">
+    <section class="mp-panel mp-panel--shape">
       <h2><ruby>地球<rt>ちきゅう</rt></ruby>から<ruby>見<rt>み</rt></ruby>た<ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby></h2>
       <p class="mp-hint">北半球から見上げたときの見え方です。</p>
       <svg id="mp-shape" viewBox="0 0 300 300" role="img" aria-label="地球から見た月の形"></svg>
+      <div class="mp-moon-overlay">
+        <p>いまは しずんでいて <ruby>見<rt>み</rt></ruby>えない</p>
+      </div>
     </section>
   </div>
 
   <div class="mp-readout">
     <p class="mp-age"><ruby>月齢<rt>げつれい</rt></ruby> <span id="mp-age-value">0.0</span></p>
     <p class="mp-name" id="mp-name"></p>
+    <p class="mp-status" id="mp-daynight"></p>
+    <p class="mp-status" id="mp-moonvis"></p>
   </div>
 
   <div class="mp-controls">
-    <input type="range" id="mp-slider" class="tb-range" min="0" max="29.5306" step="0.1" value="0"
-           aria-label="月齢">
+    <div class="mp-slider-row">
+      <label for="mp-day-slider"><ruby>日<rt>ひ</rt></ruby></label>
+      <input type="range" id="mp-day-slider" class="tb-range" min="0" max="29" step="1" value="0"
+             aria-label="日">
+      <output id="mp-day-out" for="mp-day-slider">0</output>
+    </div>
+    <div class="mp-slider-row">
+      <label for="mp-time-slider"><ruby>時刻<rt>じこく</rt></ruby></label>
+      <input type="range" id="mp-time-slider" class="tb-range" min="0" max="23.75" step="0.25" value="12"
+             aria-label="時刻">
+      <output id="mp-time-out" for="mp-time-slider">12:00</output>
+    </div>
+
+    <div class="mp-speed" role="group" aria-label="自動再生の速さ">
+      <button type="button" class="mp-speed-btn" data-speed="1">1<ruby>秒<rt>びょう</rt></ruby>で1<ruby>時間<rt>じかん</rt></ruby></button>
+      <button type="button" class="mp-speed-btn is-active" data-speed="6">1<ruby>秒<rt>びょう</rt></ruby>で6<ruby>時間<rt>じかん</rt></ruby></button>
+      <button type="button" class="mp-speed-btn" data-speed="24">1<ruby>秒<rt>びょう</rt></ruby>で1<ruby>日<rt>にち</rt></ruby></button>
+      <button type="button" class="mp-speed-btn" data-speed="72">1<ruby>秒<rt>びょう</rt></ruby>で3<ruby>日<rt>にち</rt></ruby></button>
+    </div>
+
     <button type="button" id="mp-play" class="tb-btn tb-btn--secondary mp-play">▶ うごかす</button>
   </div>
 
 </div>
 
-<script src="app.js?v=1.0.0"></script>
+<script src="app.js?v=1.1.0"></script>
 </body>
 </html>

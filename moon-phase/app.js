@@ -2,28 +2,32 @@
 
 /* ============================================================
    モデル
-   月齢 age（0〜SYN日）から、角度 phi（0〜2π、新月=0）を作る。
-   phi はそのまま「北極から見た軌道上の角度」であり、同時に
-   「太陽・地球・月」のなす角（離角 E）でもある ── 太陽は無限遠にあるとみなし、
-   常に地球から見て -x 方向（左）から来る光として扱っているため。
-   モデルの詳細は README を参照。
+   状態は経過日数 simDay（実数）ひとつだけ。0日目の正午を基準にする。
+
+   - 月の位置・形は simDay を朔望月 SYN で割った余り（＝月齢）から決まる
+   - 日本の向きは simDay の端数（＝時刻）だけから決まる。simDay の整数部（＝日）は関係ない
+   - 「日」つまみ・「時刻」つまみは、どちらも simDay の別の見方を操作しているだけ
+
+   離角・明暗・自転・出没の判定の詳しい式は README を参照。
    ============================================================ */
 const SYN = 29.5306;                 // 朔望月（日）
 const TWO_PI = Math.PI * 2;
+const DAY_CYCLE = 30;                 // 「日」つまみが 0〜29 で一周する長さ
 
 const ageToPhi = age => (age / SYN) * TWO_PI;
 const phiToAge = phi => (phi / TWO_PI) * SYN;
 const normPhi = phi => ((phi % TWO_PI) + TWO_PI) % TWO_PI;
 const normAge = age => ((age % SYN) + SYN) % SYN;
+const normSimDay = d => ((d % DAY_CYCLE) + DAY_CYCLE) % DAY_CYCLE;
 
 /* 名前を出す月齢の代表値。表示名は円環距離がいちばん近いものを採用し、
    離れていたら「満ちていく／欠けていく」の一般表現にする。 */
 const NAMED_PHASES = [
-  { age: 0,          html: '<ruby>新月<rt>しんげつ</rt></ruby>' },
-  { age: 3,           html: '<ruby>三日月<rt>みかづき</rt></ruby>' },
-  { age: SYN / 4,     html: '<ruby>上弦<rt>じょうげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' },
-  { age: SYN / 2,     html: '<ruby>満月<rt>まんげつ</rt></ruby>' },
-  { age: SYN * 3 / 4, html: '<ruby>下弦<rt>かげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' }
+  { age: 0,           html: '<ruby>新月<rt>しんげつ</rt></ruby>' },
+  { age: 3,            html: '<ruby>三日月<rt>みかづき</rt></ruby>' },
+  { age: SYN / 4,      html: '<ruby>上弦<rt>じょうげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' },
+  { age: SYN / 2,      html: '<ruby>満月<rt>まんげつ</rt></ruby>' },
+  { age: SYN * 3 / 4,  html: '<ruby>下弦<rt>かげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' }
 ];
 const NAME_WINDOW = 1.0;   // この日数以内なら、近い名前を採用する
 
@@ -76,7 +80,7 @@ function moonShapePath(cx, cy, r, phi) {
 /* ---- 軌道図（北極から見下ろした図） ---- */
 const orbitSvg = document.getElementById('mp-orbit');
 const ORBIT_CX = 230, ORBIT_CY = 200, ORBIT_R = 130;
-const EARTH_R = 42, MOON_R = 16;
+const EARTH_R = 56, MOON_R = 16;   // EARTH_R は日本の形が見える大きさまで上げてある
 
 let moonGroup, moonHit;
 
@@ -103,8 +107,11 @@ function buildOrbitScene() {
   earth.appendChild(el('path', { d: halfDiskPath(ORBIT_CX, ORBIT_CY, EARTH_R, 'left'), fill: 'var(--mp-primary)' }));
   earth.appendChild(el('path', { d: halfDiskPath(ORBIT_CX, ORBIT_CY, EARTH_R, 'right'), fill: 'var(--mp-earth-dark)' }));
   earth.appendChild(el('circle', { cx: ORBIT_CX, cy: ORBIT_CY, r: EARTH_R, fill: 'none', stroke: 'var(--tb-border)', 'stroke-width': 1.5 }));
-  earth.appendChild(el('circle', { cx: ORBIT_CX, cy: ORBIT_CY, r: 4, fill: '#fff' }));  // 北極
   orbitSvg.appendChild(earth);
+
+  buildJapan();
+
+  earth.appendChild(el('circle', { cx: ORBIT_CX, cy: ORBIT_CY, r: 4, fill: '#fff' }));  // 北極（日本より上に描く）
 
   // 月（つかんで動かす方）。形は常に「太陽側＝左半分だけ明るい」固定で、位置だけ動く
   moonGroup = el('g', { id: 'mp-moon' });
@@ -122,13 +129,103 @@ function moonPosition(phi) {
   return [ORBIT_CX - ORBIT_R * Math.cos(phi), ORBIT_CY + ORBIT_R * Math.sin(phi)];
 }
 
-function updateOrbitScene(age) {
-  const [mx, my] = moonPosition(ageToPhi(age));
+function updateOrbitScene(phi) {
+  const [mx, my] = moonPosition(phi);
   moonGroup.setAttribute('transform', `translate(${mx},${my})`);
+}
+
+/* ---- 日本（自転で向きが変わる） ----
+   正距方位図法もどき ── 北極中心からの距離を「(90-緯度)/90 × 地球の半径」、
+   向きを「日本時間だけで決めた回転角 + 経度のずれ」で決める簡略モデル。
+   経度差は形（線の長さ）だけに使い、自転の速さの計算には使わない
+   （日本全体をひとつの地方時として扱ってよい、という指示のとおり）。 */
+const JAPAN_REF_LON = 135;   // 日本標準時の基準子午線。回転角の基準にも使う
+const JAPAN_REF_LAT = 36;    // 「人が立つ地点」の代表緯度（近畿あたり）
+// 正しい縮尺のままだと、この絵の地球（半径 EARTH_R）の上では日本が数px の点にしかならず、
+// 北海道・本州・九州の見分けがつかない。代表地点からの緯度経度のずれをこの倍率で誇張し、
+// 形だけ見える大きさにする（代表地点そのものの位置は誇張しない＝地平線や人の印はそのまま）。
+const JAPAN_SCALE = 3.1;
+
+// 北海道の東から反時計まわりに太平洋側を九州まで下り、瀬戸内・日本海側を北海道まで戻る、
+// ごく粗い輪郭（十数点）。海岸線データではなく、形の見当をつけるための概算値。
+const JAPAN_OUTLINE = [
+  [145.8, 44.5], [144.5, 43.5], [141.8, 41.2], [141.3, 38.3], [140.9, 36.0],
+  [139.8, 34.9], [138.8, 34.6], [136.9, 34.2], [135.0, 33.5], [133.3, 32.8],
+  [131.8, 31.6], [130.3, 31.2], [129.7, 32.9], [131.5, 33.9], [132.5, 35.4],
+  [135.7, 35.6], [137.0, 36.8], [139.1, 38.0], [140.1, 39.7], [141.0, 41.3],
+  [140.7, 43.1], [142.5, 44.9]
+];
+
+// 時刻（0〜24時）から、日本の回転角（度・数学座標＝反時計回りが正）を作る。
+// 正午に太陽側（画面左＝180°）、18時に画面の下（270°）、0時に画面の右（0°）、
+// 6時に画面の上（90°）になるように決めてある。
+function japanRotDeg(time) { return 180 + (time - 12) * 15; }
+
+function projectLonLat(lon, lat, rotDeg) {
+  const angleDeg = rotDeg + (lon - JAPAN_REF_LON);
+  const rad = angleDeg * Math.PI / 180;
+  const dist = EARTH_R * (90 - lat) / 90;
+  return [ORBIT_CX + dist * Math.cos(rad), ORBIT_CY - dist * Math.sin(rad)];
+}
+
+let japanPath, japanLabel, japanHorizon, japanPersonHead, japanPersonBody;
+
+function buildJapan() {
+  japanPath = el('path', { fill: 'var(--mp-gold)', stroke: 'var(--mp-gold)', 'stroke-width': 1, 'stroke-linejoin': 'round' });
+  orbitSvg.appendChild(japanPath);
+
+  // 地平線（接している短い線）と、立っている人の印
+  japanHorizon = el('line', { stroke: 'var(--mp-gold)', 'stroke-width': 1.5, opacity: 0.85 });
+  orbitSvg.appendChild(japanHorizon);
+  japanPersonBody = el('line', { stroke: 'var(--mp-text)', 'stroke-width': 1.5 });
+  orbitSvg.appendChild(japanPersonBody);
+  japanPersonHead = el('circle', { r: 2.2, fill: 'var(--mp-text)' });
+  orbitSvg.appendChild(japanPersonHead);
+
+  japanLabel = el('text', {
+    'font-size': 13, fill: 'var(--mp-gold)', 'text-anchor': 'middle', 'dominant-baseline': 'middle'
+  });
+  japanLabel.textContent = 'にほん';
+  orbitSvg.appendChild(japanLabel);
+}
+
+function updateJapan(rotDeg) {
+  const d = JAPAN_OUTLINE
+    .map(([lon, lat], i) => {
+      // JAPAN_SCALE の説明どおり、代表地点からのずれだけを誇張して投影する
+      const exLon = JAPAN_REF_LON + (lon - JAPAN_REF_LON) * JAPAN_SCALE;
+      const exLat = JAPAN_REF_LAT + (lat - JAPAN_REF_LAT) * JAPAN_SCALE;
+      const [x, y] = projectLonLat(exLon, exLat, rotDeg);
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(' ') + ' Z';
+  japanPath.setAttribute('d', d);
+
+  // 代表地点（東経135°・北緯36°）に、地平線の接線と人の印を立てる
+  const [px, py] = projectLonLat(JAPAN_REF_LON, JAPAN_REF_LAT, rotDeg);
+  const rad = rotDeg * Math.PI / 180;
+  const radial = [Math.cos(rad), -Math.sin(rad)];      // 中心から外向き（＝その人にとっての「上」）
+  const tangent = [-radial[1], radial[0]];             // 90°回した接線＝地平線の向き
+
+  const HL = 15;
+  japanHorizon.setAttribute('x1', px - tangent[0] * HL);
+  japanHorizon.setAttribute('y1', py - tangent[1] * HL);
+  japanHorizon.setAttribute('x2', px + tangent[0] * HL);
+  japanHorizon.setAttribute('y2', py + tangent[1] * HL);
+
+  const headX = px + radial[0] * 9, headY = py + radial[1] * 9;
+  japanPersonBody.setAttribute('x1', px); japanPersonBody.setAttribute('y1', py);
+  japanPersonBody.setAttribute('x2', headX); japanPersonBody.setAttribute('y2', headY);
+  japanPersonHead.setAttribute('cx', headX); japanPersonHead.setAttribute('cy', headY);
+
+  // ラベルは中心から見て代表地点のさらに外側（読みやすいよう少し離す）
+  japanLabel.setAttribute('x', ORBIT_CX + (px - ORBIT_CX) * 1.5);
+  japanLabel.setAttribute('y', ORBIT_CY + (py - ORBIT_CY) * 1.5);
 }
 
 /* ---- 月の形（地球から見た見え方） ---- */
 const shapeSvg = document.getElementById('mp-shape');
+const shapePanel = document.querySelector('.mp-panel--shape');
 const SHAPE_CX = 150, SHAPE_CY = 150, SHAPE_R = 110;
 let shapePath;
 
@@ -144,8 +241,21 @@ function buildShapeScene() {
   }));
 }
 
-function updateShapeScene(age) {
-  shapePath.setAttribute('d', moonShapePath(SHAPE_CX, SHAPE_CY, SHAPE_R, ageToPhi(age)));
+function updateShapeScene(phi) {
+  shapePath.setAttribute('d', moonShapePath(SHAPE_CX, SHAPE_CY, SHAPE_R, phi));
+}
+
+/* ---- 昼夜・月の出没の判定 ----
+   太陽の方向は常に画面左＝(-1,0)。日本の方向・月の方向は、それぞれの回転角から
+   単位ベクトルを作り、内積の符号（＝なす角が90°未満かどうか）で判定する。
+   導出は README 参照。 */
+function isDaytimeAt(rotDeg) {
+  const rad = rotDeg * Math.PI / 180;
+  return -Math.cos(rad) > 0;
+}
+function isMoonUpAt(phi, rotDeg) {
+  const rad = rotDeg * Math.PI / 180;
+  return -Math.cos(phi - rad) > 0;
 }
 
 /* ============================================================
@@ -153,26 +263,61 @@ function updateShapeScene(age) {
    ============================================================ */
 const ageValueEl = document.getElementById('mp-age-value');
 const nameEl = document.getElementById('mp-name');
-const slider = document.getElementById('mp-slider');
+const daynightEl = document.getElementById('mp-daynight');
+const moonvisEl = document.getElementById('mp-moonvis');
+const daySlider = document.getElementById('mp-day-slider');
+const timeSlider = document.getElementById('mp-time-slider');
+const dayOut = document.getElementById('mp-day-out');
+const timeOut = document.getElementById('mp-time-out');
+const speedButtons = Array.from(document.querySelectorAll('.mp-speed-btn'));
 const playBtn = document.getElementById('mp-play');
 
-let age = 0;
+let simDay = 0;   // 経過日数（実数）。これだけが状態
 
-function render() {
-  updateOrbitScene(age);
-  updateShapeScene(age);
-  ageValueEl.textContent = age.toFixed(1);
-  nameEl.innerHTML = phaseName(age);
-  slider.value = age;
+function formatTime(time) {
+  const h = Math.floor(time);
+  const m = Math.round((time - h) * 60) % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
 }
 
-function setAge(newAge) {
-  age = normAge(newAge);
+function render() {
+  const day = Math.floor(simDay);
+  const time = (simDay - day) * 24;
+  const age = normAge(simDay);
+  const phi = ageToPhi(age);
+  const rotDeg = japanRotDeg(time);
+
+  updateOrbitScene(phi);
+  updateJapan(rotDeg);
+  updateShapeScene(phi);
+
+  ageValueEl.textContent = age.toFixed(1);
+  nameEl.innerHTML = phaseName(age);
+
+  const daytime = isDaytimeAt(rotDeg);
+  daynightEl.innerHTML = daytime
+    ? 'にほんは いま <ruby>昼<rt>ひる</rt></ruby>'
+    : 'にほんは いま <ruby>夜<rt>よる</rt></ruby>';
+
+  const moonUp = isMoonUpAt(phi, rotDeg);
+  moonvisEl.innerHTML = '<ruby>月<rt>つき</rt></ruby>は <ruby>空<rt>そら</rt></ruby>に '
+    + (moonUp ? 'でている' : 'しずんでいる');
+  shapePanel.classList.toggle('is-moon-hidden', !moonUp);
+
+  daySlider.value = day;
+  timeSlider.value = time;
+  dayOut.textContent = day;
+  timeOut.textContent = formatTime(time);
+}
+
+function setSimDay(newDay) {
+  simDay = normSimDay(newDay);
   render();
 }
 
 /* ============================================================
    ドラッグ（軌道図の月をつかんで動かす）
+   月の角度から t を逆算するので、日・時刻の両方のつまみが動く。
    ============================================================ */
 function svgPoint(svg, clientX, clientY) {
   const pt = svg.createSVGPoint();
@@ -192,11 +337,11 @@ function onPointerDown(e) {
   dragging = true;
   stopPlaying();
   moonHit.setPointerCapture(e.pointerId);
-  setAge(phiToAge(angleFromClient(e.clientX, e.clientY)));
+  setSimDay(phiToAge(angleFromClient(e.clientX, e.clientY)));
 }
 function onPointerMove(e) {
   if (!dragging) return;
-  setAge(phiToAge(angleFromClient(e.clientX, e.clientY)));
+  setSimDay(phiToAge(angleFromClient(e.clientX, e.clientY)));
 }
 function onPointerUp(e) {
   if (!dragging) return;
@@ -205,30 +350,40 @@ function onPointerUp(e) {
 }
 
 /* ============================================================
-   スライダー・再生
+   つまみ・速さ・再生
    ============================================================ */
-slider.addEventListener('input', () => {
-  stopPlaying();
-  setAge(parseFloat(slider.value));
+function currentSlidersToSimDay() {
+  const day = parseInt(daySlider.value, 10);
+  const time = parseFloat(timeSlider.value);
+  return day + time / 24;
+}
+daySlider.addEventListener('input', () => { stopPlaying(); setSimDay(currentSlidersToSimDay()); });
+timeSlider.addEventListener('input', () => { stopPlaying(); setSimDay(currentSlidersToSimDay()); });
+
+let speedHoursPerSec = 6;   // 初期値「1秒で6時間」
+speedButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    speedHoursPerSec = parseFloat(btn.dataset.speed);
+    speedButtons.forEach(b => b.classList.toggle('is-active', b === btn));
+  });
 });
 
-const CYCLE_SECONDS = 24;   // ひと月ぶんを何秒で回すか（自動再生の速さ）
-let playing = false, rafId = null, lastT = null;
+let playing = false, rafId = null, lastTs = null;
 
-function tick(t) {
+function tick(ts) {
   if (!playing) return;
-  if (lastT !== null) {
-    const dt = (t - lastT) / 1000;
-    setAge(age + (SYN / CYCLE_SECONDS) * dt);
+  if (lastTs !== null) {
+    const dt = (ts - lastTs) / 1000;
+    setSimDay(simDay + (speedHoursPerSec / 24) * dt);
   }
-  lastT = t;
+  lastTs = ts;
   rafId = requestAnimationFrame(tick);
 }
 
 function startPlaying() {
   if (playing) return;
   playing = true;
-  lastT = null;
+  lastTs = null;
   playBtn.textContent = '■ とめる';
   rafId = requestAnimationFrame(tick);
 }
