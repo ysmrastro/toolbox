@@ -31,20 +31,25 @@ toolbox/
 │   ├── app.js              # 幾何・描画・UI（外部ライブラリなし）
 │   ├── ogp-source.html     # OGP画像の生成元（実物の描画をそのまま使う）
 │   └── README.md           # モデル・実測との照合・仮定値
-└── meteor-settings/        # 流星撮影セッティング（PWA）
+├── meteor-settings/        # 流星撮影セッティング（PWA）
+│   ├── index.html
+│   ├── style.css
+│   ├── data.js             # カメラ/レンズ/流星群/観測地データ
+│   ├── astro.js            # 放射点高度・太陽高度・月の位置と月齢・出入りの時刻
+│   ├── engine.js           # note記事の付録A 8式の実装
+│   ├── lightpollution.js   # 光害地図タイルから地点の夜空の明るさを引く
+│   ├── lp-tiles/           # 光害地図タイル（日本周辺・34枚・約0.8MB）
+│   ├── plan.js             # 夜の数え方・極大の夜の評価・狙いの幾何（state を持たない純粋関数）
+│   ├── app.js              # 状態管理・イベント・描画。計算は持たない
+│   ├── test/               # 自動テスト（配信されない）
+│   ├── tools/              # 開発用（release.py / build-stars.py）
+│   ├── manifest.json / sw.js
+│   └── README.md           # 出典・前提・データ確度の詳細
+└── moon-phase/             # 月の満ち欠けシミュレーター
     ├── index.html
     ├── style.css
-    ├── data.js             # カメラ/レンズ/流星群/観測地データ
-    ├── astro.js            # 放射点高度・太陽高度・月の位置と月齢・出入りの時刻
-    ├── engine.js           # note記事の付録A 8式の実装
-    ├── lightpollution.js   # 光害地図タイルから地点の夜空の明るさを引く
-    ├── lp-tiles/           # 光害地図タイル（日本周辺・34枚・約0.8MB）
-    ├── plan.js             # 夜の数え方・極大の夜の評価・狙いの幾何（state を持たない純粋関数）
-    ├── app.js              # 状態管理・イベント・描画。計算は持たない
-    ├── test/               # 自動テスト（配信されない）
-    ├── tools/              # 開発用（release.py / build-stars.py）
-    ├── manifest.json / sw.js
-    └── README.md           # 出典・前提・データ確度の詳細
+    ├── app.js              # 位置・見え方の計算とSVG描画・ドラッグ操作（外部ライブラリなし）
+    └── README.md           # 見え方のモデル（離角と明暗・北半球での見え方・反時計回り）
 ```
 
 **タブは 計画 / 機材 / 条件 / 結果 の4枚**。最初に開くのは**計画**で、極大が遠い時期に

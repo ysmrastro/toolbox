@@ -1,0 +1,128 @@
+/* 月の満ち欠けシミュレーター
+   共通トークン（shared/css/variables.css）は触らず、ここで上書き・追加する。 */
+:root {
+  /* CLAUDE.md の梯子に乗せる。共通の sm=13.6px / lg=18.4px は奇数px なので直す */
+  --tb-font-size-sm: 0.875rem;   /* 14px */
+  --tb-font-size-lg: 1.125rem;   /* 18px */
+
+  /* numahoto テーマに合わせた配色。shared の夜空トーンとは別の、このツール専用のネイビー */
+  --mp-bg: #1A2332;
+  --mp-primary: #7EB8DA;
+  --mp-gold: #F6D365;
+  --mp-text: #B8D4E8;
+  --mp-subtext: #7A95AA;
+  --mp-sun: #FFD050;
+  --mp-earth-dark: #16202E;   /* 地球の夜側 */
+  --mp-moon-lit: #E8E4D8;     /* 月の照らされた側 */
+  --mp-moon-dark: #242E40;    /* 月の夜側（地球照でうっすら見える） */
+
+  /* 名前表示だけ、梯子の外に大きめの専用サイズを1つ足す（未就学児にも読めるように） */
+  --mp-font-size-name: 2.25rem;   /* 36px */
+}
+
+/* ============================================================
+   全体
+   ============================================================ */
+.mp-app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--tb-space-lg);
+}
+
+.mp-intro {
+  text-align: center;
+  margin-bottom: var(--tb-space-lg);
+}
+.mp-title {
+  font-size: var(--tb-font-size-xl);
+  color: var(--mp-primary);
+  margin-bottom: var(--tb-space-xs);
+}
+.mp-subtitle {
+  font-size: var(--tb-font-size-base);
+  color: var(--mp-subtext);
+}
+
+/* ============================================================
+   図
+   ============================================================ */
+.mp-stage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--tb-space-lg);
+  align-items: start;
+}
+
+.mp-panel {
+  background: var(--mp-bg);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  padding: var(--tb-space-md);
+  min-width: 0;
+}
+.mp-panel h2 {
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  color: var(--mp-text);
+  margin: 0 0 var(--tb-space-xs);
+}
+.mp-hint {
+  font-size: var(--tb-font-size-xs);
+  color: var(--mp-subtext);
+  margin: 0 0 var(--tb-space-sm);
+  line-height: 1.55;
+}
+
+.mp-panel svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;   /* ドラッグ中にページがスクロールしないように */
+}
+
+/* 月（軌道図・ドラッグできる方）だけ、つかめることが分かるように */
+#mp-moon-hit { cursor: grab; }
+#mp-moon-hit:active { cursor: grabbing; }
+
+/* ============================================================
+   読み取り
+   ============================================================ */
+.mp-readout {
+  text-align: center;
+  margin: var(--tb-space-lg) 0;
+}
+.mp-age {
+  font-size: var(--tb-font-size-lg);
+  color: var(--mp-subtext);
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 var(--tb-space-xs);
+}
+.mp-name {
+  font-size: var(--mp-font-size-name);
+  font-weight: 700;
+  color: var(--mp-gold);
+  margin: 0;
+  min-height: 1.2em;
+}
+
+/* ============================================================
+   操作
+   ============================================================ */
+.mp-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-md);
+  max-width: 520px;
+  margin: 0 auto;
+}
+.mp-controls .tb-range { flex: 1; }
+.mp-play { white-space: nowrap; }
+
+/* ============================================================
+   スマホ ── 左（軌道図）が上、右（月の形）が下に積む
+   ============================================================ */
+@media (max-width: 700px) {
+  .mp-app { padding: var(--tb-space-md) var(--tb-space-sm); }
+  .mp-stage { grid-template-columns: 1fr; }
+  .mp-controls { flex-direction: column; align-items: stretch; }
+}

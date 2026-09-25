@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>月の満ち欠けシミュレーター | ysmrastro toolbox</title>
+  <meta name="description" content="月をドラッグすると、北極から見下ろした軌道と、地球から見た月の形が同時に動きます。">
+
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="apple-touch-icon" href="../favicon.png">
+  <link rel="stylesheet" href="../shared/css/variables.css">
+  <link rel="stylesheet" href="../shared/css/reset.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="style.css?v=1.0.0">
+</head>
+<body>
+
+<header class="tb-header">
+  <a href="../" class="tb-header__logo">ysmrastro toolbox</a>
+  <nav class="tb-header__nav">
+    <a href="../">ツール一覧</a>
+  </nav>
+</header>
+
+<div class="mp-app">
+
+  <section class="mp-intro">
+    <h1 class="mp-title"><ruby>月<rt>つき</rt></ruby>の<ruby>満<rt>み</rt></ruby>ち<ruby>欠<rt>か</rt></ruby>けシミュレーター</h1>
+    <p class="mp-subtitle"><ruby>月<rt>つき</rt></ruby>をうごかすと、<ruby>地球<rt>ちきゅう</rt></ruby>から<ruby>見<rt>み</rt></ruby>た<ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>がかわるよ</p>
+  </section>
+
+  <div class="mp-stage">
+    <section class="mp-panel">
+      <h2><ruby>北極<rt>ほっきょく</rt></ruby>から<ruby>見<rt>み</rt></ruby><ruby>下<rt>おろ</rt></ruby>ろした図</h2>
+      <p class="mp-hint">太陽は左。月をドラッグしてうごかしてみよう。</p>
+      <svg id="mp-orbit" viewBox="0 0 400 400" role="img" aria-label="北極の上から見た、太陽・地球・月の位置"></svg>
+    </section>
+    <section class="mp-panel">
+      <h2><ruby>地球<rt>ちきゅう</rt></ruby>から<ruby>見<rt>み</rt></ruby>た<ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby></h2>
+      <p class="mp-hint">北半球から見上げたときの見え方です。</p>
+      <svg id="mp-shape" viewBox="0 0 300 300" role="img" aria-label="地球から見た月の形"></svg>
+    </section>
+  </div>
+
+  <div class="mp-readout">
+    <p class="mp-age"><ruby>月齢<rt>げつれい</rt></ruby> <span id="mp-age-value">0.0</span></p>
+    <p class="mp-name" id="mp-name"></p>
+  </div>
+
+  <div class="mp-controls">
+    <input type="range" id="mp-slider" class="tb-range" min="0" max="29.5306" step="0.1" value="0"
+           aria-label="月齢">
+    <button type="button" id="mp-play" class="tb-btn tb-btn--secondary mp-play">▶ うごかす</button>
+  </div>
+
+</div>
+
+<script src="app.js?v=1.0.0"></script>
+</body>
+</html>
