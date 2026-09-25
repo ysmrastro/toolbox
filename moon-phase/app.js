@@ -1,41 +1,65 @@
 "use strict";
 
 /* ============================================================
-   モデル
-   状態は経過日数 simDay（実数）ひとつだけ。0日目の正午を基準にする。
-
-   - 月の位置・形は simDay を朔望月 SYN で割った余り（＝月齢）から決まる
-   - 日本の向きは simDay の端数（＝時刻）だけから決まる。simDay の整数部（＝日）は関係ない
-   - 「日」つまみ・「時刻」つまみは、どちらも simDay の別の見方を操作しているだけ
-
-   離角・明暗・自転・出没の判定の詳しい式は README を参照。
+   実際の天文計算は meteor-settings/astro.js（MS_ASTRO）をそのまま使う。
+   国立天文台の公表値と突き合わせ済みのものをコピーせず共有するため、
+   index.html で <script src="../meteor-settings/astro.js"> を先に読み込んでいる。
    ============================================================ */
-const SYN = 29.5306;                 // 朔望月（日）
-const TWO_PI = Math.PI * 2;
-const DAY_CYCLE = 30;                 // 「日」つまみが 0〜29 で一周する長さ
+const RAD = Math.PI / 180, DEG = 180 / Math.PI;
+const norm360 = x => ((x % 360) + 360) % 360;
 
-const ageToPhi = age => (age / SYN) * TWO_PI;
-const phiToAge = phi => (phi / TWO_PI) * SYN;
-const normPhi = phi => ((phi % TWO_PI) + TWO_PI) % TWO_PI;
-const normAge = age => ((age % SYN) + SYN) % SYN;
+const FUKUOKA_LAT = 33.59, FUKUOKA_LON = 130.40;   // 観測地は福岡
+const SYNODIC = 29.530589;                          // 朔望月（日）。astro.js と同じ値
+
+/* ============================================================
+   モデル
+   状態は経過日数 simDay（実数）ひとつだけ。DAY0（2026-09-11・新月 00:50 JST の日）を
+   基準に、simDay の整数部がそのままカレンダーの日付になる。
+
+   - 「日」つまみ（0〜29）・「時刻」つまみ（0〜24時）は、どちらも simDay の別の見方
+   - 月の位置・形・月齢は、その瞬間の実際の離角・月齢（MS_ASTRO）から決まる
+   - 日本の向きは、福岡での太陽の時角（実際の南中時刻を基準にする）から決まる
+   - 昼夜・月の出没は、太陽・月の実際の高度（日の出入りと同じ基準）で判定する
+
+   詳しい式は README を参照。
+   ============================================================ */
+const DAY_CYCLE = 30;                 // 「日」つまみが 0〜29 で一周する長さ
+const DAY0 = new Date(2026, 8, 11);   // 2026-09-11 00:00（ブラウザのローカル時刻＝JST を想定）
 const normSimDay = d => ((d % DAY_CYCLE) + DAY_CYCLE) % DAY_CYCLE;
+
+// simDay（経過日数）から、その瞬間を表す Date を作る。分単位で丸めて浮動小数の誤差を防ぐ
+// （day + time/24 の往復で 10/24 のような割り切れない値になり、丸めないと表示の分が1つ落ちる）。
+function dateForSimDay(simDay) {
+  const totalMinutes = Math.round(simDay * 24 * 60);
+  return new Date(DAY0.getTime() + totalMinutes * 60000);
+}
+function formatDateLabel(date) {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+function formatClock(date) {
+  if (!date) return 'なし';
+  return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+const TWO_PI = Math.PI * 2;
+const normPhi = phi => ((phi % TWO_PI) + TWO_PI) % TWO_PI;
+const normAge = age => ((age % SYNODIC) + SYNODIC) % SYNODIC;
 
 /* 名前を出す月齢の代表値。表示名は円環距離がいちばん近いものを採用し、
    離れていたら「満ちていく／欠けていく」の一般表現にする。 */
 const NAMED_PHASES = [
-  { age: 0,           html: '<ruby>新月<rt>しんげつ</rt></ruby>' },
-  { age: 3,            html: '<ruby>三日月<rt>みかづき</rt></ruby>' },
-  { age: SYN / 4,      html: '<ruby>上弦<rt>じょうげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' },
-  { age: SYN / 2,      html: '<ruby>満月<rt>まんげつ</rt></ruby>' },
-  { age: SYN * 3 / 4,  html: '<ruby>下弦<rt>かげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' }
+  { age: 0,                html: '<ruby>新月<rt>しんげつ</rt></ruby>' },
+  { age: 3,                 html: '<ruby>三日月<rt>みかづき</rt></ruby>' },
+  { age: SYNODIC / 4,       html: '<ruby>上弦<rt>じょうげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' },
+  { age: SYNODIC / 2,       html: '<ruby>満月<rt>まんげつ</rt></ruby>' },
+  { age: SYNODIC * 3 / 4,   html: '<ruby>下弦<rt>かげん</rt></ruby>の<ruby>月<rt>つき</rt></ruby>' }
 ];
 const NAME_WINDOW = 1.0;   // この日数以内なら、近い名前を採用する
 
 function circularDist(a, b) {
   const d = Math.abs(normAge(a) - normAge(b));
-  return Math.min(d, SYN - d);
+  return Math.min(d, SYNODIC - d);
 }
-
 function phaseName(age) {
   let best = null, bestD = Infinity;
   for (const p of NAMED_PHASES) {
@@ -43,7 +67,7 @@ function phaseName(age) {
     if (d < bestD) { bestD = d; best = p; }
   }
   if (bestD <= NAME_WINDOW) return best.html;
-  return age < SYN / 2 ? 'だんだん ふとる' : 'だんだん やせる';
+  return age < SYNODIC / 2 ? 'だんだん ふとる' : 'だんだん やせる';
 }
 
 /* ============================================================
@@ -75,6 +99,16 @@ function moonShapePath(cx, cy, r, phi) {
   const innerSweep = a >= 0 ? 0 : 1;
   const top = `${cx} ${cy - r}`, bottom = `${cx} ${cy + r}`;
   return `M ${top} A ${r} ${r} 0 0 ${outerSweep} ${bottom} A ${rx} ${r} 0 0 ${innerSweep} ${top} Z`;
+}
+
+// 地平線ビュー用: 明るい側が「ローカルの +x」に来る向きで作る、回転できる版。
+// 太陽の方向へ回してから置く（中心が原点のローカル座標）。k は輝面比（0=新月〜1=満月）。
+function moonShapeLocalPath(r, k) {
+  const a = r * (1 - 2 * k);
+  const rx = Math.abs(a);
+  const innerSweep = a >= 0 ? 0 : 1;
+  const top = `0 ${-r}`, bottom = `0 ${r}`;
+  return `M ${top} A ${r} ${r} 0 0 1 ${bottom} A ${rx} ${r} 0 0 ${innerSweep} ${top} Z`;
 }
 
 /* ---- 軌道図（北極から見下ろした図） ---- */
@@ -130,18 +164,18 @@ function buildOrbitScene() {
   orbitSvg.appendChild(moonGroup);
 }
 
-function moonPosition(phi) {
+function moonPositionOnOrbit(phi) {
   return [ORBIT_CX - ORBIT_R * Math.cos(phi), ORBIT_CY + ORBIT_R * Math.sin(phi)];
 }
 
 function updateOrbitScene(phi) {
-  const [mx, my] = moonPosition(phi);
+  const [mx, my] = moonPositionOnOrbit(phi);
   moonGroup.setAttribute('transform', `translate(${mx},${my})`);
 }
 
 /* ---- 日本（自転で向きが変わる） ----
    正距方位図法もどき ── 北極中心からの距離を「(90-緯度)/90 × 地球の半径」、
-   向きを「日本時間だけで決めた回転角 + 経度のずれ」で決める簡略モデル。
+   向きを「太陽の時角 + 経度のずれ」で決める。
    経度差は形（線の長さ）だけに使い、自転の速さの計算には使わない
    （日本全体をひとつの地方時として扱ってよい、という指示のとおり）。 */
 const JAPAN_REF_LON = 135;   // 日本標準時の基準子午線。回転角の基準にも使う
@@ -178,10 +212,20 @@ const JAPAN_LANDMASSES = [
   ] }
 ];
 
-// 時刻（0〜24時）から、日本の回転角（度・数学座標＝反時計回りが正）を作る。
-// 正午に太陽側（画面左＝180°）、18時に画面の下（270°）、0時に画面の右（0°）、
-// 6時に画面の上（90°）になるように決めてある。
-function japanRotDeg(time) { return 180 + (time - 12) * 15; }
+// 太陽の時角（度）。0＝南中（日本が太陽側＝画面左）、正＝午後（西へ）、負＝午前（東へ）。
+// -180〜180 に正規化する。前回の「(時刻-12)*15」という近似（均時差も、福岡の経度が
+// 日本標準時の基準子午線からずれていることも無視していた）をやめ、実際の時角を使う。
+function sunHourAngleDeg(sun, date) {
+  const lst = norm360(MS_ASTRO.gmst(date) + FUKUOKA_LON);
+  let ha = norm360(lst - sun.ra);
+  if (ha > 180) ha -= 360;
+  return ha;
+}
+// 時角0で日本が画面左（太陽側）になるよう、そのまま 180 に足す
+// （軌道図・地球の「太陽側＝左半分が明るい」という描き方に合わせるため）。
+function japanRotDeg(sun, date) {
+  return norm360(180 + sunHourAngleDeg(sun, date));
+}
 
 function projectLonLat(lon, lat, rotDeg) {
   const angleDeg = rotDeg + (lon - JAPAN_REF_LON);
@@ -281,16 +325,205 @@ function updateShapeScene(phi) {
 }
 
 /* ---- 昼夜・月の出没の判定 ----
-   太陽の方向は常に画面左＝(-1,0)。日本の方向・月の方向は、それぞれの回転角から
-   単位ベクトルを作り、内積の符号（＝なす角が90°未満かどうか）で判定する。
-   導出は README 参照。 */
-function isDaytimeAt(rotDeg) {
-  const rad = rotDeg * Math.PI / 180;
-  return -Math.cos(rad) > 0;
+   太陽・月の実際の高度を、日の出入りと同じ基準で見る
+   （astro.js の dayEvents / nightTimeline が使っている基準と同じ値）。 */
+const SUN_HORIZON_ALT = -0.833;   // 太陽の出入り＝上辺が地平線に接する（大気差込み）
+const MOON_HORIZON_ALT = 0.125;   // 月の出入り＝地心高度がこの値（視差・大気差・視半径の合成）
+function isDaytimeAt(sun) { return sun.altitude > SUN_HORIZON_ALT; }
+function isMoonUpAt(moon) { return moon.altitude > MOON_HORIZON_ALT; }
+
+/* ============================================================
+   地平線ビュー（福岡から南を見た空）
+   正距円筒（方位・高度をそのまま x・y にする素朴な投影）。
+   視野は方位90°(東)〜270°(西)の180° ── 120°では真東・真西が視野に入らず
+   出入りが見えないため、180°に広げてある。左が東、中央が南、右が西。
+   ============================================================ */
+const horizonSvg = document.getElementById('mp-horizon');
+const eventsEl = document.getElementById('mp-events');
+const HZ_W = 640;                      // viewBox の幅は固定
+let HZ_H = 320;                        // 高さは実際の縦横比に合わせて resizeHorizon() が書き換える
+const HZ_GROUND_FRAC = 272 / 320;      // 地面帯の境界（高度0°）の位置。全体の高さに対する比率で固定
+let HZ_GROUND_Y = HZ_H * HZ_GROUND_FRAC;
+const HZ_AZ_MIN = 90, HZ_AZ_MAX = 270;
+const HZ_MOON_R = 15;                  // 見かけの大きさは誇張してある（指示どおり見やすさ優先）
+
+const hzX = az => HZ_W * (az - HZ_AZ_MIN) / (HZ_AZ_MAX - HZ_AZ_MIN);
+const hzY = alt => HZ_GROUND_Y * (1 - alt / 90);
+const hzInView = az => az >= HZ_AZ_MIN && az <= HZ_AZ_MAX;
+
+// 太陽の高度から空の色を作る（4点間を線形補間）。しきい値は指示どおり
+// 0°（朝焼け・夕焼けの終わり）・-6°（市民薄明）・-18°（天文薄明＝夜）に置き、
+// +6°で昼の空色に達するようにして、日の出入りの瞬間に色が飛ばないようにしている。
+const SKY_STOPS = [
+  { alt: -18, rgb: [11, 16, 30] },     // 夜
+  { alt: -6, rgb: [58, 53, 96] },      // 薄明（紫がかった夕方・明け方）
+  { alt: 0, rgb: [232, 130, 90] },     // 朝焼け・夕焼け
+  { alt: 6, rgb: [143, 205, 236] }     // 昼
+];
+function skyColor(sunAlt) {
+  const a = Math.max(SKY_STOPS[0].alt, Math.min(SKY_STOPS[SKY_STOPS.length - 1].alt, sunAlt));
+  for (let i = 0; i < SKY_STOPS.length - 1; i++) {
+    const s0 = SKY_STOPS[i], s1 = SKY_STOPS[i + 1];
+    if (a <= s1.alt) {
+      const t = (a - s0.alt) / (s1.alt - s0.alt);
+      const c = s0.rgb.map((v, j) => Math.round(v + (s1.rgb[j] - v) * t));
+      return `rgb(${c[0]},${c[1]},${c[2]})`;
+    }
+  }
+  const last = SKY_STOPS[SKY_STOPS.length - 1].rgb;
+  return `rgb(${last[0]},${last[1]},${last[2]})`;
 }
-function isMoonUpAt(phi, rotDeg) {
-  const rad = rotDeg * Math.PI / 180;
-  return -Math.cos(phi - rad) > 0;
+
+let hzSky, hzGround, hzHorizonLine, hzSun, hzMoonGroup, hzMoonShape, hzTrackPath, hzTicksGroup;
+
+function buildHorizonScene() {
+  hzSky = el('rect', { x: 0, y: 0, width: HZ_W, height: HZ_GROUND_Y });
+  horizonSvg.appendChild(hzSky);
+
+  // 地面（暗い帯）と地平線。高さは resizeHorizon() → layoutHorizonStatic() で決める
+  hzGround = el('rect', { x: 0, width: HZ_W, fill: 'var(--mp-earth-dark)' });
+  horizonSvg.appendChild(hzGround);
+  hzHorizonLine = el('line', { x1: 0, x2: HZ_W, stroke: 'var(--tb-border)', 'stroke-width': 1.5 });
+  horizonSvg.appendChild(hzHorizonLine);
+
+  // その日の月の通り道（点線）と時刻の目盛り。日が変わるたびに作り直す
+  hzTrackPath = el('path', {
+    fill: 'none', stroke: 'var(--mp-moon-lit)', 'stroke-width': 1.5,
+    'stroke-dasharray': '4 4', opacity: 0.5
+  });
+  horizonSvg.appendChild(hzTrackPath);
+  hzTicksGroup = el('g');
+  horizonSvg.appendChild(hzTicksGroup);
+
+  // 太陽・月（地面より手前＝あとに描く）
+  hzSun = el('circle', { r: 12, fill: 'var(--mp-sun)' });
+  horizonSvg.appendChild(hzSun);
+
+  hzMoonGroup = el('g');
+  hzMoonGroup.appendChild(el('circle', { r: HZ_MOON_R, fill: 'var(--mp-moon-dark)' }));
+  hzMoonShape = el('path', { fill: 'var(--mp-moon-lit)' });
+  hzMoonGroup.appendChild(hzMoonShape);
+  hzMoonGroup.appendChild(el('circle', { r: HZ_MOON_R, fill: 'none', stroke: 'var(--tb-border)', 'stroke-width': 1 }));
+  horizonSvg.appendChild(hzMoonGroup);
+
+  layoutHorizonStatic();
+}
+
+// HZ_H・HZ_GROUND_Y が変わったときに、それに依存する固定要素（空・地面・地平線の
+// サイズ）を作り直す。太陽・月・通り道・目盛りは次の render() で更新される。
+function layoutHorizonStatic() {
+  horizonSvg.setAttribute('viewBox', `0 0 ${HZ_W} ${HZ_H}`);
+  hzSky.setAttribute('height', HZ_GROUND_Y);
+  hzGround.setAttribute('y', HZ_GROUND_Y);
+  hzGround.setAttribute('height', HZ_H - HZ_GROUND_Y);
+  hzHorizonLine.setAttribute('y1', HZ_GROUND_Y);
+  hzHorizonLine.setAttribute('y2', HZ_GROUND_Y);
+}
+
+// パネルの実際の縦横比に合わせて HZ_H を作り直す。viewBox の幅は 640 で固定し、
+// 高さだけ「実際にレイアウトで割り当てられた縦横比」に合わせることで、
+// 歪ませずに幅いっぱい・高さいっぱいに描ける（指示の「2:1くらい」という目安どおりには
+// ならないが、1280×800 に3枚の図を収める都合で、実際はもっと横長になる）。
+function resizeHorizon() {
+  const rect = horizonSvg.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const newH = Math.max(80, Math.round(HZ_W * (rect.height / rect.width)));
+  if (Math.abs(newH - HZ_H) < 1) return;
+  HZ_H = newH;
+  HZ_GROUND_Y = HZ_H * HZ_GROUND_FRAC;
+  layoutHorizonStatic();
+  hzCacheDayKey = null;   // 通り道・目盛りは古い縮尺で作ってあるので作り直す
+  render();
+}
+
+// その日（00:00〜24:00、10分刻み）の月の方位・高度の並び
+function computeMoonTrack(dayDate) {
+  const start = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), 0, 0, 0, 0);
+  const pts = [];
+  for (let m = 0; m <= 24 * 60; m += 10) {
+    const t = new Date(start.getTime() + m * 60000);
+    const p = MS_ASTRO.moonPosition(t, FUKUOKA_LAT, FUKUOKA_LON);
+    pts.push({ az: p.azimuth, alt: p.altitude });
+  }
+  return pts;
+}
+
+// 地平線より上・視野の中にある区間だけをつないだパス（複数区間に分かれてよい）
+function trackPathD(pts) {
+  let d = '', drawing = false;
+  for (const p of pts) {
+    if (p.alt > 0 && hzInView(p.az)) {
+      d += `${drawing ? 'L' : 'M'} ${hzX(p.az).toFixed(1)} ${hzY(p.alt).toFixed(1)} `;
+      drawing = true;
+    } else {
+      drawing = false;
+    }
+  }
+  return d.trim();
+}
+
+function updateTicks(dayDate) {
+  while (hzTicksGroup.firstChild) hzTicksGroup.removeChild(hzTicksGroup.firstChild);
+  for (let h = 0; h < 24; h += 3) {
+    const t = new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate(), h, 0, 0, 0);
+    const p = MS_ASTRO.moonPosition(t, FUKUOKA_LAT, FUKUOKA_LON);
+    if (p.altitude <= 0 || !hzInView(p.azimuth)) continue;
+    const x = hzX(p.azimuth), y = hzY(p.altitude);
+    hzTicksGroup.appendChild(el('circle', { cx: x, cy: y, r: 2, fill: 'var(--mp-subtext)' }));
+    const label = el('text', {
+      x, y: y - 7, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--mp-subtext)'
+    });
+    label.textContent = String(h);
+    hzTicksGroup.appendChild(label);
+  }
+}
+
+// その日の出入り・月の通り道は日が変わったときだけ作り直す（毎フレームでは重いため）
+let hzCacheDayKey = null, hzCacheEvents = null;
+function ensureHorizonDayCache(date) {
+  const key = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+  if (key === hzCacheDayKey) return;
+  hzCacheDayKey = key;
+  hzCacheEvents = MS_ASTRO.dayEvents(date, FUKUOKA_LAT, FUKUOKA_LON);
+  hzTrackPath.setAttribute('d', trackPathD(computeMoonTrack(date)));
+  updateTicks(date);
+}
+
+function updateHorizonScene(date, sun, moon) {
+  ensureHorizonDayCache(date);
+
+  hzSky.setAttribute('fill', skyColor(sun.altitude));
+
+  if (sun.altitude > 0 && hzInView(sun.azimuth)) {
+    hzSun.setAttribute('cx', hzX(sun.azimuth));
+    hzSun.setAttribute('cy', hzY(sun.altitude));
+    hzSun.setAttribute('opacity', 1);
+  } else {
+    hzSun.setAttribute('opacity', 0);
+  }
+
+  const moonVisible = moon.altitude > MOON_HORIZON_ALT && hzInView(moon.azimuth);
+  if (moonVisible) {
+    const mx = hzX(moon.azimuth), my = hzY(moon.altitude);
+    // 「月から太陽への方向」を、この投影の x・y の上でそのまま求めて回す（近似でよい、との指示）。
+    // 太陽の高度は ±90 にクランプするだけで、視野の外・地平線の下でも方向の計算には使う。
+    const sunProjX = hzX(sun.azimuth);
+    const sunProjY = hzY(Math.max(-90, Math.min(90, sun.altitude)));
+    const angle = Math.atan2(sunProjY - my, sunProjX - mx) * DEG;
+    hzMoonShape.setAttribute('d', moonShapeLocalPath(HZ_MOON_R, moon.illumination));
+    hzMoonGroup.setAttribute('transform', `translate(${mx},${my}) rotate(${angle.toFixed(1)})`);
+    hzMoonGroup.setAttribute('opacity', sun.altitude > 0 ? 0.4 : 1);   // 昼間は半透明
+    hzMoonGroup.style.display = '';
+  } else {
+    hzMoonGroup.style.display = 'none';
+  }
+
+  const ev = hzCacheEvents;
+  eventsEl.innerHTML =
+    `<ruby>日<rt>ひ</rt></ruby>の<ruby>出<rt>で</rt></ruby> ${formatClock(ev.sunrise)}／` +
+    `<ruby>日<rt>ひ</rt></ruby>の<ruby>入<rt>い</rt></ruby>り ${formatClock(ev.sunset)}／` +
+    `<ruby>月<rt>つき</rt></ruby>の<ruby>出<rt>で</rt></ruby> ${formatClock(ev.moonrise)}／` +
+    `<ruby>月<rt>つき</rt></ruby>の<ruby>入<rt>い</rt></ruby>り ${formatClock(ev.moonset)}`;
 }
 
 /* ============================================================
@@ -311,7 +544,8 @@ const dayNextBtn = document.getElementById('mp-day-next');
 const timePrevBtn = document.getElementById('mp-time-prev');
 const timeNextBtn = document.getElementById('mp-time-next');
 
-let simDay = 0;   // 経過日数（実数）。これだけが状態
+// 初期表示は 2026-09-26 20:00（お話会の当日・時刻）＝ DAY0 から15日と20時間
+let simDay = 15 + 20 / 24;
 
 function formatTime(time) {
   // time は day + time/24 の往復で作っているので、10/24 のような割り切れない値では
@@ -326,30 +560,34 @@ function formatTime(time) {
 function render() {
   const day = Math.floor(simDay);
   const time = (simDay - day) * 24;
-  const age = normAge(simDay);
-  const phi = ageToPhi(age);
-  const rotDeg = japanRotDeg(time);
+  const date = dateForSimDay(simDay);
+
+  const sun = MS_ASTRO.sunPosition(date, FUKUOKA_LAT, FUKUOKA_LON);
+  const moon = MS_ASTRO.moonInfo(date, FUKUOKA_LAT, FUKUOKA_LON);
+  const phi = moon.elongation * RAD;
+  const rotDeg = japanRotDeg(sun, date);
 
   updateOrbitScene(phi);
   updateJapan(rotDeg);
   updateShapeScene(phi);
+  updateHorizonScene(date, sun, moon);
 
-  ageValueEl.textContent = age.toFixed(1);
-  nameEl.innerHTML = phaseName(age);
+  ageValueEl.textContent = moon.age.toFixed(1);
+  nameEl.innerHTML = phaseName(moon.age);
 
-  const daytime = isDaytimeAt(rotDeg);
+  const daytime = isDaytimeAt(sun);
   daynightEl.innerHTML = daytime
     ? 'にほんは いま <ruby>昼<rt>ひる</rt></ruby>'
     : 'にほんは いま <ruby>夜<rt>よる</rt></ruby>';
 
-  const moonUp = isMoonUpAt(phi, rotDeg);
+  const moonUp = isMoonUpAt(moon);
   moonvisEl.innerHTML = '<ruby>月<rt>つき</rt></ruby>は <ruby>空<rt>そら</rt></ruby>に '
     + (moonUp ? 'でている' : 'しずんでいる');
   shapePanel.classList.toggle('is-moon-hidden', !moonUp);
 
   daySlider.value = day;
   timeSlider.value = time;
-  dayOut.textContent = day;
+  dayOut.textContent = formatDateLabel(dateForSimDay(day));
   timeOut.textContent = formatTime(time);
 }
 
@@ -360,8 +598,23 @@ function setSimDay(newDay) {
 
 /* ============================================================
    ドラッグ（軌道図の月をつかんで動かす）
-   月の角度から t を逆算するので、日・時刻の両方のつまみが動く。
+   つかんだ角度＝離角に最も近い時刻を、今の日付の前後で探して simDay を決める
+   （厳密な逆算はしない。離角はほぼ一定の速さで増えるので、朔を探す astro.js の
+   moonAge() と同じ要領でニュートン法を数回まわせば十分近い解に収束する）。
    ============================================================ */
+function findDateForElongation(targetElongDeg, referenceDate) {
+  const RATE = 360 / SYNODIC;   // 離角の平均増加率 [度/日]
+  const signedDiff = (ms) => {
+    const e = MS_ASTRO.moonInfo(new Date(ms), FUKUOKA_LAT, FUKUOKA_LON).elongation;
+    let diff = e - targetElongDeg;
+    diff = ((diff + 180) % 360 + 360) % 360 - 180;   // -180〜180 に畳む
+    return diff;
+  };
+  let t = referenceDate.getTime();
+  for (let i = 0; i < 8; i++) t -= (signedDiff(t) / RATE) * 86400000;
+  return new Date(t);
+}
+
 function svgPoint(svg, clientX, clientY) {
   const pt = svg.createSVGPoint();
   pt.x = clientX; pt.y = clientY;
@@ -372,19 +625,25 @@ let dragging = false;
 
 function angleFromClient(clientX, clientY) {
   const p = svgPoint(orbitSvg, clientX, clientY);
-  // moonPosition() の逆算： x=ORBIT_CX-R*cos(phi), y=ORBIT_CY+R*sin(phi)
+  // moonPositionOnOrbit() の逆算： x=ORBIT_CX-R*cos(phi), y=ORBIT_CY+R*sin(phi)
   return Math.atan2(p.y - ORBIT_CY, ORBIT_CX - p.x);
+}
+
+function setSimDayFromDraggedAngle(phi) {
+  const targetElong = norm360(phi * DEG);
+  const found = findDateForElongation(targetElong, dateForSimDay(simDay));
+  setSimDay((found.getTime() - DAY0.getTime()) / 86400000);
 }
 
 function onPointerDown(e) {
   dragging = true;
   stopPlaying();
   moonHit.setPointerCapture(e.pointerId);
-  setSimDay(phiToAge(angleFromClient(e.clientX, e.clientY)));
+  setSimDayFromDraggedAngle(angleFromClient(e.clientX, e.clientY));
 }
 function onPointerMove(e) {
   if (!dragging) return;
-  setSimDay(phiToAge(angleFromClient(e.clientX, e.clientY)));
+  setSimDayFromDraggedAngle(angleFromClient(e.clientX, e.clientY));
 }
 function onPointerUp(e) {
   if (!dragging) return;
@@ -472,6 +731,13 @@ playBtn.addEventListener('click', () => { playing ? stopPlaying() : startPlaying
    ============================================================ */
 buildOrbitScene();
 buildShapeScene();
+buildHorizonScene();
+resizeHorizon();   // 最初のレイアウトの縦横比に、初回描画から合わせておく
+if (window.ResizeObserver) {
+  new ResizeObserver(resizeHorizon).observe(horizonSvg);
+} else {
+  window.addEventListener('resize', resizeHorizon);
+}
 moonHit.addEventListener('pointerdown', onPointerDown);
 moonHit.addEventListener('pointermove', onPointerMove);
 moonHit.addEventListener('pointerup', onPointerUp);

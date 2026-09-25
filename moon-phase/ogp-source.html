@@ -34,7 +34,7 @@
     <div class="ogp__text">
       <p class="ogp__eyebrow">YSMRASTRO TOOLBOX</p>
       <h1 class="ogp__title">月の満ち欠け<br>シミュレーター</h1>
-      <p class="ogp__lead">月をドラッグすると、<br><b>地球から見た月の形</b>がその場で変わる。<br>日本からいつ見えるかも分かります。</p>
+      <p class="ogp__lead">実際のこよみで、<br><b>地球から見た月の形</b>がその場で変わる。<br>福岡から見た空も分かります。</p>
     </div>
   </div>
 
@@ -59,8 +59,13 @@
       <button class="mp-speed-btn" data-speed="72"></button>
     </div>
     <button id="mp-play"></button>
+    <!-- 地平線ビューは絵柄に入れない（横長で1200x630に収まりにくいため）が、
+         app.js が要素を探すので置いてはおく -->
+    <div class="mp-hz-wrap"><svg id="mp-horizon" viewBox="0 0 640 320"></svg></div>
+    <p id="mp-events"></p>
   </div>
 
+  <script src="../meteor-settings/astro.js"></script>
   <script src="app.js"></script>
   <script>
     // 絵柄は日7・18時（夕方の上弦）にする

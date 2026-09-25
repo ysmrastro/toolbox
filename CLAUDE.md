@@ -152,6 +152,18 @@ JS で `el.hidden = true` としても消えない。meteor-settings では
 **スマホでは上の絵を sticky にして、タブで3枚を切り替える。** 隠れているペインは
 `clientWidth` が 0 になるので `setup()` が null を返して描画を飛ばす。タブ切り替えで再描画する。
 
+## 月の満ち欠けシミュレーターについて
+
+**`meteor-settings/astro.js` に依存している唯一のツール。** `index.html` で
+`<script src="../meteor-settings/astro.js">` を読み込み、`MS_ASTRO` をそのまま使う
+（コピーすると国立天文台の公表値との突き合わせが二重管理になるため）。ほかのツールは
+互いに独立だが、この2つだけは astro.js の関数シグネチャが変わると影響が及ぶ。
+
+観測地は福岡で固定。月の位置・満ち欠け・出没・日本の自転（太陽の時角）は、すべて
+astro.js が返す実際の値から作っている（idealized な近似式は使っていない）。
+モデルの詳細（離角・時角・地平線ビューの投影・空の色のしきい値など）は
+`moon-phase/README.md` に集約してある。
+
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 
 `euphoria-design` スキルの基準に従う。meteor-settings は準拠済み。
