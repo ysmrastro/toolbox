@@ -271,12 +271,20 @@ const dayOut = document.getElementById('mp-day-out');
 const timeOut = document.getElementById('mp-time-out');
 const speedButtons = Array.from(document.querySelectorAll('.mp-speed-btn'));
 const playBtn = document.getElementById('mp-play');
+const dayPrevBtn = document.getElementById('mp-day-prev');
+const dayNextBtn = document.getElementById('mp-day-next');
+const timePrevBtn = document.getElementById('mp-time-prev');
+const timeNextBtn = document.getElementById('mp-time-next');
 
 let simDay = 0;   // 経過日数（実数）。これだけが状態
 
 function formatTime(time) {
-  const h = Math.floor(time);
-  const m = Math.round((time - h) * 60) % 60;
+  // time は day + time/24 の往復で作っているので、10/24 のような割り切れない値では
+  // 浮動小数の誤差が乗る（例: 9.999999999998 になって Math.floor で時が1つ落ちる）。
+  // 分単位で丸めてから時・分に分けることで、この誤差を吸収する。
+  const totalMin = Math.round(time * 60) % (24 * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
   return `${h}:${String(m).padStart(2, '0')}`;
 }
 
@@ -359,6 +367,34 @@ function currentSlidersToSimDay() {
 }
 daySlider.addEventListener('input', () => { stopPlaying(); setSimDay(currentSlidersToSimDay()); });
 timeSlider.addEventListener('input', () => { stopPlaying(); setSimDay(currentSlidersToSimDay()); });
+
+/* ◀ ▶ の1コマ送り。日は日だけ、時刻は時刻だけをループさせる ──
+   例えば時刻が 23:45 で▶を押すと 0:00 に飛ぶが、日はそのまま変えない
+  （t = 日 + 時刻/24 を作り直すので、結果として t は約1日ぶん戻る。指示どおりの挙動）。 */
+const TIME_STEP = 0.25;                    // 時刻つまみの刻み＝15分
+const TIME_STEPS_PER_DAY = 24 / TIME_STEP; // 96コマ
+
+function stepDay(delta) {
+  stopPlaying();
+  const day = Math.floor(simDay);
+  const time = (simDay - day) * 24;
+  const newDay = ((day + delta) % DAY_CYCLE + DAY_CYCLE) % DAY_CYCLE;
+  setSimDay(newDay + time / 24);
+}
+function stepTime(delta) {
+  stopPlaying();
+  const day = Math.floor(simDay);
+  const time = (simDay - day) * 24;
+  // コマ番号にいったん丸めてから1コマ動かす（ドラッグ直後などで15分刻みから
+  // ずれていても、ボタンを押せばきちんと格子に乗る）
+  const idx = Math.round(time / TIME_STEP);
+  const newIdx = ((idx + delta) % TIME_STEPS_PER_DAY + TIME_STEPS_PER_DAY) % TIME_STEPS_PER_DAY;
+  setSimDay(day + (newIdx * TIME_STEP) / 24);
+}
+dayPrevBtn.addEventListener('click', () => stepDay(-1));
+dayNextBtn.addEventListener('click', () => stepDay(1));
+timePrevBtn.addEventListener('click', () => stepTime(-1));
+timeNextBtn.addEventListener('click', () => stepTime(1));
 
 let speedHoursPerSec = 6;   // 初期値「1秒で6時間」
 speedButtons.forEach(btn => {

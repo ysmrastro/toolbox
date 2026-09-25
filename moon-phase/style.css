@@ -166,6 +166,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+.mp-slider-group { margin-bottom: var(--tb-space-xs); }
+
+/* つまみの下の ◀ ▶（1コマ送り）。指でも押しやすい大きさにする */
+.mp-step-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--tb-space-lg);
+  margin-top: 2px;
+}
+.mp-step-btn {
+  font: inherit;
+  font-size: var(--tb-font-size-base);
+  min-width: 3rem;
+  min-height: 2.5rem;
+  border-radius: var(--tb-radius-md);
+  border: 1px solid var(--tb-border);
+  background: var(--tb-bg-tertiary);
+  color: var(--mp-text);
+  cursor: pointer;
+}
+.mp-step-btn:hover { border-color: var(--mp-primary); color: var(--mp-primary); }
+.mp-step-btn:active { background: var(--tb-bg-secondary); }
+
 .mp-speed {
   display: flex;
   flex-wrap: wrap;
