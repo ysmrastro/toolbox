@@ -46,9 +46,11 @@
 
 /* ============================================================
    図
-   ── 1280×800 でも操作部までスクロールなしで収まるよう、svg の高さを
-      画面の高さ基準（vh）で頭打ちにする。横幅で決まる高さとどちらか
-      小さいほうが使われる（幅が十分あるスマホの横向きなどでも安全）。
+   ── デスクトップ（701px以上）は下の @media で、画面の高さいっぱいに
+      図を広げる（body→mp-app→mp-stage→mp-panel→svg と flex を通し、
+      操作部などの自然な高さを引いた「残り」を svg まで渡す）。
+      ここのモバイル向けの指定は、その入れ子が効かない狭い画面のための
+      素朴な指定（svg は横幅に合わせ、高さは画面の高さ基準で頭打ち）。
    ============================================================ */
 .mp-stage {
   display: grid;
@@ -61,19 +63,28 @@
   background: var(--mp-bg);
   border: 1px solid var(--tb-border);
   border-radius: var(--tb-radius-lg);
-  padding: var(--tb-space-sm) var(--tb-space-md);
+  /* 上下だけ 2px まで詰める（図の高さを1pxでも多く稼ぐため。左右は tb-space-md のまま） */
+  padding: 2px var(--tb-space-md);
   min-width: 0;
+}
+/* 見出しと説明文を1行に並べて、縦を図にまわす */
+.mp-panel-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--tb-space-xs);
 }
 .mp-panel h2 {
   font-size: var(--tb-font-size-sm);
   font-weight: 700;
   color: var(--mp-text);
-  margin: 0 0 2px;
+  margin: 0;
+  white-space: nowrap;
 }
 .mp-hint {
   font-size: var(--tb-font-size-xs);
   color: var(--mp-subtext);
-  margin: 0 0 var(--tb-space-xs);
+  margin: 0;
   line-height: 1.4;
 }
 
@@ -123,7 +134,7 @@
    ============================================================ */
 .mp-readout {
   text-align: center;
-  margin: var(--tb-space-xs) 0;
+  margin: 2px 0;
 }
 .mp-age {
   font-size: var(--tb-font-size-base);
@@ -154,7 +165,7 @@
    ============================================================ */
 .mp-controls {
   display: grid;
-  gap: var(--tb-space-xs);
+  gap: 2px;
   max-width: 640px;
   margin: 0 auto;
 }
@@ -199,7 +210,6 @@
   align-items: center;
   justify-content: center;
   gap: var(--tb-space-xs);
-  margin-top: 2px;
 }
 .mp-speed-btn {
   font: inherit;
@@ -220,6 +230,62 @@
 }
 
 .mp-play { min-width: 9rem; white-space: nowrap; }
+
+/* ============================================================
+   デスクトップ ── 図を画面の高さいっぱいまで広げる
+   ── body を縦の flex にして、ヘッダーの下（mp-app）に残りの高さを渡す。
+      mp-app の中でも、タイトル・読み取り・操作部は自然な高さのまま
+      （flex-grow せず）、mp-stage だけが残りの高さを受け取って伸びる。
+      grid の行は既定で stretch するので、2つの mp-panel はどちらも
+      mp-stage と同じ高さになる。panel の中は見出し・説明・svg の
+      縦並び flex にして、svg だけを「残り」いっぱいに広げる。
+      svg 自身は幅・高さとも 100% にするだけでよい ── viewBox が正方形
+      なので、はみ出す側は自動で余白になり、絵が歪んだり切れたりしない
+      （SVG の既定の preserveAspectRatio による）。
+   ============================================================ */
+@media (min-width: 701px) {
+  body {
+    display: flex;
+    flex-direction: column;
+    /* flex-grow が配れる「残り」を作るには、コンテナの高さが確定していないといけない。
+       reset.css の min-height:100vh だけでは高さがコンテンツ依存のままで、
+       mp-stage に伸ばす余地が生まれない（伸ばす分を計算できないため）。 */
+    height: 100vh;
+  }
+  .mp-app {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    /* 上下の余白も図にまわす（左右は tb-space-md のまま） */
+    padding-top: 4px;
+    padding-bottom: 2px;
+  }
+  .mp-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* 基本の align-items:start（パネルを自然な高さのまま上に置く指定）を、
+       行の高さいっぱいに揃えるほうへ上書きする */
+    align-items: stretch;
+  }
+  .mp-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .mp-panel-head {
+    flex: none;
+  }
+  .mp-panel svg {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+  }
+}
 
 /* ============================================================
    スマホ ── 左（軌道図）が上、右（月の形）が下に積む

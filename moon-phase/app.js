@@ -78,8 +78,10 @@ function moonShapePath(cx, cy, r, phi) {
 }
 
 /* ---- 軌道図（北極から見下ろした図） ---- */
+// viewBox（index.html 側）は 0 0 380 294。月の軌道＋月の半径ぶん（ORBIT_R+MOON_R=146）の
+// 上下に 1px だけ余白を残した高さにしてある。cy を動かしたら viewBox の高さも合わせて直す。
 const orbitSvg = document.getElementById('mp-orbit');
-const ORBIT_CX = 230, ORBIT_CY = 200, ORBIT_R = 130;
+const ORBIT_CX = 230, ORBIT_CY = 147, ORBIT_R = 130;
 // EARTH_R は「軌道半径の0.35〜0.4倍程度」という目安より大きい（比は約0.58）。
 // 月（半径 MOON_R）が軌道上のどこにいても地球に重ならない範囲で、日本の形が見える
 // 大きさまで上げてある（ORBIT_R - EARTH_R - MOON_R = 39px の余白を残す）。
@@ -256,9 +258,10 @@ function updateJapan(rotDeg) {
 }
 
 /* ---- 月の形（地球から見た見え方） ---- */
+// viewBox は 0 0 232 232（円の半径110+左右6pxの余白だけ）。
 const shapeSvg = document.getElementById('mp-shape');
 const shapePanel = document.querySelector('.mp-panel--shape');
-const SHAPE_CX = 150, SHAPE_CY = 150, SHAPE_R = 110;
+const SHAPE_CX = 116, SHAPE_CY = 116, SHAPE_R = 110;
 let shapePath;
 
 function buildShapeScene() {
