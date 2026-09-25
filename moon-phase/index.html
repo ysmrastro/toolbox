@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>月の満ち欠けシミュレーター | ysmrastro toolbox</title>
+  <meta name="description" content="月をドラッグすると、北極から見下ろした軌道と、地球から見た月の形が同時に動きます。">
+
+  <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ysmrastro toolbox">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:url" content="https://ysmrastro.github.io/toolbox/moon-phase/">
+  <meta property="og:title" content="月の満ち欠けシミュレーター">
+  <meta property="og:description" content="月をドラッグすると、北極から見下ろした軌道と、地球から見た月の形が同時に動く。時刻も動かせて、日本からいつ月が見えるかも分かります。">
+  <meta property="og:image" content="https://ysmrastro.github.io/toolbox/moon-phase/ogp.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="月の満ち欠けシミュレーター">
+  <meta name="twitter:description" content="月をドラッグすると、北極から見下ろした軌道と、地球から見た月の形が同時に動く。時刻も動かせて、日本からいつ月が見えるかも分かります。">
+  <meta name="twitter:image" content="https://ysmrastro.github.io/toolbox/moon-phase/ogp.png">
+
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="apple-touch-icon" href="../favicon.png">
+  <link rel="stylesheet" href="../shared/css/variables.css">
+  <link rel="stylesheet" href="../shared/css/reset.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="style.css?v=1.5.0">
+</head>
+<body>
+
+<header class="tb-header">
+  <a href="../" class="tb-header__logo">ysmrastro toolbox</a>
+  <nav class="tb-header__nav">
+    <a href="../">ツール一覧</a>
+  </nav>
+</header>
+
+<div class="mp-app">
+
+  <section class="mp-intro">
+    <h1 class="mp-title"><ruby>月<rt>つき</rt></ruby>の<ruby>満<rt>み</rt></ruby>ち<ruby>欠<rt>か</rt></ruby>けシミュレーター</h1>
+    <p class="mp-subtitle"><ruby>月<rt>つき</rt></ruby>をうごかすと、<ruby>地球<rt>ちきゅう</rt></ruby>から<ruby>見<rt>み</rt></ruby>た<ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby>がかわるよ</p>
+  </section>
+
+  <div class="mp-stage">
+    <section class="mp-panel mp-panel--orbit">
+      <div class="mp-panel-head">
+        <h2><ruby>北極<rt>ほっきょく</rt></ruby>から<ruby>見<rt>み</rt></ruby><ruby>下<rt>おろ</rt></ruby>ろした図</h2>
+        <p class="mp-hint">太陽は左。ドラッグでうごかそう。</p>
+      </div>
+      <svg id="mp-orbit" viewBox="0 0 380 294" role="img" aria-label="北極の上から見た、太陽・地球（日本の位置つき）・月の位置"></svg>
+    </section>
+    <section class="mp-panel mp-panel--shape">
+      <div class="mp-panel-head">
+        <h2><ruby>地球<rt>ちきゅう</rt></ruby>から<ruby>見<rt>み</rt></ruby>た<ruby>月<rt>つき</rt></ruby>の<ruby>形<rt>かたち</rt></ruby></h2>
+        <p class="mp-hint">北半球から見上げたときの見え方です。</p>
+      </div>
+      <svg id="mp-shape" viewBox="0 0 232 232" role="img" aria-label="地球から見た月の形"></svg>
+      <div class="mp-moon-overlay">
+        <p>いまは しずんでいて <ruby>見<rt>み</rt></ruby>えない</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="mp-readout">
+    <p class="mp-age"><ruby>月齢<rt>げつれい</rt></ruby> <span id="mp-age-value">0.0</span></p>
+    <p class="mp-name" id="mp-name"></p>
+    <p class="mp-status" id="mp-daynight"></p>
+    <p class="mp-status" id="mp-moonvis"></p>
+  </div>
+
+  <div class="mp-controls">
+    <div class="mp-slider-row">
+      <label for="mp-day-slider"><ruby>日<rt>ひ</rt></ruby></label>
+      <input type="range" id="mp-day-slider" class="tb-range" min="0" max="29" step="1" value="0"
+             aria-label="日">
+      <output id="mp-day-out" for="mp-day-slider">0</output>
+      <button type="button" id="mp-day-prev" class="mp-step-btn" aria-label="1日もどす">◀</button>
+      <button type="button" id="mp-day-next" class="mp-step-btn" aria-label="1日すすめる">▶</button>
+    </div>
+    <div class="mp-slider-row">
+      <label for="mp-time-slider"><ruby>時刻<rt>じこく</rt></ruby></label>
+      <input type="range" id="mp-time-slider" class="tb-range" min="0" max="23.75" step="0.25" value="12"
+             aria-label="時刻">
+      <output id="mp-time-out" for="mp-time-slider">12:00</output>
+      <button type="button" id="mp-time-prev" class="mp-step-btn" aria-label="15分もどす">◀</button>
+      <button type="button" id="mp-time-next" class="mp-step-btn" aria-label="15分すすめる">▶</button>
+    </div>
+
+    <div class="mp-speed-row" role="group" aria-label="自動再生">
+      <button type="button" class="mp-speed-btn" data-speed="1">1<ruby>秒<rt>びょう</rt></ruby>で1<ruby>時間<rt>じかん</rt></ruby></button>
+      <button type="button" class="mp-speed-btn is-active" data-speed="6">1<ruby>秒<rt>びょう</rt></ruby>で6<ruby>時間<rt>じかん</rt></ruby></button>
+      <button type="button" class="mp-speed-btn" data-speed="24">1<ruby>秒<rt>びょう</rt></ruby>で1<ruby>日<rt>にち</rt></ruby></button>
+      <button type="button" class="mp-speed-btn" data-speed="72">1<ruby>秒<rt>びょう</rt></ruby>で3<ruby>日<rt>にち</rt></ruby></button>
+      <button type="button" id="mp-play" class="tb-btn tb-btn--secondary mp-play">▶ うごかす</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js?v=1.5.0"></script>
+</body>
+</html>

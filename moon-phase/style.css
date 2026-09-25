@@ -1,0 +1,312 @@
+/* 月の満ち欠けシミュレーター
+   共通トークン（shared/css/variables.css）は触らず、ここで上書き・追加する。 */
+:root {
+  /* CLAUDE.md の梯子に乗せる。共通の sm=13.6px / lg=18.4px は奇数px なので直す */
+  --tb-font-size-sm: 0.875rem;   /* 14px */
+  --tb-font-size-lg: 1.125rem;   /* 18px */
+
+  /* numahoto テーマに合わせた配色。shared の夜空トーンとは別の、このツール専用のネイビー */
+  --mp-bg: #1A2332;
+  --mp-primary: #7EB8DA;
+  --mp-gold: #F6D365;
+  --mp-gold-edge: #B8923A;   /* 日本の縁取り（塗りの gold より暗く、島の輪郭が分かるように） */
+  --mp-text: #B8D4E8;
+  --mp-subtext: #7A95AA;
+  --mp-sun: #FFD050;
+  --mp-earth-dark: #16202E;   /* 地球の夜側 */
+  --mp-moon-lit: #E8E4D8;     /* 月の照らされた側 */
+  --mp-moon-dark: #242E40;    /* 月の夜側（地球照でうっすら見える） */
+
+  /* 名前表示だけ、梯子の外に大きめの専用サイズを1つ足す（未就学児にも読めるように） */
+  --mp-font-size-name: 2.25rem;   /* 36px */
+}
+
+/* ============================================================
+   全体
+   ============================================================ */
+.mp-app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--tb-space-md);
+}
+
+.mp-intro {
+  text-align: center;
+  margin-bottom: var(--tb-space-xs);
+}
+.mp-title {
+  font-size: var(--tb-font-size-xl);
+  color: var(--mp-primary);
+  margin-bottom: 2px;
+}
+.mp-subtitle {
+  font-size: var(--tb-font-size-base);
+  color: var(--mp-subtext);
+}
+
+/* ============================================================
+   図
+   ── デスクトップ（701px以上）は下の @media で、画面の高さいっぱいに
+      図を広げる（body→mp-app→mp-stage→mp-panel→svg と flex を通し、
+      操作部などの自然な高さを引いた「残り」を svg まで渡す）。
+      ここのモバイル向けの指定は、その入れ子が効かない狭い画面のための
+      素朴な指定（svg は横幅に合わせ、高さは画面の高さ基準で頭打ち）。
+   ============================================================ */
+.mp-stage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--tb-space-sm);
+  align-items: start;
+}
+
+.mp-panel {
+  background: var(--mp-bg);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  /* 上下だけ 2px まで詰める（図の高さを1pxでも多く稼ぐため。左右は tb-space-md のまま） */
+  padding: 2px var(--tb-space-md);
+  min-width: 0;
+}
+/* 見出しと説明文を1行に並べて、縦を図にまわす */
+.mp-panel-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--tb-space-xs);
+}
+.mp-panel h2 {
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  color: var(--mp-text);
+  margin: 0;
+  white-space: nowrap;
+}
+.mp-hint {
+  font-size: var(--tb-font-size-xs);
+  color: var(--mp-subtext);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.mp-panel svg {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 27vh;
+  margin: 0 auto;
+  touch-action: none;   /* ドラッグ中にページがスクロールしないように */
+}
+/* 軌道図の中の文字（「にほん」ラベル）は共通フォントに合わせる */
+#mp-orbit text {
+  font-family: var(--tb-font-family);
+  font-weight: 700;
+}
+
+/* 月（軌道図・ドラッグできる方）だけ、つかめることが分かるように */
+#mp-moon-hit { cursor: grab; }
+#mp-moon-hit:active { cursor: grabbing; }
+
+/* 月が沈んでいるときは、右のパネルにオーバーレイを重ねて暗くする */
+.mp-panel--shape { position: relative; }
+.mp-moon-overlay {
+  position: absolute;
+  inset: var(--tb-space-md);
+  top: calc(var(--tb-space-md) + 1.6em);   /* 見出し・説明ぶんは避ける */
+  display: none;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: rgba(5, 8, 12, .74);
+  border-radius: var(--tb-radius-md);
+  color: var(--mp-text);
+}
+.mp-moon-overlay p {
+  font-size: var(--tb-font-size-lg);
+  font-weight: 700;
+  margin: 0;
+  padding: var(--tb-space-md);
+}
+.mp-panel--shape.is-moon-hidden .mp-moon-overlay { display: flex; }
+
+/* ============================================================
+   読み取り
+   ============================================================ */
+.mp-readout {
+  text-align: center;
+  margin: 2px 0;
+}
+.mp-age {
+  font-size: var(--tb-font-size-base);
+  color: var(--mp-subtext);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+.mp-name {
+  font-size: var(--mp-font-size-name);
+  font-weight: 700;
+  color: var(--mp-gold);
+  margin: 0;
+  min-height: 1.15em;
+  line-height: 1.15;
+}
+.mp-status {
+  font-size: var(--tb-font-size-base);
+  color: var(--mp-text);
+  margin: 0;
+  line-height: 1.4;
+}
+.mp-status ruby { color: var(--mp-primary); font-weight: 700; }
+
+/* ============================================================
+   操作
+   ── つまみは「ラベル｜つまみ｜値｜◀｜▶」の1行、速さと再生も1行にして
+      縦を詰める（ユーザーから「縦が長い」との指摘）。
+   ============================================================ */
+.mp-controls {
+  display: grid;
+  gap: 2px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.mp-slider-row {
+  display: grid;
+  grid-template-columns: 3.2rem minmax(0, 1fr) 4rem 2.25rem 2.25rem;
+  align-items: center;
+  gap: var(--tb-space-xs);
+}
+.mp-slider-row label {
+  font-size: var(--tb-font-size-sm);
+  color: var(--mp-subtext);
+}
+.mp-slider-row output {
+  font-size: var(--tb-font-size-sm);
+  font-family: var(--tb-font-mono);
+  color: var(--mp-text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ◀ ▶（1コマ送り）。指でも押しやすい大きさを保ちつつ、1行に収める */
+.mp-step-btn {
+  font: inherit;
+  font-size: var(--tb-font-size-sm);
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  border-radius: var(--tb-radius-sm);
+  border: 1px solid var(--tb-border);
+  background: var(--tb-bg-tertiary);
+  color: var(--mp-text);
+  cursor: pointer;
+}
+.mp-step-btn:hover { border-color: var(--mp-primary); color: var(--mp-primary); }
+.mp-step-btn:active { background: var(--tb-bg-secondary); }
+
+.mp-speed-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tb-space-xs);
+}
+.mp-speed-btn {
+  font: inherit;
+  font-size: var(--tb-font-size-xs);
+  padding: 0.4rem 0.7rem;
+  min-height: 2.25rem;
+  border-radius: var(--tb-radius-sm);
+  border: 1px solid var(--tb-border);
+  background: var(--tb-bg-tertiary);
+  color: var(--mp-text);
+  cursor: pointer;
+}
+.mp-speed-btn:hover { border-color: var(--mp-primary); }
+.mp-speed-btn.is-active {
+  border-color: var(--mp-primary);
+  color: var(--mp-primary);
+  background: rgba(126, 184, 218, .14);
+}
+
+.mp-play { min-width: 9rem; white-space: nowrap; }
+
+/* ============================================================
+   デスクトップ ── 図を画面の高さいっぱいまで広げる
+   ── body を縦の flex にして、ヘッダーの下（mp-app）に残りの高さを渡す。
+      mp-app の中でも、タイトル・読み取り・操作部は自然な高さのまま
+      （flex-grow せず）、mp-stage だけが残りの高さを受け取って伸びる。
+      grid の行は既定で stretch するので、2つの mp-panel はどちらも
+      mp-stage と同じ高さになる。panel の中は見出し・説明・svg の
+      縦並び flex にして、svg だけを「残り」いっぱいに広げる。
+      svg 自身は幅・高さとも 100% にするだけでよい ── viewBox が正方形
+      なので、はみ出す側は自動で余白になり、絵が歪んだり切れたりしない
+      （SVG の既定の preserveAspectRatio による）。
+   ============================================================ */
+@media (min-width: 701px) {
+  body {
+    display: flex;
+    flex-direction: column;
+    /* flex-grow が配れる「残り」を作るには、コンテナの高さが確定していないといけない。
+       reset.css の min-height:100vh だけでは高さがコンテンツ依存のままで、
+       mp-stage に伸ばす余地が生まれない（伸ばす分を計算できないため）。 */
+    height: 100vh;
+  }
+  .mp-app {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    /* 上下の余白も図にまわす（左右は tb-space-md のまま） */
+    padding-top: 4px;
+    padding-bottom: 2px;
+  }
+  .mp-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* 基本の align-items:start（パネルを自然な高さのまま上に置く指定）を、
+       行の高さいっぱいに揃えるほうへ上書きする */
+    align-items: stretch;
+  }
+  .mp-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .mp-panel-head {
+    flex: none;
+  }
+  .mp-panel svg {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+  }
+}
+
+/* ============================================================
+   スマホ ── 左（軌道図）が上、右（月の形）が下に積む
+   ============================================================ */
+@media (max-width: 700px) {
+  .mp-app { padding: var(--tb-space-sm); }
+  .mp-stage { grid-template-columns: 1fr; }
+  .mp-panel svg { max-height: 34vh; }
+}
+
+/* さらに狭い幅では、つまみの行を「ラベル＋値＋◀▶」の上段／つまみの下段に折り返す
+   （1行だと、つまみ本体がほぼ無くなるほど狭くなるため）。 */
+@media (max-width: 480px) {
+  .mp-slider-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 2px;
+  }
+  .mp-slider-row label { order: 1; }
+  .mp-slider-row output { order: 2; margin-left: auto; }
+  .mp-slider-row .mp-step-btn { order: 3; margin-left: var(--tb-space-xs); }
+  .mp-slider-row input[type=range] { order: 4; flex-basis: 100%; width: 100%; }
+}
