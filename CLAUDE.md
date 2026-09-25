@@ -49,6 +49,7 @@ toolbox/
     ├── index.html
     ├── style.css
     ├── app.js              # 位置・見え方の計算とSVG描画・ドラッグ操作（外部ライブラリなし）
+    ├── ogp-source.html     # OGP画像の生成元（実物の描画をそのまま使う）
     └── README.md           # 見え方のモデル（離角と明暗・北半球での見え方・反時計回り）
 ```
 
