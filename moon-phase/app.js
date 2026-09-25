@@ -80,7 +80,10 @@ function moonShapePath(cx, cy, r, phi) {
 /* ---- 軌道図（北極から見下ろした図） ---- */
 const orbitSvg = document.getElementById('mp-orbit');
 const ORBIT_CX = 230, ORBIT_CY = 200, ORBIT_R = 130;
-const EARTH_R = 56, MOON_R = 16;   // EARTH_R は日本の形が見える大きさまで上げてある
+// EARTH_R は「軌道半径の0.35〜0.4倍程度」という目安より大きい（比は約0.58）。
+// 月（半径 MOON_R）が軌道上のどこにいても地球に重ならない範囲で、日本の形が見える
+// 大きさまで上げてある（ORBIT_R - EARTH_R - MOON_R = 39px の余白を残す）。
+const EARTH_R = 75, MOON_R = 16;
 
 let moonGroup, moonHit;
 
@@ -141,19 +144,34 @@ function updateOrbitScene(phi) {
    （日本全体をひとつの地方時として扱ってよい、という指示のとおり）。 */
 const JAPAN_REF_LON = 135;   // 日本標準時の基準子午線。回転角の基準にも使う
 const JAPAN_REF_LAT = 36;    // 「人が立つ地点」の代表緯度（近畿あたり）
-// 正しい縮尺のままだと、この絵の地球（半径 EARTH_R）の上では日本が数px の点にしかならず、
+// 正しい縮尺のままだと、地球（半径 EARTH_R）の上では日本が数px の点にしかならず、
 // 北海道・本州・九州の見分けがつかない。代表地点からの緯度経度のずれをこの倍率で誇張し、
-// 形だけ見える大きさにする（代表地点そのものの位置は誇張しない＝地平線や人の印はそのまま）。
-const JAPAN_SCALE = 3.1;
+// 列島の弧の長さが地球の半径のおよそ1/3になるようにしている（地平線・人の印も
+// 同じ誇張後の位置に合わせる。判定の計算は角度だけなので誇張しても結果は変わらない）。
+const JAPAN_SCALE = 1.6;
 
-// 北海道の東から反時計まわりに太平洋側を九州まで下り、瀬戸内・日本海側を北海道まで戻る、
-// ごく粗い輪郭（十数点）。海岸線データではなく、形の見当をつけるための概算値。
-const JAPAN_OUTLINE = [
-  [145.8, 44.5], [144.5, 43.5], [141.8, 41.2], [141.3, 38.3], [140.9, 36.0],
-  [139.8, 34.9], [138.8, 34.6], [136.9, 34.2], [135.0, 33.5], [133.3, 32.8],
-  [131.8, 31.6], [130.3, 31.2], [129.7, 32.9], [131.5, 33.9], [132.5, 35.4],
-  [135.7, 35.6], [137.0, 36.8], [139.1, 38.0], [140.1, 39.7], [141.0, 41.3],
-  [140.7, 43.1], [142.5, 44.9]
+// 北海道・本州・四国・九州を別々の多角形にして、列島の弧の形が分かるようにする。
+// 海岸線データではなく、形の見当をつけるための概算値（十点前後ずつ）。
+const JAPAN_LANDMASSES = [
+  { points: [ // 北海道
+    [140.9, 41.8], [140.3, 43.4], [141.6, 45.3], [143.5, 45.0],
+    [145.3, 43.8], [145.5, 42.6], [144.0, 41.8], [142.0, 41.6]
+  ] },
+  { points: [ // 本州（太平洋側を南下し、日本海側を北上して戻る）
+    [141.3, 41.3], [141.0, 38.9], [140.8, 37.3], [140.0, 36.0], [139.7, 35.3],
+    [138.9, 34.7], [137.7, 34.6], [136.5, 34.2], [135.7, 33.6], [135.0, 33.9],
+    [133.9, 34.3], [132.5, 34.2], [131.5, 34.2], [131.0, 34.5], [132.0, 35.5],
+    [133.5, 35.6], [135.3, 35.7], [136.8, 36.9], [138.2, 37.8], [139.4, 39.1],
+    [140.2, 40.6]
+  ] },
+  { points: [ // 四国
+    [134.6, 33.9], [133.9, 34.2], [133.0, 33.9], [132.6, 33.3],
+    [132.9, 32.8], [133.8, 32.9], [134.5, 33.2]
+  ] },
+  { points: [ // 九州
+    [131.9, 33.9], [131.3, 33.3], [131.8, 31.7], [130.9, 31.0],
+    [130.2, 31.2], [129.6, 32.6], [130.0, 33.0], [130.9, 33.5]
+  ] }
 ];
 
 // 時刻（0〜24時）から、日本の回転角（度・数学座標＝反時計回りが正）を作る。
@@ -168,11 +186,22 @@ function projectLonLat(lon, lat, rotDeg) {
   return [ORBIT_CX + dist * Math.cos(rad), ORBIT_CY - dist * Math.sin(rad)];
 }
 
-let japanPath, japanLabel, japanHorizon, japanPersonHead, japanPersonBody;
+// JAPAN_SCALE の説明どおり、代表地点からのずれだけを誇張してから投影する。
+// 地平線・人の印もこれで作った点を使うので、見た目の日本の位置とぴったり合う。
+function projectJapan(lon, lat, rotDeg) {
+  const exLon = JAPAN_REF_LON + (lon - JAPAN_REF_LON) * JAPAN_SCALE;
+  const exLat = JAPAN_REF_LAT + (lat - JAPAN_REF_LAT) * JAPAN_SCALE;
+  return projectLonLat(exLon, exLat, rotDeg);
+}
+
+let japanPaths, japanLabel, japanHorizon, japanPersonHead, japanPersonBody;
 
 function buildJapan() {
-  japanPath = el('path', { fill: 'var(--mp-gold)', stroke: 'var(--mp-gold)', 'stroke-width': 1, 'stroke-linejoin': 'round' });
-  orbitSvg.appendChild(japanPath);
+  // 塗りは gold、縁取りはそれより暗い色で「島」がひとつずつ分かるようにする
+  japanPaths = JAPAN_LANDMASSES.map(() => el('path', {
+    fill: 'var(--mp-gold)', stroke: 'var(--mp-gold-edge)', 'stroke-width': 1.2, 'stroke-linejoin': 'round'
+  }));
+  japanPaths.forEach(p => orbitSvg.appendChild(p));
 
   // 地平線（接している短い線）と、立っている人の印
   japanHorizon = el('line', { stroke: 'var(--mp-gold)', 'stroke-width': 1.5, opacity: 0.85 });
@@ -183,26 +212,25 @@ function buildJapan() {
   orbitSvg.appendChild(japanPersonHead);
 
   japanLabel = el('text', {
-    'font-size': 13, fill: 'var(--mp-gold)', 'text-anchor': 'middle', 'dominant-baseline': 'middle'
+    'font-size': 14, fill: 'var(--mp-gold)', 'text-anchor': 'middle', 'dominant-baseline': 'middle'
   });
   japanLabel.textContent = 'にほん';
   orbitSvg.appendChild(japanLabel);
 }
 
 function updateJapan(rotDeg) {
-  const d = JAPAN_OUTLINE
-    .map(([lon, lat], i) => {
-      // JAPAN_SCALE の説明どおり、代表地点からのずれだけを誇張して投影する
-      const exLon = JAPAN_REF_LON + (lon - JAPAN_REF_LON) * JAPAN_SCALE;
-      const exLat = JAPAN_REF_LAT + (lat - JAPAN_REF_LAT) * JAPAN_SCALE;
-      const [x, y] = projectLonLat(exLon, exLat, rotDeg);
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(' ') + ' Z';
-  japanPath.setAttribute('d', d);
+  JAPAN_LANDMASSES.forEach((mass, i) => {
+    const d = mass.points
+      .map(([lon, lat], j) => {
+        const [x, y] = projectJapan(lon, lat, rotDeg);
+        return `${j === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+      })
+      .join(' ') + ' Z';
+    japanPaths[i].setAttribute('d', d);
+  });
 
-  // 代表地点（東経135°・北緯36°）に、地平線の接線と人の印を立てる
-  const [px, py] = projectLonLat(JAPAN_REF_LON, JAPAN_REF_LAT, rotDeg);
+  // 代表地点（東経135°・北緯36°）の、誇張後の位置に地平線の接線と人の印を立てる
+  const [px, py] = projectJapan(JAPAN_REF_LON, JAPAN_REF_LAT, rotDeg);
   const rad = rotDeg * Math.PI / 180;
   const radial = [Math.cos(rad), -Math.sin(rad)];      // 中心から外向き（＝その人にとっての「上」）
   const tangent = [-radial[1], radial[0]];             // 90°回した接線＝地平線の向き
@@ -218,9 +246,11 @@ function updateJapan(rotDeg) {
   japanPersonBody.setAttribute('x2', headX); japanPersonBody.setAttribute('y2', headY);
   japanPersonHead.setAttribute('cx', headX); japanPersonHead.setAttribute('cy', headY);
 
-  // ラベルは中心から見て代表地点のさらに外側（読みやすいよう少し離す）
-  japanLabel.setAttribute('x', ORBIT_CX + (px - ORBIT_CX) * 1.5);
-  japanLabel.setAttribute('y', ORBIT_CY + (py - ORBIT_CY) * 1.5);
+  // ラベルは代表地点と同じ向き（rad）に沿って、地球の縁の外側に置く。
+  // 列島は必ず地球の中（dist < EARTH_R）に収まるので、これで形と重ならない。
+  const labelDist = EARTH_R + 14;
+  japanLabel.setAttribute('x', ORBIT_CX + radial[0] * labelDist);
+  japanLabel.setAttribute('y', ORBIT_CY + radial[1] * labelDist);
 }
 
 /* ---- 月の形（地球から見た見え方） ---- */

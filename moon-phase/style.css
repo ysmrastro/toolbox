@@ -9,6 +9,7 @@
   --mp-bg: #1A2332;
   --mp-primary: #7EB8DA;
   --mp-gold: #F6D365;
+  --mp-gold-edge: #B8923A;   /* 日本の縁取り（塗りの gold より暗く、島の輪郭が分かるように） */
   --mp-text: #B8D4E8;
   --mp-subtext: #7A95AA;
   --mp-sun: #FFD050;
