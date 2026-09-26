@@ -242,7 +242,8 @@ npm test
 ## 開発コマンド
 
 ```bash
-npm test                       # Small テスト（依存なし・1秒台）
+npm test                       # Small テスト全ツールぶん（依存なし・1秒台）
+npm run test:meteor-settings   # 1つのツールだけ（ほかに test:quiz-drill / test:astro）
 npm run test:e2e               # ブラウザで起動して表示だけ見る（Playwright）
 npx serve .                    # ローカルサーバー
 python3 -m http.server         # 代替
@@ -266,12 +267,25 @@ state を注入するのは app.js の役目で、`P.` の薄いラッパにま�
 
 ## CI とブランチ保護
 
-`.github/workflows/test.yml` が PR と main への push で走る。ジョブは2つ。
+**CI はツールごとに1ファイル**（`.github/workflows/ci-<ツール名>.yml`、Actions では
+`CI - <ツール名>` と並ぶ）。書き方は rd-lab の CI にそろえている。
+**そのツールと、それが使うものが変わった PR でだけ走る**（ワークフローの `paths:` で絞る）。
 
-| チェック名 | 中身 | 目安 |
+| ワークフロー | 走る条件（変わったとき） | ジョブ |
 |---|---|---|
-| `Small テスト` | `npm test`（依存なし） | 10秒 |
-| `E2E smoke` | `npm run test:e2e`（Playwright） | 50秒 |
+| `CI - meteor-settings` | `meteor-settings/`・`shared/`・`package.json`・`package-lock.json` | `Small テスト`（`npm run test:meteor-settings`）・`E2E smoke`（`npm run test:e2e`） |
+| `CI - quiz-drill` | `quiz-drill/`・`shared/`・`package.json` | `Small テスト`（`npm run test:quiz-drill`） |
+| `CI - moon-phase` | `moon-phase/`・`meteor-settings/astro.js` とそのテスト・`shared/`・`package.json` | `構文チェック`・`astro.js のテスト`（`npm run test:astro`） |
+| `CI - collimation` | `collimation/`・`shared/` | `構文チェック` |
+| `CI - qr-generator` | `qr-generator/`・`shared/` | `構文チェック` |
+
+どのワークフローも、自分自身の yml が変わったときにも走る。
+
+- **依存先を `paths:` に入れ忘れない。** moon-phase は `meteor-settings/astro.js` をコピーせず読み込んで
+  いるので、astro.js の変更で moon-phase が壊れうる。ツールが別のツールや共通部品を使うようになったら、
+  そのパスを使う側の `paths:` にも足す
+- **ツールを足したら `ci-<ツール名>.yml` も足す。** テストが無いうちは `node --check` の構文チェックだけでよい
+- テストを1つのツールだけ流すときは `npm run test:<ツール名>`。`npm test` は全ツールぶん
 
 TZ は `Asia/Tokyo` に固定してある。日本の空を計算するアプリで参照値も JST なので、
 CI の既定（UTC）のままだと「その夜」の数え方が実際とずれる。
@@ -279,7 +293,10 @@ CI の既定（UTC）のままだと「その夜」の数え方が実際とず�
 **main は保護してある。**
 
 - **直接 push できない**（PR 必須。承認は0人でよいので一人でもマージできる）
-- 上の2つのチェックが**緑でないとマージできない**
+- **CI は必須チェックにしていない。** `paths:` で絞ったワークフローは、対象外の PR では
+  結果そのものが出ないので、必須にすると「待ち」のまま一生マージできなくなる。
+  **緑になったのを自分で見てからマージする**（以前は `Small テスト`・`E2E smoke` を必須にしていたが、
+  ツールごとに分けたときに外した）
 - **管理者にも適用**（`enforce_admins: true`）。オーナーでも素通りできない。
   これを外すと一人リポジトリでは実質ノーガードになるので、意図して有効にしている
 - force push とブランチ削除は禁止
