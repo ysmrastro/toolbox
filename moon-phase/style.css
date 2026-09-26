@@ -214,7 +214,9 @@
 
 .mp-slider-row {
   display: grid;
-  grid-template-columns: 3.2rem minmax(0, 1fr) 4rem 2.25rem 2.25rem;
+  /* 3列目（値）は「2:00（27日）」のように翌日の日付が付くと長くなるので、
+     「9/26」だけの日つまみにはやや余るが、時刻つまみに合わせて広げてある */
+  grid-template-columns: 3.2rem minmax(0, 1fr) 6.5rem 2.25rem 2.25rem;
   align-items: center;
   gap: var(--tb-space-xs);
 }
@@ -228,6 +230,7 @@
   color: var(--mp-text);
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ◀ ▶（1コマ送り）。指でも押しやすい大きさを保ちつつ、1行に収める */

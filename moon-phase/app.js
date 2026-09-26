@@ -36,10 +36,6 @@ function dateForSimDay(simDay) {
 function formatDateLabel(date) {
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
-function formatClock(date) {
-  if (!date) return 'なし';
-  return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
 
 const TWO_PI = Math.PI * 2;
 const normPhi = phi => ((phi % TWO_PI) + TWO_PI) % TWO_PI;
@@ -504,19 +500,43 @@ function updateTicks(centerDate) {
   }
 }
 
-// その日の出入りは日が変わったときだけ作り直す（毎フレームでは重いため）。
-// 通り道・目盛りは「いま」が動くたびに窓自体が動くので、毎回作り直す
-// （10分刻み×24時間ぶんの評価で軽く、毎フレームでも問題にならない）。
-let hzCacheDayKey = null, hzCacheEvents = null;
-function ensureHorizonDayCache(date) {
-  const key = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
-  if (key === hzCacheDayKey) return;
-  hzCacheDayKey = key;
-  hzCacheEvents = MS_ASTRO.dayEvents(date, FUKUOKA_LAT, FUKUOKA_LON);
+// 「日」がいま表している夜（d日6:00〜d+1日5:45）の出入り。
+// 日の入りは d日、日の出は d+1日（それぞれの暦日の dayEvents）のものを使う ──
+// これで「その夜の始まりの日没」「その夜の終わりの日の出」になる。
+// 月の出入りは暦日単位の dayEvents では窓に合わないので、findCrossing で
+// d日6:00〜d+1日6:00 の中を自前で探す。
+function computeNightEvents(day) {
+  const sunToday = MS_ASTRO.dayEvents(dateForSimDay(day), FUKUOKA_LAT, FUKUOKA_LON);
+  const sunTomorrow = MS_ASTRO.dayEvents(dateForSimDay(day + 1), FUKUOKA_LAT, FUKUOKA_LON);
+  const winStart = dateForSimDay(day + 6 / 24).getTime();
+  const winEnd = dateForSimDay(day + 1 + 6 / 24).getTime();
+  const moonAlt = t => MS_ASTRO.moonPosition(t, FUKUOKA_LAT, FUKUOKA_LON).altitude;
+  const moonrise = MS_ASTRO.findCrossing(winStart, winEnd, 10 * 60000, moonAlt, MOON_HORIZON_ALT, +1, 30000);
+  const moonset = MS_ASTRO.findCrossing(winStart, winEnd, 10 * 60000, moonAlt, MOON_HORIZON_ALT, -1, 30000);
+  return { sunset: sunToday.sunset, sunrise: sunTomorrow.sunrise, moonrise, moonset };
 }
 
-function updateHorizonScene(date, sun, moon) {
-  ensureHorizonDayCache(date);
+// 出入りの時刻に、暦日の数字を添える（例: 18:10（26日））。指示の例にならい、
+// d日・d+1日のどちらでも常に日付を添える（読み手が「今どちらの日か」を
+// 考えずに読めるようにするため）。ルビは「日」だけに付ける（数字にルビは要らない）。
+function formatEventClock(date) {
+  if (!date) return 'なし';
+  const h = date.getHours(), m = date.getMinutes();
+  return `${h}:${String(m).padStart(2, '0')}（${date.getDate()}<ruby>日<rt>にち</rt></ruby>）`;
+}
+
+// 夜の出入りは日が変わったときだけ作り直す（毎フレームでは重いため）。
+// 通り道・目盛りは「いま」が動くたびに窓自体が動くので、毎回作り直す
+// （10分刻み×24時間ぶんの評価で軽く、毎フレームでも問題にならない）。
+let hzCacheDay = null, hzCacheEvents = null;
+function ensureHorizonDayCache(day) {
+  if (day === hzCacheDay) return;
+  hzCacheDay = day;
+  hzCacheEvents = computeNightEvents(day);
+}
+
+function updateHorizonScene(date, day, sun, moon) {
+  ensureHorizonDayCache(day);
   hzTrackPath.setAttribute('d', trackPathD(computeMoonTrack(date)));
   updateTicks(date);
 
@@ -548,12 +568,13 @@ function updateHorizonScene(date, sun, moon) {
     hzMoonGroup.style.display = 'none';
   }
 
+  // 夜の始まり→終わりの順（日の入り・月の出・月の入り・日の出）に表示する
   const ev = hzCacheEvents;
   eventsEl.innerHTML =
-    `<ruby>日<rt>ひ</rt></ruby>の<ruby>出<rt>で</rt></ruby> ${formatClock(ev.sunrise)}／` +
-    `<ruby>日<rt>ひ</rt></ruby>の<ruby>入<rt>い</rt></ruby>り ${formatClock(ev.sunset)}／` +
-    `<ruby>月<rt>つき</rt></ruby>の<ruby>出<rt>で</rt></ruby> ${formatClock(ev.moonrise)}／` +
-    `<ruby>月<rt>つき</rt></ruby>の<ruby>入<rt>い</rt></ruby>り ${formatClock(ev.moonset)}`;
+    `<ruby>日<rt>ひ</rt></ruby>の<ruby>入<rt>い</rt></ruby>り ${formatEventClock(ev.sunset)}／` +
+    `<ruby>月<rt>つき</rt></ruby>の<ruby>出<rt>で</rt></ruby> ${formatEventClock(ev.moonrise)}／` +
+    `<ruby>月<rt>つき</rt></ruby>の<ruby>入<rt>い</rt></ruby>り ${formatEventClock(ev.moonset)}／` +
+    `<ruby>日<rt>ひ</rt></ruby>の<ruby>出<rt>で</rt></ruby> ${formatEventClock(ev.sunrise)}`;
 }
 
 /* ============================================================
@@ -577,19 +598,38 @@ const timeNextBtn = document.getElementById('mp-time-next');
 // 初期表示は 2026-09-26 20:00（お話会の当日・時刻）＝ DAY0 から15日と20時間
 let simDay = 15 + 20 / 24;
 
-function formatTime(time) {
-  // time は day + time/24 の往復で作っているので、10/24 のような割り切れない値では
+// simDay（経過日数）を「日」「時刻」の2本のつまみの値に分ける。
+// 「時刻」は 6:00 始まり（〜翌 29.75 時＝5:45）にしてある ── 0時始まりだと、
+// 夜中に「先に進める」がすぐ端に当たって使いづらい、というユーザーの声を受けたもの。
+// d 日は「d 日 6:00 〜 d+1 日 5:45」を表すので、日の境目を 6:00 にずらして
+// floor する（simDay - 6/24 を切り捨てる）。当日 0:00〜5:59 は、前日の夜の続きとして
+// 前日側に入る。
+function decomposeSimDay(simDay) {
+  const rawDay = Math.floor(simDay - 6 / 24);
+  const time = (simDay - rawDay) * 24;                          // 6 <= time < 30
+  const day = ((rawDay % DAY_CYCLE) + DAY_CYCLE) % DAY_CYCLE;    // 0〜29（つまみ・表示用）
+  return { day, time };
+}
+
+// time（6〜30）を表示用の文字列にする。24時以降は24を引いて、翌日の日付を
+// 「（27日）」のように添える（数字にルビは要らないが、「日」にはルビを付ける）。
+function formatTime(day, time) {
+  // day + time/24 の往復で作っているので、10/24 のような割り切れない値では
   // 浮動小数の誤差が乗る（例: 9.999999999998 になって Math.floor で時が1つ落ちる）。
   // 分単位で丸めてから時・分に分けることで、この誤差を吸収する。
-  const totalMin = Math.round(time * 60) % (24 * 60);
-  const h = Math.floor(totalMin / 60);
+  const totalMin = Math.round(time * 60);
+  let h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
+  if (h >= 24) {
+    h -= 24;
+    const nextDate = dateForSimDay(day + 1);
+    return `${h}:${String(m).padStart(2, '0')}（${nextDate.getDate()}<ruby>日<rt>にち</rt></ruby>）`;
+  }
   return `${h}:${String(m).padStart(2, '0')}`;
 }
 
 function render() {
-  const day = Math.floor(simDay);
-  const time = (simDay - day) * 24;
+  const { day, time } = decomposeSimDay(simDay);
   const date = dateForSimDay(simDay);
 
   const sun = MS_ASTRO.sunPosition(date, FUKUOKA_LAT, FUKUOKA_LON);
@@ -600,7 +640,7 @@ function render() {
   updateOrbitScene(phi);
   updateJapan(rotDeg);
   updateShapeScene(phi);
-  updateHorizonScene(date, sun, moon);
+  updateHorizonScene(date, day, sun, moon);
 
   ageValueEl.textContent = moon.age.toFixed(1);
   nameEl.innerHTML = phaseName(moon.age);
@@ -618,7 +658,7 @@ function render() {
   daySlider.value = day;
   timeSlider.value = time;
   dayOut.textContent = formatDateLabel(dateForSimDay(day));
-  timeOut.textContent = formatTime(time);
+  timeOut.innerHTML = formatTime(day, time);
 }
 
 function setSimDay(newDay) {
@@ -693,27 +733,27 @@ daySlider.addEventListener('input', () => { stopPlaying(); setSimDay(currentSlid
 timeSlider.addEventListener('input', () => { stopPlaying(); setSimDay(currentSlidersToSimDay()); });
 
 /* ◀ ▶ の1コマ送り。日は日だけ、時刻は時刻だけをループさせる ──
-   例えば時刻が 23:45 で▶を押すと 0:00 に飛ぶが、日はそのまま変えない
-  （t = 日 + 時刻/24 を作り直すので、結果として t は約1日ぶん戻る。指示どおりの挙動）。 */
-const TIME_STEP = 0.25;                    // 時刻つまみの刻み＝15分
-const TIME_STEPS_PER_DAY = 24 / TIME_STEP; // 96コマ
+   例えば時刻が 5:45（翌朝）で▶を押すと 6:00 に飛ぶが、日はそのまま変えない
+  （t = 日 + 時刻/24 を作り直すので、結果として t は1日ぶん進む。指示どおりの挙動）。 */
+const TIME_STEP = 0.25;                     // 時刻つまみの刻み＝15分
+const TIME_STEPS_PER_DAY = 24 / TIME_STEP;  // 96コマ
+const TIME_BASE_STEPS = 6 / TIME_STEP;      // 時刻つまみの起点（6:00）のコマ数
 
 function stepDay(delta) {
   stopPlaying();
-  const day = Math.floor(simDay);
-  const time = (simDay - day) * 24;
+  const { day, time } = decomposeSimDay(simDay);
   const newDay = ((day + delta) % DAY_CYCLE + DAY_CYCLE) % DAY_CYCLE;
   setSimDay(newDay + time / 24);
 }
 function stepTime(delta) {
   stopPlaying();
-  const day = Math.floor(simDay);
-  const time = (simDay - day) * 24;
-  // コマ番号にいったん丸めてから1コマ動かす（ドラッグ直後などで15分刻みから
-  // ずれていても、ボタンを押せばきちんと格子に乗る）
-  const idx = Math.round(time / TIME_STEP);
+  const { day, time } = decomposeSimDay(simDay);
+  // コマ番号（6:00を0とする）にいったん丸めてから1コマ動かす（ドラッグ直後などで
+  // 15分刻みからずれていても、ボタンを押せばきちんと格子に乗る）
+  const idx = Math.round(time / TIME_STEP) - TIME_BASE_STEPS;
   const newIdx = ((idx + delta) % TIME_STEPS_PER_DAY + TIME_STEPS_PER_DAY) % TIME_STEPS_PER_DAY;
-  setSimDay(day + (newIdx * TIME_STEP) / 24);
+  const newTime = (newIdx + TIME_BASE_STEPS) * TIME_STEP;
+  setSimDay(day + newTime / 24);
 }
 dayPrevBtn.addEventListener('click', () => stepDay(-1));
 dayNextBtn.addEventListener('click', () => stepDay(1));
