@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>4択ドリル | ysmrastro toolbox</title>
+  <meta name="description" content="自分で用意した4択問題のファイルを読み込んで、スマホで解いて練習する。問題は端末の中にだけ保存されます。">
+
+  <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ysmrastro toolbox">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:url" content="https://ysmrastro.github.io/toolbox/quiz-drill/">
+  <meta property="og:title" content="4択ドリル">
+  <meta property="og:description" content="自分で用意した4択問題のファイルを読み込んで、スマホで解いて練習する。タップですぐ判定、解説つき。問題は端末の中にだけ保存されます。">
+  <meta property="og:image" content="https://ysmrastro.github.io/toolbox/quiz-drill/ogp.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="4択ドリル">
+  <meta name="twitter:description" content="自分で用意した4択問題のファイルを読み込んで、スマホで解いて練習する。タップですぐ判定、解説つき。問題は端末の中にだけ保存されます。">
+  <meta name="twitter:image" content="https://ysmrastro.github.io/toolbox/quiz-drill/ogp.png">
+
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="apple-touch-icon" href="../favicon.png">
+  <link rel="stylesheet" href="../shared/css/variables.css">
+  <link rel="stylesheet" href="../shared/css/reset.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="tb-header">
+  <a href="../" class="tb-header__logo">ysmrastro toolbox</a>
+  <nav class="tb-header__nav">
+    <a href="../">ツール一覧</a>
+  </nav>
+</header>
+
+<main class="qd-app">
+
+  <!-- ===================== ホーム ===================== -->
+  <section id="screen-home" class="qd-screen">
+    <div class="qd-intro">
+      <h1 class="qd-title">4択ドリル</h1>
+      <p class="qd-subtitle">自分の問題ファイルを読み込んで、4択問題を解いて練習する</p>
+    </div>
+
+    <div id="resume-card" class="qd-card qd-resume" hidden>
+      <button type="button" id="btn-resume" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">続きから</button>
+      <p id="resume-desc" class="qd-note"></p>
+    </div>
+
+    <section id="empty-guide" class="qd-card" hidden>
+      <h2 class="qd-card-title">使い方</h2>
+      <ol class="qd-steps">
+        <li>問題ファイル（JSON）を用意して、この端末に送る</li>
+        <li>下の「問題ファイルを読み込む」から選ぶ</li>
+        <li>出題方法を選んで解く。選択肢をタップするとすぐ判定します</li>
+      </ol>
+      <p class="qd-note">問題はこの端末のブラウザの中にだけ保存されます。どこにも送信しません。</p>
+      <button type="button" id="btn-sample" class="tb-btn tb-btn--secondary tb-btn--block">見本の問題で試す</button>
+      <p class="qd-note"><a href="https://github.com/ysmrastro/toolbox/blob/main/quiz-drill/README.md" target="_blank" rel="noopener">問題ファイルの形式の説明</a></p>
+    </section>
+
+    <section id="start-card" class="qd-card" hidden>
+      <h2 class="qd-card-title">出題方法</h2>
+      <div class="qd-modes" role="radiogroup" aria-label="出題方法">
+        <label class="qd-mode"><input type="radio" name="mode" value="seq" checked><span>問題集ごとに通し</span></label>
+        <label class="qd-mode"><input type="radio" name="mode" value="set-random"><span>問題集の中でランダム</span></label>
+        <label class="qd-mode"><input type="radio" name="mode" value="all-random"><span>全問題からランダム</span></label>
+      </div>
+
+      <div id="set-field" class="tb-form-group">
+        <label class="tb-label" for="set-select">問題集</label>
+        <select id="set-select" class="tb-select"></select>
+      </div>
+
+      <div id="count-field" class="tb-form-group" hidden>
+        <span class="tb-label">出題数</span>
+        <div class="qd-counts" role="radiogroup" aria-label="出題数">
+          <label class="qd-count"><input type="radio" name="count" value="10" checked><span>10問</span></label>
+          <label class="qd-count"><input type="radio" name="count" value="30"><span>30問</span></label>
+          <label class="qd-count"><input type="radio" name="count" value="60"><span>60問</span></label>
+          <label class="qd-count"><input type="radio" name="count" value="all"><span>全部</span></label>
+        </div>
+      </div>
+
+      <button type="button" id="btn-start" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">はじめる</button>
+    </section>
+
+    <section class="qd-card">
+      <h2 class="qd-card-title">読み込んだ問題集</h2>
+      <ul id="set-list" class="qd-set-list"></ul>
+      <p id="set-empty" class="qd-note">まだありません。</p>
+      <label class="tb-btn tb-btn--secondary tb-btn--block qd-file-btn">
+        問題ファイルを読み込む
+        <input type="file" id="file-input" accept=".json,application/json" multiple>
+      </label>
+      <div id="load-msg" class="qd-load-msg" hidden></div>
+    </section>
+  </section>
+
+  <!-- ===================== 問題 ===================== -->
+  <section id="screen-quiz" class="qd-screen" hidden>
+    <div class="qd-qhead">
+      <div class="qd-qhead-row">
+        <p id="q-label" class="qd-qlabel"></p>
+        <button type="button" id="btn-quit" class="tb-btn tb-btn--ghost qd-quit">中断</button>
+      </div>
+      <div class="qd-qhead-row qd-qmeta">
+        <span id="q-category" class="qd-category"></span>
+        <span id="q-points" class="qd-badge" hidden></span>
+        <span class="qd-spacer"></span>
+        <span id="q-progress" class="qd-progress"></span>
+        <span id="q-score" class="qd-progress"></span>
+      </div>
+    </div>
+
+    <p id="q-text" class="qd-qtext"></p>
+
+    <figure id="q-figure" class="qd-figure" hidden>
+      <img id="q-image" alt="">
+      <figcaption class="qd-note">タップで拡大</figcaption>
+    </figure>
+
+    <ol id="q-choices" class="qd-choices"></ol>
+
+    <p id="q-verdict" class="qd-verdict" hidden></p>
+
+    <section id="q-after" class="qd-after" hidden>
+      <h2 class="qd-after-title">選択肢（元の番号）</h2>
+      <ol id="q-original" class="qd-original"></ol>
+
+      <div id="q-explanation-wrap">
+        <h2 class="qd-after-title">解説</h2>
+        <p id="q-explanation" class="qd-prose"></p>
+      </div>
+
+      <div id="q-supplement-wrap" hidden>
+        <h2 class="qd-after-title">補足</h2>
+        <p id="q-supplement" class="qd-prose"></p>
+      </div>
+
+      <button type="button" id="btn-next" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">次の問題へ</button>
+    </section>
+  </section>
+
+  <!-- ===================== 結果 ===================== -->
+  <section id="screen-result" class="qd-screen" hidden>
+    <div class="qd-card qd-result">
+      <h1 class="qd-card-title">結果</h1>
+      <p id="r-summary" class="qd-result-big"></p>
+      <p id="r-rate" class="qd-result-sub"></p>
+      <p id="r-points" class="qd-result-sub" hidden></p>
+    </div>
+
+    <section class="qd-card">
+      <h2 class="qd-card-title">間違えた問題</h2>
+      <ul id="r-wrong" class="qd-wrong-list"></ul>
+      <p id="r-nowrong" class="qd-note" hidden>全問正解です。</p>
+    </section>
+
+    <div class="qd-actions">
+      <button type="button" id="btn-retry" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">間違えた問題だけもう一度</button>
+      <button type="button" id="btn-home" class="tb-btn tb-btn--secondary tb-btn--block qd-big-btn">ホームへ</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- 画像の全画面表示。タップで閉じる -->
+<div id="lightbox" class="qd-lightbox" hidden>
+  <img id="lightbox-img" alt="">
+</div>
+
+<script src="quiz.js"></script>
+<script src="storage.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

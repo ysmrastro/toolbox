@@ -45,12 +45,22 @@ toolbox/
 │   ├── tools/              # 開発用（release.py / build-stars.py）
 │   ├── manifest.json / sw.js
 │   └── README.md           # 出典・前提・データ確度の詳細
-└── moon-phase/             # 月の満ち欠けシミュレーター
+├── moon-phase/             # 月の満ち欠けシミュレーター
+│   ├── index.html
+│   ├── style.css
+│   ├── app.js              # 位置・見え方の計算とSVG描画・ドラッグ操作（外部ライブラリなし）
+│   ├── ogp-source.html     # OGP画像の生成元（実物の描画をそのまま使う）
+│   └── README.md           # 見え方のモデル（離角と明暗・北半球での見え方・反時計回り）
+└── quiz-drill/             # 4択ドリル（問題は同梱しない。利用者が JSON を読み込む）
     ├── index.html
     ├── style.css
-    ├── app.js              # 位置・見え方の計算とSVG描画・ドラッグ操作（外部ライブラリなし）
-    ├── ogp-source.html     # OGP画像の生成元（実物の描画をそのまま使う）
-    └── README.md           # 見え方のモデル（離角と明暗・北半球での見え方・反時計回り）
+    ├── quiz.js             # 検証・統合・出題順・並べ替え・正誤・採点（純粋関数。乱数は引数）
+    ├── storage.js          # 問題集は IndexedDB、セッションと成績は localStorage
+    ├── app.js              # DOM・イベント・描画。計算は持たない
+    ├── sample.json         # 見本の問題（架空の一般常識の問題5問）
+    ├── test/               # 自動テスト（配信されない）
+    ├── ogp-source.html     # OGP画像の生成元
+    └── README.md           # 使い方と問題ファイルの形式
 ```
 
 **タブは 計画 / 機材 / 条件 / 結果 の4枚**。最初に開くのは**計画**で、極大が遠い時期に

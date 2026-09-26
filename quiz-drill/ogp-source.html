@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>OGP source — 4択ドリル</title>
+<!-- 1200x630 で撮って ogp.png として保存する。問題画面の部品（style.css）をそのまま使う。
+     問題は見本（sample.json）と同じ架空の問題。 -->
+<link rel="stylesheet" href="../shared/css/variables.css">
+<link rel="stylesheet" href="../shared/css/reset.css">
+<link rel="stylesheet" href="../shared/css/components.css">
+<link rel="stylesheet" href="style.css">
+<style>
+  html,body{margin:0;padding:0;width:1200px;height:630px;overflow:hidden;background:var(--tb-bg-primary)}
+  .ogp{display:grid;grid-template-columns:600px 1fr;height:630px;align-items:center}
+  .ogp__text{padding:0 40px 0 64px}
+  .ogp__eyebrow{font-family:var(--tb-font-mono);font-size:18px;letter-spacing:.22em;color:var(--tb-accent);margin:0 0 18px}
+  .ogp__title{font-size:64px;line-height:1.2;font-weight:700;color:var(--tb-accent);margin:0 0 24px}
+  .ogp__lead{font-size:24px;line-height:1.8;color:var(--tb-text-primary);margin:0}
+  .ogp__lead b{color:var(--tb-success)}
+  .ogp__art{padding:0 64px 0 16px}
+  .ogp__art .qd-card{padding:28px;margin:0}
+  .ogp__art .qd-qtext{font-size:22px;margin-bottom:18px}
+  .ogp__art .qd-choice{min-height:62px;font-size:20px}
+  .ogp__art .qd-verdict{font-size:40px;margin:12px 0 0}
+</style>
+</head>
+<body>
+  <div class="ogp">
+    <div class="ogp__text">
+      <p class="ogp__eyebrow">YSMRASTRO TOOLBOX</p>
+      <h1 class="ogp__title">4択ドリル</h1>
+      <p class="ogp__lead">自分の問題ファイルを読み込んで、<br>スマホで解いて練習する。<br><b>タップですぐ判定</b>、解説つき。</p>
+    </div>
+    <div class="ogp__art">
+      <div class="qd-card">
+        <p class="qd-qtext">太陽系の惑星はいくつあるか。</p>
+        <ol class="qd-choices">
+          <li><button class="qd-choice" disabled><span class="qd-choice-num">1</span><span class="qd-choice-text">9個</span></button></li>
+          <li><button class="qd-choice is-correct" disabled><span class="qd-choice-num">2</span><span class="qd-choice-text">8個</span></button></li>
+          <li><button class="qd-choice" disabled><span class="qd-choice-num">3</span><span class="qd-choice-text">10個</span></button></li>
+          <li><button class="qd-choice" disabled><span class="qd-choice-num">4</span><span class="qd-choice-text">7個</span></button></li>
+        </ol>
+        <p class="qd-verdict is-correct">正解</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
