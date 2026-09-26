@@ -590,12 +590,15 @@ const ageValueEl = document.getElementById('mp-age-value');
 const nameEl = document.getElementById('mp-name');
 const daynightEl = document.getElementById('mp-daynight');
 const moonvisEl = document.getElementById('mp-moonvis');
+const summaryMobileEl = document.getElementById('mp-summary-mobile');
 const daySlider = document.getElementById('mp-day-slider');
 const timeSlider = document.getElementById('mp-time-slider');
 const dayOut = document.getElementById('mp-day-out');
 const timeOut = document.getElementById('mp-time-out');
 const speedButtons = Array.from(document.querySelectorAll('.mp-speed-btn'));
 const playBtn = document.getElementById('mp-play');
+const playIconEl = playBtn.querySelector('.mp-play-icon');
+const playLabelEl = playBtn.querySelector('.mp-play-label');
 const dayPrevBtn = document.getElementById('mp-day-prev');
 const dayNextBtn = document.getElementById('mp-day-next');
 const timePrevBtn = document.getElementById('mp-time-prev');
@@ -660,6 +663,12 @@ function render() {
   moonvisEl.innerHTML = '<ruby>月<rt>つき</rt></ruby>は <ruby>空<rt>そら</rt></ruby>に '
     + (moonUp ? 'でている' : 'しずんでいる');
   shapePanel.classList.toggle('is-moon-hidden', !moonUp);
+
+  // スマホの画面下バー用の要約1行（月齢・名前・昼夜・出没を詰める）。
+  // 中身は上の4行と同じ情報なので、常に上の4行から組み立てる（別に計算しない）。
+  summaryMobileEl.innerHTML = `<ruby>月齢<rt>げつれい</rt></ruby>${moon.age.toFixed(1)} `
+    + `${phaseName(moon.age)}・${daytime ? '<ruby>昼<rt>ひる</rt></ruby>' : '<ruby>夜<rt>よる</rt></ruby>'}・`
+    + (moonUp ? 'でている' : 'しずんでいる');
 
   daySlider.value = day;
   timeSlider.value = time;
@@ -790,17 +799,38 @@ function startPlaying() {
   if (playing) return;
   playing = true;
   lastTs = null;
-  playBtn.textContent = '■ とめる';
+  playIconEl.textContent = '■';
+  playLabelEl.textContent = 'とめる';
   rafId = requestAnimationFrame(tick);
 }
 function stopPlaying() {
   if (!playing) return;
   playing = false;
   if (rafId) cancelAnimationFrame(rafId);
-  playBtn.textContent = '▶ うごかす';
+  playIconEl.textContent = '▶';
+  playLabelEl.textContent = 'うごかす';
 }
 
 playBtn.addEventListener('click', () => { playing ? stopPlaying() : startPlaying(); });
+
+/* ============================================================
+   タブ切り替え（スマホ幅だけで見える。パソコン幅ではタブ自体が非表示なので
+   触られない。3枚の図のうち選んだ1枚だけ .is-active-tab で表示する）
+   ============================================================ */
+const tabButtons = Array.from(document.querySelectorAll('.mp-tab'));
+
+function selectTab(tabId) {
+  tabButtons.forEach(btn => {
+    const isActive = btn.id === tabId;
+    btn.classList.toggle('is-active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
+    const panel = document.getElementById(btn.getAttribute('aria-controls'));
+    panel.classList.toggle('is-active-tab', isActive);
+  });
+}
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => selectTab(btn.id));
+});
 
 /* ============================================================
    起動
