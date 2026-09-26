@@ -1,0 +1,35 @@
+# QRコード生成ツールのチェック。テストはまだ無いので、JS の構文チェックだけ。
+# このツールと共通CSSが変わった PR でだけ走る。
+name: CI - qr-generator
+
+on:
+  pull_request:
+    branches:
+      - main
+    # synchronize を含める: PR に追加コミットを積んだときも再実行する
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'qr-generator/**'
+      - 'shared/**'
+      - '.github/workflows/ci-qr-generator.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: 構文チェック
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: node --check
+        run: for f in qr-generator/*.js; do echo "$f"; node --check "$f"; done

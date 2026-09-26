@@ -500,12 +500,13 @@ Bortle スケールと混同しないよう明確に求めている。UI と REA
 ## テスト
 
 ```bash
-npm test            # Small テスト（依存なし・1秒台）
-npm run test:e2e    # ブラウザで起動して表示だけ見る（Playwright）
+npm run test:meteor-settings   # Small テスト（依存なし・1秒台）
+npm run test:e2e               # ブラウザで起動して表示だけ見る（Playwright）
 ```
 
-どちらも **PR で自動的に走る**（`.github/workflows/test.yml`）。main は保護してあり、
-この2つが緑でないとマージできない。手元で流し忘れても止まる。詳細はリポジトリの CLAUDE.md。
+どちらも、このツールに関わるファイルを変えた PR で**自動的に走る**
+（`.github/workflows/ci-meteor-settings.yml`、Actions では `CI - meteor-settings`）。
+必須チェックにはしていないので、**緑になったのを見てからマージする**。詳細はリポジトリの CLAUDE.md。
 
 Node 標準の `node:test` だけで動く（`npm test` に依存パッケージは要らない）。
 `npm run test:e2e` だけ Playwright を使う。TZ は npm script が `Asia/Tokyo` に固定する

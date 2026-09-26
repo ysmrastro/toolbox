@@ -1,4 +1,5 @@
-# PR とデフォルトブランチへの push でテストを走らせる。
+# 流星撮影セッティングのテスト。このツールと、それが使うもの（共通CSS・開発用の
+# package.json）が変わった PR でだけ走る。
 #
 # 【なぜ2つのジョブに分けるか】
 # Small テストは依存パッケージが要らず数秒で終わる。E2E は Playwright の
@@ -8,12 +9,20 @@
 # 【TZ を固定する理由】
 # 日本の空を計算するアプリで、テストの参照値も国立天文台の JST の公表値。
 # CI の既定（UTC）のままだと「その夜」の数え方が実際とずれる。
-name: テスト
+name: CI - meteor-settings
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    branches:
+      - main
+    # synchronize を含める: PR に追加コミットを積んだときも再実行する
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'meteor-settings/**'
+      - 'shared/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ci-meteor-settings.yml'
 
 # 同じブランチに続けて push したら、走っている古いほうは止める
 concurrency:
@@ -38,8 +47,8 @@ jobs:
           node-version: '24'
 
       # 依存パッケージなしで動く（Node 標準の node:test）ので npm ci は要らない
-      - name: npm test
-        run: npm test
+      - name: npm run test:meteor-settings
+        run: npm run test:meteor-settings
 
   e2e:
     name: E2E smoke

@@ -1,0 +1,37 @@
+# 4択ドリルのテスト。このツールと、それが使うもの（共通CSS・package.json）が
+# 変わった PR でだけ走る。
+name: CI - quiz-drill
+
+on:
+  pull_request:
+    branches:
+      - main
+    # synchronize を含める: PR に追加コミットを積んだときも再実行する
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'quiz-drill/**'
+      - 'shared/**'
+      - 'package.json'
+      - '.github/workflows/ci-quiz-drill.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Small テスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 依存パッケージなしで動く（Node 標準の node:test）ので npm ci は要らない
+      - name: npm run test:quiz-drill
+        run: npm run test:quiz-drill

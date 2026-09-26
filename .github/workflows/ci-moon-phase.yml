@@ -1,0 +1,56 @@
+# 月の満ち欠けシミュレーターのチェック。テストはまだ無いので、JS の構文チェックだけ。
+#
+# 天文計算は meteor-settings/astro.js を読み込んで使っている（コピーしていない）。
+# astro.js やそのテストが変わったときもこちらを走らせ、astro.js の単体テストも流す。
+name: CI - moon-phase
+
+on:
+  pull_request:
+    branches:
+      - main
+    # synchronize を含める: PR に追加コミットを積んだときも再実行する
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'moon-phase/**'
+      - 'meteor-settings/astro.js'
+      - 'meteor-settings/test/astro.test.js'
+      - 'shared/**'
+      - 'package.json'
+      - '.github/workflows/ci-moon-phase.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TZ: Asia/Tokyo
+
+jobs:
+  syntax:
+    name: 構文チェック
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: node --check
+        run: for f in moon-phase/*.js; do echo "$f"; node --check "$f"; done
+
+  astro:
+    name: astro.js のテスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: npm run test:astro
+        run: npm run test:astro
