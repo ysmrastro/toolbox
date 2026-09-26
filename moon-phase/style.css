@@ -46,13 +46,22 @@
 
 /* ============================================================
    図
-   ── デスクトップ（701px以上）は下の @media で、画面の高さいっぱいに
-      図を広げる（body→mp-app→mp-stage→mp-panel→svg と flex を通し、
-      操作部などの自然な高さを引いた「残り」を svg まで渡す）。
-      ここのモバイル向けの指定は、その入れ子が効かない狭い画面のための
-      素朴な指定（svg は横幅に合わせ、高さは画面の高さ基準で頭打ち）。
+   ── mp-stage は「上段（軌道図・月の形を横に並べる mp-stage-top）」と
+      「地平線ビュー（横長、上段の幅いっぱい）」を縦に積んだもの。
+      デスクトップ（701px以上）は下の @media で、画面の高さいっぱいに
+      広げる（body→mp-app→mp-stage→mp-stage-top→mp-panel→svg と flex を通し、
+      操作部などの自然な高さを引いた「残り」を svg まで渡す）。地平線ビューは
+      幅いっぱい・アスペクト比 2:1 で自然に決まる高さのぶんだけ、上段の
+      取り分から差し引かれる。ここのモバイル向けの指定は、その入れ子が
+      効かない狭い画面のための素朴な指定（svg は横幅に合わせ、高さは
+      画面の高さ基準で頭打ち）。
    ============================================================ */
 .mp-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-sm);
+}
+.mp-stage-top {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--tb-space-sm);
@@ -106,6 +115,39 @@
 /* 月（軌道図・ドラッグできる方）だけ、つかめることが分かるように */
 #mp-moon-hit { cursor: grab; }
 #mp-moon-hit:active { cursor: grabbing; }
+
+/* 地平線ビュー ── 横長。方位ラベルはルビが要るので SVG の外に HTML で重ねる
+   （SVG の <text> は <ruby> を組めないため）。viewBox は 640×320（2:1）だが、
+   デスクトップでは高さを他の2枚と取り合うため、実際に描かれる比はもっと
+   横長になる。width/height を 100% にして SVG 自体の preserveAspectRatio に
+   任せているので、割り当てが 2:1 でなくても歪まず、余白が上下または左右に
+   出るだけで済む。 */
+.mp-hz-wrap { position: relative; }
+.mp-panel--horizon svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 30vh;
+  margin: 0 auto;
+}
+.mp-hz-label {
+  position: absolute;
+  bottom: 4%;
+  transform: translateX(-50%);
+  font-size: var(--tb-font-size-xs);
+  font-weight: 700;
+  color: var(--mp-gold);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.mp-hz-events {
+  font-size: var(--tb-font-size-xs);
+  color: var(--mp-subtext);
+  text-align: center;
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
 
 /* 月が沈んでいるときは、右のパネルにオーバーレイを重ねて暗くする */
 .mp-panel--shape { position: relative; }
@@ -236,12 +278,19 @@
    ── body を縦の flex にして、ヘッダーの下（mp-app）に残りの高さを渡す。
       mp-app の中でも、タイトル・読み取り・操作部は自然な高さのまま
       （flex-grow せず）、mp-stage だけが残りの高さを受け取って伸びる。
-      grid の行は既定で stretch するので、2つの mp-panel はどちらも
-      mp-stage と同じ高さになる。panel の中は見出し・説明・svg の
-      縦並び flex にして、svg だけを「残り」いっぱいに広げる。
-      svg 自身は幅・高さとも 100% にするだけでよい ── viewBox が正方形
-      なので、はみ出す側は自動で余白になり、絵が歪んだり切れたりしない
-      （SVG の既定の preserveAspectRatio による）。
+      mp-stage 自身は縦積みの flex で、上段（mp-stage-top＝軌道図・月の形）と
+      地平線ビューが、その「残り」を分け合う。
+      最初は地平線ビューを見出しの分を除いて素直に幅の半分の高さ（2:1）で
+      確保しようとしたが、3枚ぶんの高さがそもそも1280×800に収まらず、
+      上段がほぼ潰れる不具合になった。展望図は「2:1くらい」という目安どおり
+      には収まらないと判断し、上段・地平線ビューとも flex-basis:0 で対等に
+      「残り」を分け合う形に直した ── 地平線ビューの実際の縦横比は
+      2:1よりかなり横長になるが、SVG 側は width/height を 100% にして
+      preserveAspectRatio に任せているので、歪んだり切れたりはしない
+      （割り当てが 2:1 でなければ、その分だけ左右か上下に余白が出るだけ）。
+      grid の行は既定で stretch するので、上段の2つの mp-panel はどちらも
+      同じ高さになる。panel の中は見出し・説明・svg の縦並び flex にして、
+      svg だけを「残り」いっぱいに広げる。
    ============================================================ */
 @media (min-width: 701px) {
   body {
@@ -264,6 +313,10 @@
   .mp-stage {
     flex: 1 1 auto;
     min-height: 0;
+  }
+  .mp-stage-top {
+    flex: 1 1 0;
+    min-height: 0;
     /* 基本の align-items:start（パネルを自然な高さのまま上に置く指定）を、
        行の高さいっぱいに揃えるほうへ上書きする */
     align-items: stretch;
@@ -285,15 +338,32 @@
     max-height: none;
     margin: 0;
   }
+  /* 地平線ビューは上段と対等に「残り」を分け合う（flex-basis:0）。
+     svg は正方形ではないので、幅いっぱい・高さは残りいっぱいにするだけで、
+     縦横比は preserveAspectRatio まかせにする。 */
+  .mp-panel--horizon {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .mp-hz-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .mp-panel--horizon svg {
+    max-width: none;
+    max-height: none;
+    height: 100%;
+  }
 }
 
 /* ============================================================
-   スマホ ── 左（軌道図）が上、右（月の形）が下に積む
+   スマホ ── 軌道図・月の形・地平線ビューを縦に積む
    ============================================================ */
 @media (max-width: 700px) {
   .mp-app { padding: var(--tb-space-sm); }
-  .mp-stage { grid-template-columns: 1fr; }
+  .mp-stage-top { grid-template-columns: 1fr; }
   .mp-panel svg { max-height: 34vh; }
+  .mp-panel--horizon svg { max-height: none; }   /* こちらは高さでなく縦横比で決める */
 }
 
 /* さらに狭い幅では、つまみの行を「ラベル＋値＋◀▶」の上段／つまみの下段に折り返す
