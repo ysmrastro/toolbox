@@ -503,16 +503,22 @@ function updateTicks(centerDate) {
 // 「日」がいま表している夜（d日6:00〜d+1日5:45）の出入り。
 // 日の入りは d日、日の出は d+1日（それぞれの暦日の dayEvents）のものを使う ──
 // これで「その夜の始まりの日没」「その夜の終わりの日の出」になる。
-// 月の出入りは暦日単位の dayEvents では窓に合わないので、findCrossing で
-// d日6:00〜d+1日6:00 の中を自前で探す。
+// 月の出入りは、「d日6:00〜d+1日5:45の枠の中にあるもの」だと、月の入りがその枠を
+// わずかに過ぎるだけで「なし」になり、「今夜の月は沈まない」と誤読される
+// （実際に満月前後で起きた）。そこで、**d日6:00以降で最初に見つかる月の出と、
+// その月の出のあとで最初に見つかる月の入り**を出す（＝その夜に昇った月が沈むまでを
+// 追いかける）。月の入りが翌日の昼ごろになっても、日付を添えてそのまま出す。
 function computeNightEvents(day) {
   const sunToday = MS_ASTRO.dayEvents(dateForSimDay(day), FUKUOKA_LAT, FUKUOKA_LON);
   const sunTomorrow = MS_ASTRO.dayEvents(dateForSimDay(day + 1), FUKUOKA_LAT, FUKUOKA_LON);
-  const winStart = dateForSimDay(day + 6 / 24).getTime();
-  const winEnd = dateForSimDay(day + 1 + 6 / 24).getTime();
   const moonAlt = t => MS_ASTRO.moonPosition(t, FUKUOKA_LAT, FUKUOKA_LON).altitude;
-  const moonrise = MS_ASTRO.findCrossing(winStart, winEnd, 10 * 60000, moonAlt, MOON_HORIZON_ALT, +1, 30000);
-  const moonset = MS_ASTRO.findCrossing(winStart, winEnd, 10 * 60000, moonAlt, MOON_HORIZON_ALT, -1, 30000);
+  const nightStart = dateForSimDay(day + 6 / 24).getTime();
+  // 月の出は月齢によらず1日以内に必ず見つかるはずだが、念のため48時間まで探す
+  const moonrise = MS_ASTRO.findCrossing(nightStart, nightStart + 48 * 3600000, 10 * 60000, moonAlt, MOON_HORIZON_ALT, +1, 30000);
+  // 月の入りは、月の出から30時間もあれば必ず見つかる（1回の月の出入りの間隔は最大でも24時間強）
+  const moonset = moonrise
+    ? MS_ASTRO.findCrossing(moonrise.getTime(), moonrise.getTime() + 30 * 3600000, 10 * 60000, moonAlt, MOON_HORIZON_ALT, -1, 30000)
+    : null;
   return { sunset: sunToday.sunset, sunrise: sunTomorrow.sunrise, moonrise, moonset };
 }
 
