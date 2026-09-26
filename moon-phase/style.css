@@ -23,14 +23,32 @@
 
 /* ============================================================
    全体
+   ── body を縦の flex にして、ヘッダーの下（mp-app）に残りの高さを渡す。
+      スマホ・パソコンの両方で使う（前はデスクトップだけだったが、スマホでも
+      「タブ＋図＋下のバー」を1画面に収める方針にしたので共通化した）。
+      100vh はモバイルブラウザのアドレスバーの出し引きでずれることがあるので、
+      対応ブラウザでは 100dvh（実際に見えている高さ）で上書きする
+      （非対応ブラウザは 100vh のまま無視されるだけなので害はない）。
    ============================================================ */
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
 .mp-app {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   max-width: 900px;
+  width: 100%;
   margin: 0 auto;
   padding: var(--tb-space-md);
 }
 
 .mp-intro {
+  flex: none;
   text-align: center;
   margin-bottom: var(--tb-space-xs);
 }
@@ -44,19 +62,21 @@
   color: var(--mp-subtext);
 }
 
+/* タブ（スマホだけ。701px以上では出さない） */
+.mp-tabs { display: none; }
+
 /* ============================================================
    図
    ── mp-stage は「上段（軌道図・月の形を横に並べる mp-stage-top）」と
       「地平線ビュー（横長、上段の幅いっぱい）」を縦に積んだもの。
-      デスクトップ（701px以上）は下の @media で、画面の高さいっぱいに
-      広げる（body→mp-app→mp-stage→mp-stage-top→mp-panel→svg と flex を通し、
-      操作部などの自然な高さを引いた「残り」を svg まで渡す）。地平線ビューは
-      幅いっぱい・アスペクト比 2:1 で自然に決まる高さのぶんだけ、上段の
-      取り分から差し引かれる。ここのモバイル向けの指定は、その入れ子が
-      効かない狭い画面のための素朴な指定（svg は横幅に合わせ、高さは
-      画面の高さ基準で頭打ち）。
+      body→mp-app→mp-stage→(mp-stage-top→)mp-panel→svg と flex を通し、
+      タイトル・タブ・下のバーの自然な高さを引いた「残り」を svg まで渡す。
+      パソコン（701px以上）とスマホ（700px以下）で、mp-stage 以下の配り方が
+      違う（それぞれの @media を参照）。
    ============================================================ */
 .mp-stage {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--tb-space-sm);
@@ -69,6 +89,9 @@
 }
 
 .mp-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: var(--mp-bg);
   border: 1px solid var(--tb-border);
   border-radius: var(--tb-radius-lg);
@@ -78,6 +101,7 @@
 }
 /* 見出しと説明文を1行に並べて、縦を図にまわす */
 .mp-panel-head {
+  flex: none;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -97,14 +121,17 @@
   line-height: 1.4;
 }
 
+/* svg だけを「残り」いっぱいに広げる。viewBox が正方形（軌道図・月の形）なら
+   preserveAspectRatio により歪んだり切れたりしない。スマホ・パソコンで
+   共通（スマホはタブで1枚しか出さないので、その1枚がこの svg だけで
+   縦いっぱいに広がる）。 */
 .mp-panel svg {
   display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 27vh;
-  margin: 0 auto;
-  touch-action: none;   /* ドラッグ中にページがスクロールしないように */
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
 }
 /* 軌道図の中の文字（「にほん」ラベル）は共通フォントに合わせる */
 #mp-orbit text {
@@ -112,24 +139,32 @@
   font-weight: 700;
 }
 
-/* 月（軌道図・ドラッグできる方）だけ、つかめることが分かるように */
-#mp-moon-hit { cursor: grab; }
+/* 月（軌道図・ドラッグできる方）だけ、つかめることが分かるように。
+   touch-action: none も図全体ではなくこの当たり判定の円だけに付ける ──
+   図全体に付けると、月に触れていないときもページがスクロールできなくなり、
+   スマホで「1枚目を見ているときにスクロールできない」不具合になっていた。 */
+#mp-moon-hit {
+  cursor: grab;
+  touch-action: none;
+}
 #mp-moon-hit:active { cursor: grabbing; }
 
 /* 地平線ビュー ── 横長。方位ラベルはルビが要るので SVG の外に HTML で重ねる
-   （SVG の <text> は <ruby> を組めないため）。viewBox は 640×320（2:1）だが、
-   デスクトップでは高さを他の2枚と取り合うため、実際に描かれる比はもっと
-   横長になる。width/height を 100% にして SVG 自体の preserveAspectRatio に
-   任せているので、割り当てが 2:1 でなくても歪まず、余白が上下または左右に
-   出るだけで済む。 */
-.mp-hz-wrap { position: relative; }
+   （SVG の <text> は <ruby> を組めないため）。viewBox は 640×320（2:1）を初期値に
+   app.js の ResizeObserver（resizeHorizon()）が実際の縦横比に作り直す。
+   width/height を 100% にして SVG 自体の preserveAspectRatio に任せているので、
+   割り当てが 2:1 でなくても歪まない。パソコンは他の2枚と高さを取り合って横長に、
+   スマホはタブで1枚だけ出るので縦長寄りになる ── どちらも同じ仕組みでよい。 */
+.mp-hz-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
 .mp-panel--horizon svg {
   display: block;
   width: 100%;
-  height: auto;
-  max-width: 100%;
-  max-height: 30vh;
-  margin: 0 auto;
+  height: 100%;
+  margin: 0;
 }
 .mp-hz-label {
   position: absolute;
@@ -175,6 +210,7 @@
    読み取り
    ============================================================ */
 .mp-readout {
+  flex: none;
   text-align: center;
   margin: 2px 0;
 }
@@ -200,17 +236,37 @@
 }
 .mp-status ruby { color: var(--mp-primary); font-weight: 700; }
 
+/* 月齢・名前・昼夜・出没を1行に詰めた要約。スマホの下のバー専用（701px以上では出さない） */
+.mp-summary-mobile {
+  display: none;
+  font-size: var(--tb-font-size-sm);
+  color: var(--mp-text);
+  margin: 0 0 2px;
+  line-height: 1.4;
+}
+.mp-summary-mobile ruby { color: var(--mp-gold); font-weight: 700; }
+
 /* ============================================================
    操作
    ── つまみは「ラベル｜つまみ｜値｜◀｜▶」の1行、速さと再生も1行にして
       縦を詰める（ユーザーから「縦が長い」との指摘）。
    ============================================================ */
 .mp-controls {
+  flex: none;
   display: grid;
   gap: 2px;
   max-width: 640px;
   margin: 0 auto;
 }
+
+/* mp-readout + mp-controls をまとめて置くラッパー。パソコンでは display:contents
+   で「透明」にし、中の mp-readout / mp-controls を mp-app の直接の子のまま扱う
+   （素朴に flex:none の箱にすると、mp-controls が margin:0 auto で伸縮する
+   flex アイテムの挙動から、幅いっぱいに広がる普通の block 子の挙動に変わってしまい、
+   操作部が広がる見た目の差分が出た。実際に 1280×800 のスクリーンショット比較で
+   検出したので、ここは display:contents で挟む前と同じ配り方に固定する）。
+   スマホでは画面下のバーとして見せるため、実体のある箱に戻す（下の @media）。 */
+.mp-bottombar { display: contents; }
 
 .mp-slider-row {
   display: grid;
@@ -277,45 +333,20 @@
 .mp-play { min-width: 9rem; white-space: nowrap; }
 
 /* ============================================================
-   デスクトップ ── 図を画面の高さいっぱいまで広げる
-   ── body を縦の flex にして、ヘッダーの下（mp-app）に残りの高さを渡す。
-      mp-app の中でも、タイトル・読み取り・操作部は自然な高さのまま
-      （flex-grow せず）、mp-stage だけが残りの高さを受け取って伸びる。
-      mp-stage 自身は縦積みの flex で、上段（mp-stage-top＝軌道図・月の形）と
-      地平線ビューが、その「残り」を分け合う。
-      最初は地平線ビューを見出しの分を除いて素直に幅の半分の高さ（2:1）で
-      確保しようとしたが、3枚ぶんの高さがそもそも1280×800に収まらず、
-      上段がほぼ潰れる不具合になった。展望図は「2:1くらい」という目安どおり
-      には収まらないと判断し、上段・地平線ビューとも flex-basis:0 で対等に
-      「残り」を分け合う形に直した ── 地平線ビューの実際の縦横比は
-      2:1よりかなり横長になるが、SVG 側は width/height を 100% にして
-      preserveAspectRatio に任せているので、歪んだり切れたりはしない
-      （割り当てが 2:1 でなければ、その分だけ左右か上下に余白が出るだけ）。
+   デスクトップ（701px以上）── 3枚を同時に、画面の高さいっぱいまで広げる
+   ── 図を敷き詰める flex-fill の仕組み自体は上の「全体・図」の節で共通化した。
+      ここではパソコン固有の配り方だけを上書きする: 上段（mp-stage-top＝
+      軌道図・月の形）を2列 grid にし、地平線ビューと flex-basis:0 で
+      「残り」を対等に分け合う（3枚ぶんの高さは「2:1くらい」という目安どおりの
+      比率には収まらないので、対等分けにしている。詳しくは README）。
       grid の行は既定で stretch するので、上段の2つの mp-panel はどちらも
-      同じ高さになる。panel の中は見出し・説明・svg の縦並び flex にして、
-      svg だけを「残り」いっぱいに広げる。
+      同じ高さになる。
    ============================================================ */
 @media (min-width: 701px) {
-  body {
-    display: flex;
-    flex-direction: column;
-    /* flex-grow が配れる「残り」を作るには、コンテナの高さが確定していないといけない。
-       reset.css の min-height:100vh だけでは高さがコンテンツ依存のままで、
-       mp-stage に伸ばす余地が生まれない（伸ばす分を計算できないため）。 */
-    height: 100vh;
-  }
   .mp-app {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
     /* 上下の余白も図にまわす（左右は tb-space-md のまま） */
     padding-top: 4px;
     padding-bottom: 2px;
-  }
-  .mp-stage {
-    flex: 1 1 auto;
-    min-height: 0;
   }
   .mp-stage-top {
     flex: 1 1 0;
@@ -324,49 +355,84 @@
        行の高さいっぱいに揃えるほうへ上書きする */
     align-items: stretch;
   }
-  .mp-panel {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .mp-panel-head {
-    flex: none;
-  }
-  .mp-panel svg {
-    flex: 1 1 auto;
-    min-height: 0;
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    max-height: none;
-    margin: 0;
-  }
-  /* 地平線ビューは上段と対等に「残り」を分け合う（flex-basis:0）。
-     svg は正方形ではないので、幅いっぱい・高さは残りいっぱいにするだけで、
-     縦横比は preserveAspectRatio まかせにする。 */
+  /* 地平線ビューは上段と対等に「残り」を分け合う（flex-basis:0） */
   .mp-panel--horizon {
     flex: 1 1 0;
     min-height: 0;
   }
-  .mp-hz-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-  .mp-panel--horizon svg {
-    max-width: none;
-    max-height: none;
-    height: 100%;
-  }
 }
 
 /* ============================================================
-   スマホ ── 軌道図・月の形・地平線ビューを縦に積む
+   スマホ（700px以下）── 3枚をタブで1枚ずつ出し、操作部を画面下のバーにする
+   ── 「3つともスクロールできてつまみが触れない」という不具合を受けての変更。
+      mp-stage-top はレイアウト上「透明」にして（display:contents）、その中の
+      2枚（軌道図・月の形）を、地平線ビューと同じく mp-stage の直接の子として
+      並べる。パネルは既定で隠し、選んだタブの1枚だけ .is-active-tab で
+      表示して、残りの縦の空間いっぱいに広げる（display:flex は
+      「全体・図」の節の共通ルールと同じ）。
    ============================================================ */
 @media (max-width: 700px) {
   .mp-app { padding: var(--tb-space-sm); }
-  .mp-stage-top { grid-template-columns: 1fr; }
-  .mp-panel svg { max-height: 34vh; }
-  .mp-panel--horizon svg { max-height: none; }   /* こちらは高さでなく縦横比で決める */
+
+  .mp-tabs {
+    flex: none;
+    display: flex;
+    gap: 2px;
+    margin: 0 0 var(--tb-space-xs);
+    background: var(--tb-bg-tertiary);
+    border-radius: var(--tb-radius-md);
+    padding: 2px;
+  }
+  .mp-tab {
+    flex: 1;
+    font: inherit;
+    font-size: var(--tb-font-size-sm);
+    min-height: 2.25rem;
+    padding: 0.4rem;
+    border: none;
+    border-radius: var(--tb-radius-sm);
+    background: transparent;
+    color: var(--mp-subtext);
+    cursor: pointer;
+  }
+  .mp-tab.is-active {
+    background: var(--mp-primary);
+    color: var(--mp-bg);
+    font-weight: 700;
+  }
+
+  .mp-stage-top { display: contents; }
+  .mp-panel { display: none; }
+  .mp-panel.is-active-tab {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* 画面下のバー。display:contents をやめて実体のある箱に戻す（mp-app の
+     flex アイテムとして flex:none、中の mp-readout / mp-controls は普通に
+     縦積みでよいので display は block のままでよい）。
+     env(safe-area-inset-bottom) で iPhone のホームバー分をよける。 */
+  .mp-bottombar {
+    display: block;
+    flex: none;
+    background: var(--mp-bg);
+    border-top: 1px solid var(--tb-border);
+    margin: var(--tb-space-xs) calc(-1 * var(--tb-space-sm)) calc(-1 * var(--tb-space-sm));
+    padding: var(--tb-space-xs) var(--tb-space-sm)
+      calc(var(--tb-space-xs) + env(safe-area-inset-bottom)) var(--tb-space-sm);
+  }
+  .mp-readout { margin: 0 0 2px; }
+  .mp-age, .mp-name, .mp-status { display: none; }
+  .mp-summary-mobile { display: block; }
+
+  .mp-controls { max-width: none; }
+  /* 「1秒で」を省いて短くする（例:「1秒で6時間」→「6時間」） */
+  .mp-speed-prefix { display: none; }
+  /* 「うごかす」「とめる」の文字を隠し、アイコンだけにする */
+  .mp-play-label { display: none; }
+  .mp-play { min-width: 2.75rem; padding: 0.5rem; }
 }
 
 /* さらに狭い幅では、つまみの行を「ラベル＋値＋◀▶」の上段／つまみの下段に折り返す
