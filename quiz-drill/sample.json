@@ -1,0 +1,90 @@
+{
+  "format": "yontaku-drill/1",
+  "sets": [
+    {
+      "id": "sample-general",
+      "title": "見本の問題",
+      "questions": [
+        {
+          "id": "q1",
+          "no": 1,
+          "category": "理科",
+          "points": 2,
+          "question": "太陽系の惑星はいくつあるか。",
+          "choices": [
+            "7個",
+            "8個",
+            "9個",
+            "10個"
+          ],
+          "answer": 2,
+          "explanation": "水星・金星・地球・火星・木星・土星・天王星・海王星の8個です。③の9個は、冥王星を惑星に数えていたころの数です。"
+        },
+        {
+          "id": "q2",
+          "no": 2,
+          "category": "理科",
+          "question": "1気圧のもとで、純粋な水が沸騰する温度はおよそ何℃か。",
+          "choices": [
+            "0℃",
+            "50℃",
+            "100℃",
+            "200℃"
+          ],
+          "answer": 3,
+          "explanation": "およそ100℃です。①の0℃は水がこおる温度です。"
+        },
+        {
+          "id": "q3",
+          "no": 3,
+          "category": "理科",
+          "question": "光が真空中を進む速さは、1秒あたりおよそ何kmか。",
+          "choices": [
+            "約3千km",
+            "約3万km",
+            "約30万km",
+            "約300万km"
+          ],
+          "answer": 3,
+          "explanation": "約30万km（秒速）です。1秒で地球を約7周半する速さです。"
+        },
+        {
+          "id": "q4",
+          "no": 4,
+          "category": "算数",
+          "question": "図のア〜エのうち、三角形はどれか。",
+          "choices": [
+            "ア",
+            "イ",
+            "ウ",
+            "エ"
+          ],
+          "answer": 2,
+          "image": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMTMwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjEzMCIgZmlsbD0iI2ZmZmZmZiIvPjxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFhMWEyZSIgc3Ryb2tlLXdpZHRoPSIzIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjU1IiByPSIzMiIvPjxwb2x5Z29uIHBvaW50cz0iMTUwLDIzIDE4NSw4NyAxMTUsODciLz48cmVjdCB4PSIyMjAiIHk9IjIzIiB3aWR0aD0iNjQiIGhlaWdodD0iNjQiLz48cG9seWdvbiBwb2ludHM9IjM1MCwyMSAzODMsNDUgMzcwLDg1IDMzMCw4NSAzMTcsNDUiLz48L2c+PGcgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZpbGw9IiMxYTFhMmUiIHRleHQtYW5jaG9yPSJtaWRkbGUiPjx0ZXh0IHg9IjUwIiB5PSIxMTgiPuOCojwvdGV4dD48dGV4dCB4PSIxNTAiIHk9IjExOCI+44KkPC90ZXh0Pjx0ZXh0IHg9IjI1MiIgeT0iMTE4Ij7jgqY8L3RleHQ+PHRleHQgeD0iMzUwIiB5PSIxMTgiPuOCqDwvdGV4dD48L2c+PC9zdmc+",
+          "imageAlt": "左から、アは円、イは三角形、ウは正方形、エは五角形",
+          "fixedOrder": true,
+          "explanation": "イが三角形です。アは円、ウは四角形、エは五角形です。選択肢が図の記号を指すので、この問題は選択肢を並べ替えません。"
+        },
+        {
+          "id": "q5",
+          "no": 5,
+          "category": "算数",
+          "question": "次のうち、素数でないものはどれか。",
+          "choices": [
+            "2",
+            "9",
+            "5",
+            "15"
+          ],
+          "answer": 2,
+          "answers": [
+            2,
+            4
+          ],
+          "explanation": "②の9は3×3、④の15は3×5で割り切れるので素数ではありません。①の2と③の5は素数です。",
+          "supplement": "はじめは②だけを正解としていましたが、④も素数でないため、②と④のどちらを選んでも正解としています。"
+        }
+      ]
+    }
+  ]
+}
