@@ -59,10 +59,15 @@ var QD_QUIZ = (function () {
       errs.push('choices に空の選択肢があります');
     }
 
-    if (!isInt(q.answer)) {
-      errs.push('answer（正解の番号）がありません');
-    } else if (n >= 2 && (q.answer < 1 || q.answer > n)) {
-      errs.push('answer が選択肢の範囲外です（1〜' + n + '）');
+    // 正解は answer と answers のどちらか一方があればよい（両方あれば answers を使う）
+    if (q.answer === undefined && q.answers === undefined) {
+      errs.push('answer または answers（正解の番号）がありません');
+    } else if (q.answer !== undefined) {
+      if (!isInt(q.answer)) {
+        errs.push('answer は正解の番号（整数）で書いてください');
+      } else if (n >= 2 && (q.answer < 1 || q.answer > n)) {
+        errs.push('answer が選択肢の範囲外です（1〜' + n + '）');
+      }
     }
 
     if (q.answers !== undefined) {

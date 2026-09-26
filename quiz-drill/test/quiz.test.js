@@ -70,6 +70,20 @@ test('validateFile: answer が範囲外なら、どの問題かを示して拒�
   assert.match(rs.errors[0], /answers/);
 });
 
+test('validateFile: answers だけの問題（answer なし）を通し、answers で判定する', () => {
+  const question = { id: 'a', question: '問', choices: ['あ', 'い', 'う', 'え'], answers: [2, 4] };
+  const r = Q.validateFile(file([{ id: 's', title: 'T', questions: [question] }]));
+  assert.strictEqual(r.ok, true, r.errors.join('\n'));
+  assert.deepStrictEqual(Q.correctIndices(question), [1, 3]);
+});
+
+test('validateFile: answer も answers もない問題は拒否する', () => {
+  const question = { id: 'a', question: '問', choices: ['あ', 'い', 'う', 'え'] };
+  const r = Q.validateFile(file([{ id: 's', title: 'T', questions: [question] }]));
+  assert.strictEqual(r.ok, false);
+  assert.deepStrictEqual(r.errors, ['問題集「T」の 1 問目（id: a）: answer または answers（正解の番号）がありません']);
+});
+
 test('validateFile: 選択肢が2個未満なら拒否する', () => {
   const r = Q.validateFile(file([{ id: 's', title: 'T', questions: [q('a', { choices: ['ひとつ'] })] }]));
   assert.strictEqual(r.ok, false);
