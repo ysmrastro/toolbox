@@ -5,7 +5,14 @@
  * （1ファイル 5〜6MB）が入らないため。レコードは問題集1つにつき1件（keyPath は問題集の id）
  * なので、同じ id を put すれば置き換え、違う id なら追加になる。
  *
- * 進行中のセッション・問題ごとの成績・前回の正解の表示位置は小さいので localStorage に置く。
+ * 学習の記録（回答ごとのログ）も IndexedDB に置く（store 'log'、keyPath は回答の id）。
+ * 1件は 100 バイト前後で、何年も積み上げると数万〜十万件（数MB〜10MB）になりうる。
+ * localStorage の上限（5MB 前後）に近づくと、進行中のセッションまで保存できなくなるので避けた。
+ * id で put するので、同じ回答を何度書いても1件のまま。
+ *
+ * 進行中のセッション・前回の正解の表示位置・端末ID と連番は小さいので localStorage に置く。
+ * 以前の成績の記録（問題ごとの集計）も localStorage に残っている。ログに移したあとも消さず、
+ * 移行済みの印だけを付ける。
  * localStorage はプライベートブラウズなどで例外を投げることがあるので、読み書きは握りつぶす
  * （保存できなくても出題はできる）。
  */
@@ -13,10 +20,14 @@ var QD_STORAGE = (function () {
   'use strict';
 
   var DB_NAME = 'quiz-drill';
-  var DB_VERSION = 1;
+  var DB_VERSION = 2;   // 2 で学習の記録の store を足した
   var STORE = 'sets';
+  var LOG_STORE = 'log';
   var SESSION_KEY = 'quiz-drill.session';
-  var STATS_KEY = 'quiz-drill.stats';
+  var STATS_KEY = 'quiz-drill.stats';           // 以前の成績の記録（問題ごとの集計）。読むだけ
+  var MIGRATED_KEY = 'quiz-drill.stats-migrated'; // 以前の成績の記録をログに移した印
+  var DEVICE_KEY = 'quiz-drill.device';           // 端末ごとに固定のランダムな ID
+  var SEQ_KEY = 'quiz-drill.seq';                 // 回答の id に付ける連番
   var POSITIONS_KEY = 'quiz-drill.positions';   // 鍵 → 前回表示したときの代表の正解の表示位置
 
   var dbPromise = null;
@@ -28,6 +39,7 @@ var QD_STORAGE = (function () {
       req.onupgradeneeded = function () {
         var db = req.result;
         if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(LOG_STORE)) db.createObjectStore(LOG_STORE, { keyPath: 'id' });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
@@ -35,12 +47,13 @@ var QD_STORAGE = (function () {
     return dbPromise;
   }
 
-  /** 1つのトランザクションで store に対する処理を行い、完了を待つ */
-  function withStore(mode, fn) {
+  /** 1つのトランザクションで store に対する処理を行い、完了を待つ。name を省くと問題集の store */
+  function withStore(mode, fn, name) {
     return openDb().then(function (db) {
       return new Promise(function (resolve, reject) {
-        var tx = db.transaction(STORE, mode);
-        var result = fn(tx.objectStore(STORE));
+        var storeName = name || STORE;
+        var tx = db.transaction(storeName, mode);
+        var result = fn(tx.objectStore(storeName));
         tx.oncomplete = function () { resolve(result && 'result' in result ? result.result : undefined); };
         tx.onerror = function () { reject(tx.error); };
         tx.onabort = function () { reject(tx.error); };
@@ -86,6 +99,41 @@ var QD_STORAGE = (function () {
     return withStore('readwrite', function (store) { store.delete(id); });
   }
 
+  /* ===================== 学習の記録（ログ） ===================== */
+
+  function getAllLog() {
+    return withStore('readonly', function (store) { return store.getAll(); }, LOG_STORE)
+      .then(function (records) { return records || []; });
+  }
+
+  /** ログを書き足す。同じ id は上書き（＝1件のまま） */
+  function addLog(entries) {
+    if (!entries.length) return Promise.resolve();
+    return withStore('readwrite', function (store) {
+      entries.forEach(function (e) { store.put(e); });
+    }, LOG_STORE);
+  }
+
+  /** 端末ID（無ければ作る）。2台で衝突しないよう乱数で作る */
+  function deviceId() {
+    var id = readJson(DEVICE_KEY);
+    if (typeof id === 'string' && id) return id;
+    var bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    id = Array.prototype.map.call(bytes, function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
+    writeJson(DEVICE_KEY, id);
+    return id;
+  }
+
+  /**
+   * 回答の id。端末ID＋時刻＋連番。連番が消えても（サイトデータを消したときなど）時刻で衝突しない。
+   */
+  function newLogId(now) {
+    var seq = (readJson(SEQ_KEY) || 0) + 1;
+    writeJson(SEQ_KEY, seq);
+    return deviceId() + ':' + now.getTime().toString(36) + ':' + seq;
+  }
+
   /* ===================== localStorage ===================== */
 
   function readJson(key) {
@@ -111,8 +159,12 @@ var QD_STORAGE = (function () {
     loadSession: function () { return readJson(SESSION_KEY); },
     saveSession: function (s) { writeJson(SESSION_KEY, s); },
     clearSession: function () { writeJson(SESSION_KEY, null); },
-    loadStats: function () { return readJson(STATS_KEY) || {}; },
-    saveStats: function (s) { writeJson(STATS_KEY, s); },
+    getAllLog: getAllLog,
+    addLog: addLog,
+    newLogId: newLogId,
+    loadLegacyStats: function () { return readJson(STATS_KEY); },
+    isMigrated: function () { return readJson(MIGRATED_KEY) === true; },
+    markMigrated: function () { writeJson(MIGRATED_KEY, true); },
     loadPositions: function () { return readJson(POSITIONS_KEY) || {}; },
     savePositions: function (p) { writeJson(POSITIONS_KEY, p); },
   };

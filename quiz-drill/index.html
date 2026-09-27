@@ -72,6 +72,7 @@
         <label class="qd-mode"><input type="radio" name="mode" value="set-random"><span>問題集の中でランダム</span></label>
         <label class="qd-mode"><input type="radio" name="mode" value="all-random"><span>全問題からランダム</span></label>
         <label class="qd-mode"><input type="radio" name="mode" value="wrong"><span>前に間違えた問題</span></label>
+        <label class="qd-mode"><input type="radio" name="mode" value="weak"><span>苦手な問題</span></label>
       </div>
 
       <!-- タグが1つも無ければ出さない。選択肢はデータのタグから作る -->
@@ -95,6 +96,17 @@
         </div>
       </div>
 
+      <!-- 苦手な問題だけで使う。正答率がこれ未満か、最後に不正解の問題を出す -->
+      <div id="threshold-field" class="tb-form-group" hidden>
+        <span class="tb-label">苦手とみなす正答率</span>
+        <div class="qd-counts qd-counts--3" role="radiogroup" aria-label="苦手とみなす正答率">
+          <label class="qd-count"><input type="radio" name="threshold" value="50"><span>50%未満</span></label>
+          <label class="qd-count"><input type="radio" name="threshold" value="70" checked><span>70%未満</span></label>
+          <label class="qd-count"><input type="radio" name="threshold" value="80"><span>80%未満</span></label>
+        </div>
+        <p class="qd-note">最後に不正解だった問題も含めます。</p>
+      </div>
+
       <p id="start-count" class="qd-start-count"></p>
       <button type="button" id="btn-start" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">はじめる</button>
     </section>
@@ -103,6 +115,7 @@
     <section id="history-card" class="qd-card">
       <h2 class="qd-card-title">学習の記録</h2>
       <p id="history-summary" class="qd-history-summary"></p>
+      <button type="button" id="btn-stats" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn qd-stats-btn">成績を見る</button>
       <div class="qd-history-btns">
         <button type="button" id="btn-export" class="tb-btn tb-btn--secondary qd-big-btn">記録を書き出す</button>
         <label class="tb-btn tb-btn--secondary qd-big-btn qd-file-btn">
@@ -110,7 +123,7 @@
           <input type="file" id="history-input" accept=".json,application/json">
         </label>
       </div>
-      <p class="qd-note">書き出したファイルには、問題のIDと成績だけが入ります（問題文は入りません）。</p>
+      <p class="qd-note">書き出したファイルには、問題のIDと回答の記録だけが入ります（問題文は入りません）。別の端末の記録を読み込むと合算されます。同じファイルを何度読み込んでも増えません。</p>
       <div id="history-msg" class="qd-load-msg" hidden></div>
     </section>
 
@@ -168,6 +181,36 @@
       </div>
 
       <button type="button" id="btn-next" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">次の問題へ</button>
+    </section>
+  </section>
+
+  <!-- ===================== 成績 ===================== -->
+  <section id="screen-stats" class="qd-screen" hidden>
+    <div class="qd-qhead-row qd-stats-head">
+      <h1 class="qd-qlabel">成績</h1>
+      <button type="button" id="btn-stats-home" class="tb-btn tb-btn--ghost qd-quit">ホームへ</button>
+    </div>
+
+    <div class="qd-card qd-result">
+      <p id="st-total" class="qd-stat-big"></p>
+      <p id="st-total-sub" class="qd-result-sub"></p>
+      <p id="st-threshold" class="qd-note"></p>
+    </div>
+
+    <section class="qd-card">
+      <h2 class="qd-card-title">問題集ごと</h2>
+      <ul id="st-sets" class="qd-stat-list"></ul>
+    </section>
+
+    <section id="st-cats-card" class="qd-card">
+      <h2 class="qd-card-title">分類ごと</h2>
+      <ul id="st-cats" class="qd-stat-list"></ul>
+    </section>
+
+    <section class="qd-card">
+      <h2 class="qd-card-title">苦手な問題（正答率の低い順・最大30問）</h2>
+      <ul id="st-weak" class="qd-wrong-list"></ul>
+      <p id="st-noweak" class="qd-note" hidden>苦手な問題はありません。</p>
     </section>
   </section>
 

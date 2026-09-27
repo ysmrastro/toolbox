@@ -140,7 +140,11 @@ body {
 }
 .qd-start-count.is-empty { color: var(--qd-wrong); font-weight: 700; }
 
+/* 苦手の正答率（3つ並べる） */
+.qd-counts--3 { grid-template-columns: repeat(3, 1fr); }
+
 /* 学習の記録 */
+.qd-stats-btn { margin-bottom: var(--tb-space-sm); }
 .qd-history-summary {
   font-size: var(--tb-font-size-base);
   color: var(--tb-text-primary);
@@ -437,6 +441,46 @@ body {
 }
 
 .qd-actions { display: grid; gap: var(--tb-space-sm); }
+
+/* ===================== 成績 ===================== */
+
+.qd-stats-head {
+  margin-bottom: var(--tb-space-md);
+  padding-bottom: var(--tb-space-sm);
+  border-bottom: 1px solid var(--tb-border);
+}
+.qd-stat-big {
+  font-size: var(--tb-font-size-xl);
+  font-weight: 700;
+  color: var(--tb-accent);
+  font-variant-numeric: tabular-nums;
+}
+.qd-stat-list {
+  list-style: none;
+  display: grid;
+  gap: var(--tb-space-sm);
+}
+.qd-stat-item {
+  display: block;
+  padding: var(--tb-space-sm) var(--tb-space-md);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  background: var(--tb-bg-tertiary);
+}
+.qd-stat-title {
+  display: block;
+  font-size: var(--tb-font-size-base);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+  overflow-wrap: anywhere;
+}
+.qd-stat-line {
+  display: block;
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ===================== 画像の全画面表示 ===================== */
 

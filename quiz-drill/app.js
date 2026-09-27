@@ -4,6 +4,9 @@
  * 計算（検証・統合・出題順・並べ替え・正誤・採点）は quiz.js、保存は storage.js に置いてあり、
  * ここは持たない。app.js は外から呼べないクロージャなので、ここに計算を置くとテストできない。
  *
+ * 学習の記録は回答ごとのログ（IndexedDB）で、集計（state.summary）はそこから quiz.js で計算する。
+ * 以前の成績の記録（問題ごとの集計）が残っていれば、起動時に一度だけログに移す。
+ *
  * セッション（localStorage）の形:
  *   { mode, order: [問題の鍵], pos: いま何問目か（0 始まり）,
  *     answers: { 鍵: { order: 表示順, picked: 選んだ元の添字, correct } },
@@ -22,9 +25,10 @@
     'set-random': '問題集の中でランダム',
     'all-random': '全問題からランダム',
     'wrong': '前に間違えた問題',
+    'weak': '苦手な問題',
     'retry': '間違えた問題だけもう一度',
   };
-  var ALL_SETS = '';   // 問題集の選択肢の「すべての問題集」（前に間違えた問題でだけ出す）
+  var ALL_SETS = '';   // 問題集の選択肢の「すべての問題集」（前に間違えた問題・苦手な問題でだけ出す）
   var MAX_ERRORS_SHOWN = 20;
   var EXCERPT_LEN = 40;
 
@@ -33,10 +37,12 @@
     index: {},         // 鍵 → { set, question, index }
     session: null,     // 進行中のセッション
     finished: null,    // 直前に終えたセッション（結果画面と見返し用）
-    stats: S.loadStats(),
+    log: [],           // 学習の記録（回答ごとのログ）
+    summary: {},       // ログの集計（鍵 → { attempts, corrects, wrongs, rate, last, lastAt }）
     positions: S.loadPositions(),   // 鍵 → 前回表示したときの代表の正解の表示位置
     currentOrder: null, // 回答前の問題の表示順
-    reviewKey: null,   // 結果画面から見返している問題の鍵
+    reviewKey: null,   // 結果画面・成績の画面から見返している問題の鍵
+    reviewFrom: null,  // 見返しから戻る画面（'result' | 'stats'）
     loaded: false,     // 保存済みの問題集を読み出せたか
   };
 
@@ -45,7 +51,7 @@
   /* ===================== 画面の切り替え ===================== */
 
   function showScreen(name) {
-    ['home', 'quiz', 'result'].forEach(function (n) {
+    ['home', 'quiz', 'result', 'stats'].forEach(function (n) {
       $('screen-' + n).hidden = n !== name;
     });
     window.scrollTo(0, 0);
@@ -128,12 +134,13 @@
   function renderModeFields() {
     var mode = selectedMode();
     $('set-field').hidden = mode === 'all-random';
-    $('count-field').hidden = mode !== 'all-random' && mode !== 'wrong';
+    $('count-field').hidden = mode !== 'all-random' && mode !== 'wrong' && mode !== 'weak';
+    $('threshold-field').hidden = mode !== 'weak';
     fillSetSelect(mode);
     renderStartCount();
   }
 
-  /** 問題集の選択肢。前に間違えた問題のときだけ先頭に「すべての問題集」を足す。前の選択は残す */
+  /** 問題集の選択肢。前に間違えた問題・苦手な問題のときだけ先頭に「すべての問題集」を足す。前の選択は残す */
   function fillSetSelect(mode) {
     var select = $('set-select');
     var prev = select.value;
@@ -144,7 +151,7 @@
       opt.textContent = text;
       select.appendChild(opt);
     };
-    if (mode === 'wrong') add(ALL_SETS, 'すべての問題集');
+    if (mode === 'wrong' || mode === 'weak') add(ALL_SETS, 'すべての問題集');
     state.sets.forEach(function (set) {
       add(set.id, set.title + '（' + set.questions.length + '問）');
     });
@@ -191,13 +198,19 @@
     return v === 'all' ? null : Number(v);
   }
 
+  /** 苦手の判定に使う正答率のしきい値（0〜1） */
+  function selectedThreshold() {
+    return Number(document.querySelector('input[name="threshold"]:checked').value) / 100;
+  }
+
   /** いまの出題方法・問題集・絞り込みで対象になる問題集（問題を絞った写し） */
   function candidateSets(mode) {
     var sets = Q.filterSets(state.sets, currentFilter());
-    if (mode === 'wrong') sets = Q.filterWrong(sets, state.stats);
+    if (mode === 'wrong') sets = Q.filterWrong(sets, state.summary);
+    if (mode === 'weak') sets = Q.filterWeak(sets, state.summary, selectedThreshold());
     if (mode === 'all-random') return sets;
     var id = $('set-select').value;
-    if (mode === 'wrong' && id === ALL_SETS) return sets;
+    if ((mode === 'wrong' || mode === 'weak') && id === ALL_SETS) return sets;
     return sets.filter(function (set) { return set.id === id; });
   }
 
@@ -208,6 +221,7 @@
     var n = Q.countQuestions(candidateSets(mode));
     var text;
     if (mode === 'wrong') text = n > 0 ? '前に間違えた問題: ' + n + '問' : '前に間違えた問題はありません';
+    else if (mode === 'weak') text = n > 0 ? '苦手な問題: ' + n + '問' : '苦手な問題はありません';
     else text = n > 0 ? '対象: ' + n + '問' : '条件に合う問題がないため、開始できません';
     var el = $('start-count');
     el.textContent = text;
@@ -317,10 +331,30 @@
 
   /* ===================== 学習の記録の書き出し・読み込み ===================== */
 
+  function setLog(log) {
+    state.log = log;
+    state.summary = Q.summarizeLog(log);
+  }
+
+  /**
+   * 以前の成績の記録（問題ごとの集計）が残っていればログに移し、ログを読み出す。
+   * 移したあとも古い記録は消さず、移行済みの印だけを付ける。移す id は集計から決まるので、
+   * 途中で失敗して次の起動でやり直しても二重にならない。
+   */
+  function initLog() {
+    var legacy = S.loadLegacyStats();
+    var migrate = Promise.resolve();
+    if (legacy && !S.isMigrated()) {
+      var v = Q.validateHistory({ format: Q.HISTORY_FORMAT_V1, history: legacy });
+      if (v.ok) migrate = S.addLog(Q.migrateStats(legacy)).then(S.markMigrated);
+    }
+    return migrate.then(S.getAllLog).then(setLog);
+  }
+
   function renderHistory() {
-    var sum = Q.historySummary(state.stats);
+    var sum = Q.historySummary(state.summary);
     $('history-summary').textContent = sum.answered > 0
-      ? '解いた問題 ' + sum.answered + '問・前に間違えた問題 ' + sum.wrong + '問'
+      ? '解いた問題 ' + sum.answered + '問・回答 ' + sum.answers + '件・前に間違えた問題 ' + sum.wrong + '問'
       : 'まだ記録がありません。';
     $('btn-export').disabled = sum.answered === 0;
   }
@@ -331,8 +365,8 @@
    */
   function exportHistory() {
     var now = new Date();
-    var data = Q.buildHistoryExport(state.stats, state.positions, state.sets, now);
-    var name = Q.historyFileName(now);
+    var data = Q.buildHistoryExport(state.log, state.positions, state.sets, now);
+    var name = Q.HISTORY_FILE_NAME;
     var json = JSON.stringify(data, null, 2) + '\n';
     var file = null;
     try {
@@ -360,7 +394,10 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
-  /** 記録を読み込んで統合する。進行中のセッションには触れない */
+  /**
+   * 記録を読み込んで統合する。ログは id で和集合を取るので、2台の記録は合算され、
+   * 同じファイルを何度読み込んでも増えない。進行中のセッションには触れない。
+   */
   function importHistory(name, text) {
     var data;
     try {
@@ -377,14 +414,18 @@
       showMessage(lines, true, 'history-msg');
       return;
     }
-    var r = Q.mergeHistory(state.stats, state.positions, data.history, data.positions);
-    state.stats = r.stats;
-    state.positions = r.positions;
-    S.saveStats(state.stats);
-    S.savePositions(state.positions);
-    renderHome();
-    showMessage(['記録を読み込みました（追加 ' + r.added + '件・更新 ' + r.updated + '件・変更なし ' + r.unchanged + '件）。'],
-      false, 'history-msg');
+    var r = Q.unionLog(state.log, Q.historyToLog(data));
+    // 保存できてから画面の状態を変える（失敗したら何も変えない）
+    S.addLog(r.added).then(function () {
+      setLog(r.log);
+      state.positions = Q.mergePositions(state.positions, data.positions);
+      S.savePositions(state.positions);
+      renderHome();
+      showMessage(['記録を読み込みました（追加 ' + r.added.length + '件の回答・合計 ' + r.log.length + '件）。'],
+        false, 'history-msg');
+    }).catch(function (e) {
+      showMessage(['記録を保存できませんでした: ' + e], true, 'history-msg');
+    });
   }
 
   function onHistoryFile(ev) {
@@ -415,6 +456,8 @@
     var order;
     if (mode === 'all-random' || mode === 'wrong') {
       order = Q.allRandomOrder(sets, selectedCount(), Math.random);
+    } else if (mode === 'weak') {
+      order = Q.weakOrder(sets, state.summary, selectedCount(), Math.random);
     } else {
       order = mode === 'seq' ? Q.sequentialOrder(sets[0]) : Q.randomOrder(sets[0], Math.random);
     }
@@ -430,6 +473,7 @@
       var set = state.sets.filter(function (s) { return s.id === id; })[0];
       parts.push(set ? set.title : (opt ? opt.textContent : ''));
     }
+    if (mode === 'weak') parts.push('正答率' + Math.round(selectedThreshold() * 100) + '%未満か最後に不正解');
     if (!$('filter-field').hidden && currentFilter().type !== 'all') {
       parts.push($('filter-select').selectedOptions[0].textContent);
     }
@@ -488,7 +532,7 @@
       $('q-progress').textContent = (s.pos + 1) + ' / ' + s.order.length;
       $('q-score').textContent = '正解 ' + countCorrect(s);
     }
-    $('btn-quit').textContent = review ? '結果へ' : '中断';
+    $('btn-quit').textContent = review ? (state.reviewFrom === 'stats' ? '成績へ' : '結果へ') : '中断';
 
     $('q-text').textContent = q.question;
 
@@ -529,8 +573,9 @@
       list.appendChild(li);
     });
 
+    // 成績の画面からの見返しは回答が無い（picked が null）。判定は出さず、正解だけを示す
     var verdict = $('q-verdict');
-    verdict.hidden = !answer;
+    verdict.hidden = !answer || answer.picked == null;
     $('q-after').hidden = !answer;
     if (!answer) return;
 
@@ -569,7 +614,7 @@
     $('q-supplement').textContent = q.supplement || '';
 
     var next = $('btn-next');
-    if (review) next.textContent = '結果に戻る';
+    if (review) next.textContent = state.reviewFrom === 'stats' ? '成績に戻る' : '結果に戻る';
     else next.textContent = state.session.pos + 1 >= state.session.order.length ? '結果を見る' : '次の問題へ';
   }
 
@@ -592,15 +637,19 @@
     var r = Q.judge(q, state.currentOrder, displayIndex);
     s.answers[key] = { order: state.currentOrder, picked: r.original, correct: r.correct };
     S.saveSession(s);
-    state.stats = Q.updateStats(state.stats, key, r.correct, new Date().toISOString());
-    S.saveStats(state.stats);
+    var now = new Date();
+    var entry = { id: S.newLogId(now), key: key, at: now.toISOString(), ok: r.correct };
+    setLog(state.log.concat([entry]));
+    S.addLog([entry]).catch(function (e) {
+      showMessage(['回答の記録を保存できませんでした: ' + e], true, 'history-msg');
+    });
     drawQuestion(key, state.currentOrder, s.answers[key], false);
   }
 
   function onNext() {
     if (state.reviewKey) {
       state.reviewKey = null;
-      showScreen('result');
+      showScreen(state.reviewFrom || 'result');
       return;
     }
     var s = state.session;
@@ -671,6 +720,7 @@
   function review(key) {
     var a = state.finished.answers[key];
     state.reviewKey = key;
+    state.reviewFrom = 'result';
     drawQuestion(key, a.order, a, true);
     showScreen('quiz');
   }
@@ -679,6 +729,83 @@
     var f = state.finished;
     var wrong = f.order.filter(function (k) { return !(f.answers[k] && f.answers[k].correct); });
     if (wrong.length) startSession('retry', wrong);
+  }
+
+  /* ===================== 成績 ===================== */
+
+  function percent(rate) {
+    return rate == null ? '—' : Math.round(rate * 100) + '%';
+  }
+
+  /** 集計1件をカード1枚にする（表は横にはみ出すのでカードにする） */
+  function statCard(title, g) {
+    var li = document.createElement('li');
+    li.className = 'qd-stat-item';
+    var h = document.createElement('span');
+    h.className = 'qd-stat-title';
+    h.textContent = title;
+    var line = document.createElement('span');
+    line.className = 'qd-stat-line';
+    line.textContent = '解いた ' + g.answered + ' / ' + g.questions + '問・正答率 ' + percent(g.rate) + '・苦手 ' + g.weak + '問';
+    li.appendChild(h);
+    li.appendChild(line);
+    return li;
+  }
+
+  function renderStats() {
+    var th = Q.DEFAULT_WEAK_THRESHOLD;
+    var r = Q.statsReport(state.sets, state.summary, th);
+    $('st-total').textContent = '解いた問題 ' + r.total.answered + ' / ' + r.total.questions + '問';
+    $('st-total-sub').textContent = '回答 ' + r.total.answers + '件・正答率 ' + percent(r.total.rate);
+    $('st-threshold').textContent = '苦手 = 正答率' + Math.round(th * 100) + '%未満か、最後に不正解だった問題';
+
+    var bySet = $('st-sets');
+    bySet.textContent = '';
+    r.bySet.forEach(function (g) { bySet.appendChild(statCard(g.title, g)); });
+
+    var byCat = $('st-cats');
+    byCat.textContent = '';
+    r.byCategory.forEach(function (g) { byCat.appendChild(statCard(g.category === null ? '（分類なし）' : g.category, g)); });
+    $('st-cats-card').hidden = r.byCategory.length === 0 ||
+      (r.byCategory.length === 1 && r.byCategory[0].category === null);
+
+    var list = $('st-weak');
+    list.textContent = '';
+    r.weakList.forEach(function (w) {
+      var e = state.index[w.key];
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'qd-wrong-item';
+      var label = document.createElement('span');
+      label.className = 'qd-wrong-label';
+      label.textContent = Q.questionLabel(e.set, e.question, e.index);
+      var text = document.createElement('span');
+      text.className = 'qd-wrong-text';
+      text.textContent = (e.question.category ? e.question.category + '・' : '') +
+        w.attempts + '回・正答率 ' + percent(w.rate);
+      btn.appendChild(label);
+      btn.appendChild(text);
+      btn.addEventListener('click', function () { reviewFromStats(w.key); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    $('st-noweak').hidden = r.weakList.length > 0;
+  }
+
+  /** 成績の画面から、その問題の回答後の表示（元の番号の選択肢と解説）を見る。並べ替えも記録もしない */
+  function reviewFromStats(key) {
+    var q = state.index[key].question;
+    state.reviewKey = key;
+    state.reviewFrom = 'stats';
+    var order = q.choices.map(function (_, i) { return i; });
+    drawQuestion(key, order, { order: order, picked: null, correct: null }, true);
+    showScreen('quiz');
+  }
+
+  function openStats() {
+    renderStats();
+    showScreen('stats');
   }
 
   /* ===================== 画像の拡大 ===================== */
@@ -698,6 +825,8 @@
 
   $('file-input').addEventListener('change', onFiles);
   $('btn-export').addEventListener('click', exportHistory);
+  $('btn-stats').addEventListener('click', openStats);
+  $('btn-stats-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
   $('history-input').addEventListener('change', onHistoryFile);
   $('btn-sample').addEventListener('click', loadSample);
   $('btn-start').addEventListener('click', onStart);
@@ -714,11 +843,16 @@
   Array.prototype.forEach.call(document.querySelectorAll('input[name="count"]'), function (el) {
     el.addEventListener('change', renderStartCount);
   });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="threshold"]'), function (el) {
+    el.addEventListener('change', renderStartCount);
+  });
   $('set-select').addEventListener('change', renderStartCount);
   $('filter-select').addEventListener('change', renderStartCount);
 
   state.session = S.loadSession();
-  reloadSets().catch(function (e) {
+  initLog().catch(function (e) {
+    showMessage(['学習の記録を読み出せませんでした: ' + e], true, 'history-msg');
+  }).then(reloadSets).catch(function (e) {
     renderHome();
     showMessage(['保存した問題集を読み出せませんでした: ' + e], true);
   });
