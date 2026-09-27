@@ -54,7 +54,7 @@ toolbox/
 └── quiz-drill/             # 4択ドリル（問題は同梱しない。利用者が JSON を読み込む）
     ├── index.html
     ├── style.css
-    ├── quiz.js             # 検証・統合・出題順・並べ替え・正誤・採点（純粋関数。乱数は引数）
+    ├── quiz.js             # 検証・統合・絞り込み・出題順・並べ替え・正誤・採点（純粋関数。乱数は引数）
     ├── storage.js          # 問題集は IndexedDB、セッションと成績は localStorage
     ├── app.js              # DOM・イベント・描画。計算は持たない
     ├── sample.json         # 見本の問題（架空の一般常識の問題5問）

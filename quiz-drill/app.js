@@ -19,8 +19,10 @@
     'seq': '問題集ごとに通し',
     'set-random': '問題集の中でランダム',
     'all-random': '全問題からランダム',
-    'retry': '間違えた問題',
+    'wrong': '前に間違えた問題',
+    'retry': '間違えた問題だけもう一度',
   };
+  var ALL_SETS = '';   // 問題集の選択肢の「すべての問題集」（前に間違えた問題でだけ出す）
   var MAX_ERRORS_SHOWN = 20;
   var EXCERPT_LEN = 40;
 
@@ -89,17 +91,7 @@
       list.appendChild(li);
     });
 
-    // 問題集の選択肢（前に選んでいたものは残す）
-    var select = $('set-select');
-    var prev = select.value;
-    select.textContent = '';
-    state.sets.forEach(function (set) {
-      var opt = document.createElement('option');
-      opt.value = set.id;
-      opt.textContent = set.title + '（' + set.questions.length + '問）';
-      select.appendChild(opt);
-    });
-    if (prev && state.sets.some(function (s) { return s.id === prev; })) select.value = prev;
+    fillFilterSelect();
 
     // 続きから
     // 読み出しに失敗したとき（loaded でない）は、途中の分を消さずに残しておく
@@ -118,6 +110,7 @@
   }
 
   function describeSession(s) {
+    if (s.desc) return s.desc;
     var first = state.index[s.order[0]];
     var name = MODE_NAMES[s.mode] || '';
     if ((s.mode === 'seq' || s.mode === 'set-random') && first) return name + '：' + first.set.title;
@@ -131,7 +124,91 @@
   function renderModeFields() {
     var mode = selectedMode();
     $('set-field').hidden = mode === 'all-random';
-    $('count-field').hidden = mode !== 'all-random';
+    $('count-field').hidden = mode !== 'all-random' && mode !== 'wrong';
+    fillSetSelect(mode);
+    renderStartCount();
+  }
+
+  /** 問題集の選択肢。前に間違えた問題のときだけ先頭に「すべての問題集」を足す。前の選択は残す */
+  function fillSetSelect(mode) {
+    var select = $('set-select');
+    var prev = select.value;
+    select.textContent = '';
+    var add = function (value, text) {
+      var opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = text;
+      select.appendChild(opt);
+    };
+    if (mode === 'wrong') add(ALL_SETS, 'すべての問題集');
+    state.sets.forEach(function (set) {
+      add(set.id, set.title + '（' + set.questions.length + '問）');
+    });
+    var keep = Array.prototype.some.call(select.options, function (o) { return o.value === prev; });
+    if (keep) select.value = prev;
+  }
+
+  /**
+   * 絞り込みの選択肢。タグはデータから取る（アプリにタグの言葉を書かない）。
+   * 値は { type, tag } の JSON にしてある（タグにどんな文字が入っていても区切りで壊れないように）。
+   */
+  function fillFilterSelect() {
+    var tags = Q.collectTags(state.sets);
+    var select = $('filter-select');
+    var prev = select.value;
+    select.textContent = '';
+    $('filter-field').hidden = tags.length === 0;
+    var add = function (filter, text) {
+      var opt = document.createElement('option');
+      opt.value = JSON.stringify(filter);
+      opt.textContent = text;
+      select.appendChild(opt);
+    };
+    add({ type: 'all' }, 'すべて');
+    tags.forEach(function (tag) {
+      add({ type: 'only', tag: tag }, tag + 'だけ');
+      add({ type: 'exclude', tag: tag }, tag + 'を除く');
+    });
+    var keep = Array.prototype.some.call(select.options, function (o) { return o.value === prev; });
+    if (keep) select.value = prev;
+  }
+
+  function currentFilter() {
+    if ($('filter-field').hidden) return { type: 'all' };
+    try {
+      return JSON.parse($('filter-select').value);
+    } catch (e) {
+      return { type: 'all' };
+    }
+  }
+
+  function selectedCount() {
+    var v = document.querySelector('input[name="count"]:checked').value;
+    return v === 'all' ? null : Number(v);
+  }
+
+  /** いまの出題方法・問題集・絞り込みで対象になる問題集（問題を絞った写し） */
+  function candidateSets(mode) {
+    var sets = Q.filterSets(state.sets, currentFilter());
+    if (mode === 'wrong') sets = Q.filterWrong(sets, state.stats);
+    if (mode === 'all-random') return sets;
+    var id = $('set-select').value;
+    if (mode === 'wrong' && id === ALL_SETS) return sets;
+    return sets.filter(function (set) { return set.id === id; });
+  }
+
+  /** 今の条件で対象になる問題数。0問なら開始できないようにする */
+  function renderStartCount() {
+    if (!state.sets.length) return;
+    var mode = selectedMode();
+    var n = Q.countQuestions(candidateSets(mode));
+    var text;
+    if (mode === 'wrong') text = n > 0 ? '前に間違えた問題: ' + n + '問' : '前に間違えた問題はありません';
+    else text = n > 0 ? '対象: ' + n + '問' : '条件に合う問題がないため、開始できません';
+    var el = $('start-count');
+    el.textContent = text;
+    el.classList.toggle('is-empty', n === 0);
+    $('btn-start').disabled = n === 0;
   }
 
   function removeSet(set) {
@@ -236,8 +313,8 @@
 
   /* ===================== セッションの開始 ===================== */
 
-  function startSession(mode, order) {
-    state.session = { mode: mode, order: order, pos: 0, answers: {} };
+  function startSession(mode, order, desc) {
+    state.session = { mode: mode, order: order, pos: 0, answers: {}, desc: desc || '' };
     state.finished = null;
     S.saveSession(state.session);
     renderQuestion();
@@ -246,17 +323,33 @@
   function onStart() {
     if (state.session && !confirm('途中の問題があります。新しく始めると、途中の分は消えます。よろしいですか？')) return;
     var mode = selectedMode();
+    var sets = candidateSets(mode);
+    if (Q.countQuestions(sets) === 0) {
+      renderStartCount();
+      return;
+    }
     var order;
-    if (mode === 'all-random') {
-      var v = document.querySelector('input[name="count"]:checked').value;
-      order = Q.allRandomOrder(state.sets, v === 'all' ? null : Number(v), Math.random);
+    if (mode === 'all-random' || mode === 'wrong') {
+      order = Q.allRandomOrder(sets, selectedCount(), Math.random);
     } else {
+      order = mode === 'seq' ? Q.sequentialOrder(sets[0]) : Q.randomOrder(sets[0], Math.random);
+    }
+    startSession(mode, order, describeStart(mode));
+  }
+
+  /** 続きからの下に出す説明（出題方法・問題集・絞り込み） */
+  function describeStart(mode) {
+    var parts = [MODE_NAMES[mode]];
+    if (mode !== 'all-random') {
+      var opt = $('set-select').selectedOptions[0];
       var id = $('set-select').value;
       var set = state.sets.filter(function (s) { return s.id === id; })[0];
-      if (!set) return;
-      order = mode === 'seq' ? Q.sequentialOrder(set) : Q.randomOrder(set, Math.random);
+      parts.push(set ? set.title : (opt ? opt.textContent : ''));
     }
-    startSession(mode, order);
+    if (!$('filter-field').hidden && currentFilter().type !== 'all') {
+      parts.push($('filter-select').selectedOptions[0].textContent);
+    }
+    return parts.join('：');
   }
 
   /* ===================== 問題 ===================== */
@@ -513,6 +606,11 @@
   Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function (el) {
     el.addEventListener('change', renderModeFields);
   });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="count"]'), function (el) {
+    el.addEventListener('change', renderStartCount);
+  });
+  $('set-select').addEventListener('change', renderStartCount);
+  $('filter-select').addEventListener('change', renderStartCount);
 
   state.session = S.loadSession();
   reloadSets().catch(function (e) {

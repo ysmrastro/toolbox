@@ -236,3 +236,94 @@ test('updateStats: 回答回数・正解回数・最後の結果・日時を積�
     attempts: 2, corrects: 1, last: 'wrong', lastAt: '2026-09-26T11:00:00.000Z',
   });
 });
+
+/* ===================== 絞り込み ===================== */
+
+const tagged = [
+  { id: 's1', title: 'T1', questions: [
+    q('a', { tags: ['タグ甲'] }),
+    q('b', { tags: ['タグ乙'] }),
+    q('c'),                                  // タグなし
+    q('d', { tags: ['タグ甲', 'タグ乙'] }),
+  ] },
+  { id: 's2', title: 'T2', questions: [q('a', { tags: ['タグ乙'] })] },
+];
+
+const keysOf = (sets) => sets.flatMap((s) => s.questions.map((x) => s.id + '::' + x.id));
+
+test('validateFile: tags は文字列の配列だけ通す', () => {
+  const ok = Q.validateFile(file([{ id: 's', title: 'T', questions: [q('a', { tags: ['甲', '乙'] })] }]));
+  assert.strictEqual(ok.ok, true);
+  const ng = Q.validateFile(file([{ id: 's', title: 'T', questions: [q('a', { tags: '甲' })] }]));
+  assert.strictEqual(ng.ok, false);
+  assert.match(ng.errors[0], /tags/);
+});
+
+test('collectTags: 出てくるタグを最初に出てきた順に重複なく集める', () => {
+  assert.deepStrictEqual(Q.collectTags(tagged), ['タグ甲', 'タグ乙']);
+  assert.deepStrictEqual(Q.collectTags([{ id: 's', title: 'T', questions: [q('a')] }]), []);
+});
+
+test('filterSets:「だけ」はそのタグを持つ問題だけ（タグなしは含めない）', () => {
+  const r = Q.filterSets(tagged, { type: 'only', tag: 'タグ甲' });
+  assert.deepStrictEqual(keysOf(r), ['s1::a', 's1::d']);
+});
+
+test('filterSets:「除く」はそのタグを持たない問題（タグなしは含める）。0問の問題集は落とす', () => {
+  const r = Q.filterSets(tagged, { type: 'exclude', tag: 'タグ乙' });
+  assert.deepStrictEqual(keysOf(r), ['s1::a', 's1::c']);
+  assert.deepStrictEqual(r.map((s) => s.id), ['s1']);
+});
+
+test('filterSets:「すべて」は絞らない。引数は書き換えない', () => {
+  assert.deepStrictEqual(keysOf(Q.filterSets(tagged, { type: 'all' })),
+    ['s1::a', 's1::b', 's1::c', 's1::d', 's2::a']);
+  Q.filterSets(tagged, { type: 'only', tag: 'タグ甲' });
+  assert.strictEqual(tagged[0].questions.length, 4);
+});
+
+test('filterSets: 絞った結果は通しの出題順にもそのまま使える', () => {
+  const set = { id: 's', title: 'T', questions: [
+    q('x', { no: 3, tags: ['甲'] }), q('y', { no: 1 }), q('z', { no: 2, tags: ['甲'] }),
+  ] };
+  const [only] = Q.filterSets([set], { type: 'only', tag: '甲' });
+  assert.deepStrictEqual(Q.sequentialOrder(only), ['s::z', 's::x']);
+  assert.strictEqual(Q.countQuestions(Q.filterSets([set], { type: 'only', tag: '乙' })), 0);
+});
+
+/* ===================== 前に間違えた問題 ===================== */
+
+test('filterWrong: 最後に解いたとき不正解だった問題だけ', () => {
+  let st = {};
+  st = Q.updateStats(st, 's1::a', false, 't1');   // 不正解のまま
+  st = Q.updateStats(st, 's1::b', true, 't1');    // 正解
+  st = Q.updateStats(st, 's2::a', false, 't1');   // 不正解のまま
+  // s1::c・s1::d は解いていない
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, st)), ['s1::a', 's2::a']);
+});
+
+test('filterWrong: 間違えたあと最後に正解したら外れる', () => {
+  let st = {};
+  st = Q.updateStats(st, 's1::a', false, 't1');
+  st = Q.updateStats(st, 's1::a', true, 't2');
+  st = Q.updateStats(st, 's1::b', true, 't1');
+  st = Q.updateStats(st, 's1::b', false, 't2');
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, st)), ['s1::b']);
+});
+
+test('filterWrong: 範囲は渡した問題集の中だけ（問題 id が同じでも別の問題集は別扱い）', () => {
+  let st = {};
+  st = Q.updateStats(st, 's2::a', false, 't1');
+  const onlyS1 = tagged.filter((s) => s.id === 's1');
+  assert.deepStrictEqual(keysOf(Q.filterWrong(onlyS1, st)), []);
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, st)), ['s2::a']);
+});
+
+test('filterWrong と絞り込み・出題数の組み合わせ', () => {
+  let st = {};
+  ['s1::a', 's1::b', 's1::c', 's1::d'].forEach((k) => { st = Q.updateStats(st, k, false, 't'); });
+  const wrong = Q.filterSets(Q.filterWrong(tagged, st), { type: 'exclude', tag: 'タグ甲' });
+  assert.deepStrictEqual(keysOf(wrong), ['s1::b', 's1::c']);
+  const order = Q.allRandomOrder(wrong, 1, () => 0);
+  assert.strictEqual(order.length, 1);
+});

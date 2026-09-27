@@ -40,6 +40,9 @@ var QD_QUIZ = (function () {
     ['category', 'explanation', 'supplement', 'image', 'imageAlt'].forEach(function (k) {
       if (q[k] !== undefined && typeof q[k] !== 'string') errs.push(k + ' は文字列で書いてください');
     });
+    if (q.tags !== undefined && !(Array.isArray(q.tags) && q.tags.every(isNonEmptyString))) {
+      errs.push('tags は文字列の配列で書いてください');
+    }
     if (q.fixedOrder !== undefined && typeof q.fixedOrder !== 'boolean') {
       errs.push('fixedOrder は true か false で書いてください');
     }
@@ -217,6 +220,66 @@ var QD_QUIZ = (function () {
     return count == null ? a : a.slice(0, count);
   }
 
+  /* ===================== 絞り込み =====================
+   * 絞り込みは「問題集の問題を減らした写し」を作る形にする。出題順の関数（通し・ランダム）は
+   * そのまま使え、どの出題方法にも同じように効く。
+   */
+
+  /** 読み込んだ問題に出てくるタグ（最初に出てきた順・重複なし） */
+  function collectTags(sets) {
+    var tags = [];
+    sets.forEach(function (set) {
+      set.questions.forEach(function (q) {
+        (q.tags || []).forEach(function (t) {
+          if (tags.indexOf(t) < 0) tags.push(t);
+        });
+      });
+    });
+    return tags;
+  }
+
+  /**
+   * filter: { type: 'all' } / { type: 'only', tag } / { type: 'exclude', tag }。
+   * タグの無い問題は「だけ」には入らず、「除く」には入る。
+   */
+  function matchesFilter(question, filter) {
+    if (!filter || filter.type === 'all') return true;
+    var has = Array.isArray(question.tags) && question.tags.indexOf(filter.tag) >= 0;
+    if (filter.type === 'only') return has;
+    if (filter.type === 'exclude') return !has;
+    return true;
+  }
+
+  /** 問題を条件で絞った問題集の写しを返す。0問になった問題集は落とす。引数は書き換えない */
+  function selectQuestions(sets, pred) {
+    return sets
+      .map(function (set) {
+        var qs = set.questions.filter(function (q) { return pred(set, q); });
+        return Object.assign({}, set, { questions: qs });
+      })
+      .filter(function (set) { return set.questions.length > 0; });
+  }
+
+  function filterSets(sets, filter) {
+    return selectQuestions(sets, function (set, q) { return matchesFilter(q, filter); });
+  }
+
+  /**
+   * 前に間違えた問題: 成績の記録で「最後に解いたとき不正解」だった問題だけに絞る。
+   * stats は updateStats() で作ったもの（鍵 → { last: 'correct' | 'wrong', ... }）。
+   */
+  function filterWrong(sets, stats) {
+    return selectQuestions(sets, function (set, q) {
+      var st = stats[questionKey(set.id, q.id)];
+      return !!st && st.last === 'wrong';
+    });
+  }
+
+  /** 問題集の問題数の合計 */
+  function countQuestions(sets) {
+    return sets.reduce(function (n, set) { return n + set.questions.length; }, 0);
+  }
+
   /* ===================== 選択肢と正誤 ===================== */
 
   /**
@@ -304,6 +367,11 @@ var QD_QUIZ = (function () {
     sequentialOrder: sequentialOrder,
     randomOrder: randomOrder,
     allRandomOrder: allRandomOrder,
+    collectTags: collectTags,
+    matchesFilter: matchesFilter,
+    filterSets: filterSets,
+    filterWrong: filterWrong,
+    countQuestions: countQuestions,
     choiceOrder: choiceOrder,
     correctIndices: correctIndices,
     isCorrectOriginal: isCorrectOriginal,

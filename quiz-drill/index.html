@@ -71,6 +71,13 @@
         <label class="qd-mode"><input type="radio" name="mode" value="seq" checked><span>問題集ごとに通し</span></label>
         <label class="qd-mode"><input type="radio" name="mode" value="set-random"><span>問題集の中でランダム</span></label>
         <label class="qd-mode"><input type="radio" name="mode" value="all-random"><span>全問題からランダム</span></label>
+        <label class="qd-mode"><input type="radio" name="mode" value="wrong"><span>前に間違えた問題</span></label>
+      </div>
+
+      <!-- タグが1つも無ければ出さない。選択肢はデータのタグから作る -->
+      <div id="filter-field" class="tb-form-group" hidden>
+        <label class="tb-label" for="filter-select">絞り込み</label>
+        <select id="filter-select" class="tb-select"></select>
       </div>
 
       <div id="set-field" class="tb-form-group">
@@ -88,6 +95,7 @@
         </div>
       </div>
 
+      <p id="start-count" class="qd-start-count"></p>
       <button type="button" id="btn-start" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">はじめる</button>
     </section>
 
