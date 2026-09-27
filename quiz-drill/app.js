@@ -9,7 +9,7 @@
  *
  * セッション（localStorage）の形:
  *   { mode, order: [問題の鍵], pos: いま何問目か（0 始まり）,
- *     answers: { 鍵: { order: 表示順, picked: 選んだ元の添字, correct } },
+ *     answers: { 鍵: { order: 表示順, picked: 選んだ元の添字, correct, logId: 回答の記録の id, lucky } },
  *     shown: { key, order } 回答前の問題を表示したときの表示順 }
  * 回答するたびに保存するので、途中で閉じても同じ問題から再開できる。
  * shown があるので、回答前に閉じて「続きから」で戻っても同じ並びで描く（並べ替え直さない）。
@@ -421,9 +421,11 @@
       state.positions = Q.mergePositions(state.positions, data.positions);
       S.savePositions(state.positions);
       renderHome();
-      var marks = r.added.filter(function (x) { return x.kind === 'clear'; }).length;
-      showMessage(['記録を読み込みました（追加 ' + (r.added.length - marks) + '件の回答' +
-        (marks ? '・消去の印 ' + marks + '件' : '') + '・合計 ' + r.log.length + '件）。'],
+      var clears = r.added.filter(function (x) { return x.kind === 'clear'; }).length;
+      var lucks = r.added.filter(function (x) { return x.kind === 'lucky'; }).length;
+      showMessage(['記録を読み込みました（追加 ' + (r.added.length - clears - lucks) + '件の回答' +
+        (clears ? '・消去の印 ' + clears + '件' : '') + (lucks ? '・まぐれの印 ' + lucks + '件' : '') +
+        '・合計 ' + r.log.length + '件）。'],
         false, 'history-msg');
     }).catch(function (e) {
       showMessage(['記録を保存できませんでした: ' + e], true, 'history-msg');
@@ -579,11 +581,19 @@
     var verdict = $('q-verdict');
     verdict.hidden = !answer || answer.picked == null;
     $('q-after').hidden = !answer;
+    $('btn-lucky').hidden = true;   // 回答後に下で出し直す
     if (!answer) return;
 
-    verdict.textContent = answer.correct ? '正解' : '不正解';
+    verdict.textContent = answer.correct ? (answer.lucky ? '正解（まぐれ）' : '正解') : '不正解';
     verdict.classList.toggle('is-correct', answer.correct);
     verdict.classList.toggle('is-wrong', !answer.correct);
+
+    // まぐれの印は、回答した直後の画面でだけ操作できる（見返しでは出さない）。
+    // logId の無い回答（この機能より前に始めたセッション）では出さない
+    var lucky = $('btn-lucky');
+    lucky.hidden = review || !answer.correct || !answer.logId;
+    lucky.textContent = answer.lucky ? 'まぐれにしました（取り消す）' : 'まぐれ（あとで復習）';
+    lucky.classList.toggle('is-on', !!answer.lucky);
 
     // 元の番号順の選択肢。解説は元の番号で書かれていることがあるので、これで番号を突き合わせる
     var orig = $('q-original');
@@ -628,7 +638,7 @@
   }
 
   function countCorrect(s) {
-    return s.order.filter(function (k) { return s.answers[k] && s.answers[k].correct; }).length;
+    return s.order.filter(function (k) { return Q.answerCorrect(s.answers[k]); }).length;
   }
 
   function onPick(displayIndex) {
@@ -637,15 +647,36 @@
     if (s.answers[key]) return;   // 選び直しはできない
     var q = state.index[key].question;
     var r = Q.judge(q, state.currentOrder, displayIndex);
-    s.answers[key] = { order: state.currentOrder, picked: r.original, correct: r.correct };
-    S.saveSession(s);
     var now = new Date();
     var entry = { id: S.newLogId(now), key: key, at: now.toISOString(), ok: r.correct };
+    s.answers[key] = { order: state.currentOrder, picked: r.original, correct: r.correct, logId: entry.id, lucky: false };
+    S.saveSession(s);
     setLog(state.log.concat([entry]));
     S.addLog([entry]).catch(function (e) {
       showMessage(['回答の記録を保存できませんでした: ' + e], true, 'history-msg');
     });
     drawQuestion(key, state.currentOrder, s.answers[key], false);
+  }
+
+  /**
+   * まぐれの印を付ける・取り消す。回答の記録は書き換えず、印 { kind: 'lucky', ref, on } を足す
+   * （書き換えは和集合でもう一方の端末に伝わらないため）。印が保存できてから表示を変える。
+   */
+  function onLucky() {
+    var s = state.session;
+    var key = s.order[s.pos];
+    var a = s.answers[key];
+    if (!a || !a.correct || !a.logId) return;
+    var now = new Date();
+    var mark = { id: S.newLogId(now), kind: 'lucky', ref: a.logId, on: !a.lucky, at: now.toISOString() };
+    S.addLog([mark]).then(function () {
+      a.lucky = mark.on;
+      S.saveSession(s);
+      setLog(state.log.concat([mark]));
+      drawQuestion(key, a.order, a, false);
+    }).catch(function (e) {
+      alert('まぐれの印を保存できませんでした: ' + e);
+    });
   }
 
   function onNext() {
@@ -686,11 +717,14 @@
   function renderResult() {
     var f = state.finished;
     var results = f.order.map(function (k) {
-      return { key: k, question: state.index[k].question, correct: !!(f.answers[k] && f.answers[k].correct) };
+      return { key: k, question: state.index[k].question, correct: Q.answerCorrect(f.answers[k]) };
     });
     var sc = Q.score(results);
     $('r-summary').textContent = sc.correct + ' / ' + sc.total + ' 問正解';
     $('r-rate').textContent = '正答率 ' + Math.round(sc.correct / sc.total * 100) + '%';
+    var lucky = f.order.filter(function (k) { return f.answers[k] && f.answers[k].lucky; }).length;
+    $('r-lucky').hidden = lucky === 0;
+    $('r-lucky').textContent = 'うち まぐれ ' + lucky + '問（不正解として数えています）';
     $('r-points').hidden = !sc.hasPoints;
     $('r-points').textContent = '得点 ' + sc.points + ' / ' + sc.maxPoints + ' 点';
 
@@ -729,7 +763,7 @@
 
   function onRetry() {
     var f = state.finished;
-    var wrong = f.order.filter(function (k) { return !(f.answers[k] && f.answers[k].correct); });
+    var wrong = f.order.filter(function (k) { return !Q.answerCorrect(f.answers[k]); });
     if (wrong.length) startSession('retry', wrong);
   }
 
@@ -748,7 +782,8 @@
     h.textContent = title;
     var line = document.createElement('span');
     line.className = 'qd-stat-line';
-    line.textContent = '解いた ' + g.answered + ' / ' + g.questions + '問・正答率 ' + percent(g.rate) + '・苦手 ' + g.weak + '問';
+    line.textContent = '解いた ' + g.answered + ' / ' + g.questions + '問・正答率 ' + percent(g.rate) + '・苦手 ' + g.weak + '問' +
+      (g.lucky ? '・まぐれ ' + g.lucky + '問' : '');
     li.appendChild(h);
     li.appendChild(line);
     return li;
@@ -780,7 +815,8 @@
     var th = Q.DEFAULT_WEAK_THRESHOLD;
     var r = Q.statsReport(state.sets, state.summary, th);
     $('st-total').textContent = '解いた問題 ' + r.total.answered + ' / ' + r.total.questions + '問';
-    $('st-total-sub').textContent = '回答 ' + r.total.answers + '件・正答率 ' + percent(r.total.rate);
+    $('st-total-sub').textContent = '回答 ' + r.total.answers + '件・正答率 ' + percent(r.total.rate) +
+      '・まぐれ ' + r.total.lucky + '問';
     $('st-threshold').textContent = '苦手 = 正答率' + Math.round(th * 100) + '%未満か、最後に不正解だった問題';
 
     var bySet = $('st-sets');
@@ -867,6 +903,7 @@
   $('btn-start').addEventListener('click', onStart);
   $('btn-resume').addEventListener('click', renderQuestion);
   $('btn-next').addEventListener('click', onNext);
+  $('btn-lucky').addEventListener('click', onLucky);
   $('btn-quit').addEventListener('click', onQuit);
   $('btn-retry').addEventListener('click', onRetry);
   $('btn-home').addEventListener('click', function () { renderHome(); showScreen('home'); });

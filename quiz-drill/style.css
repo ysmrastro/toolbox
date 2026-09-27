@@ -343,6 +343,17 @@ body {
 .qd-verdict.is-correct { color: var(--qd-correct); }
 .qd-verdict.is-wrong { color: var(--qd-wrong); }
 
+/* まぐれの印。付けたら目立たせて、取り消せることが分かるようにする */
+.qd-lucky-btn { margin-bottom: var(--tb-space-md); }
+/* 共通の secondary の :hover（枠がアクセント色）に負けないよう、:hover も並べて書く */
+.qd-lucky-btn.is-on,
+.qd-lucky-btn.is-on:hover:not(:disabled) {
+  border-color: var(--qd-wrong);
+  background: var(--qd-wrong-subtle);
+  color: var(--tb-text-primary);
+  font-weight: 700;
+}
+
 /* 回答後の表示 */
 .qd-after {
   padding-top: var(--tb-space-md);
