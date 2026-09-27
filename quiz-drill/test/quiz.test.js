@@ -228,15 +228,6 @@ test('circled: 元の番号を丸付き数字にする', () => {
   assert.strictEqual(Q.circled(21), '(21)');
 });
 
-test('updateStats: 回答回数・正解回数・最後の結果・日時を積み上げる', () => {
-  let st = {};
-  st = Q.updateStats(st, 's::a', true, '2026-09-26T10:00:00.000Z');
-  st = Q.updateStats(st, 's::a', false, '2026-09-26T11:00:00.000Z');
-  assert.deepStrictEqual(st['s::a'], {
-    attempts: 2, corrects: 1, last: 'wrong', lastAt: '2026-09-26T11:00:00.000Z',
-  });
-});
-
 /* ===================== 絞り込み ===================== */
 
 const tagged = [
@@ -293,36 +284,35 @@ test('filterSets: 絞った結果は通しの出題順にもそのまま使え�
 
 /* ===================== 前に間違えた問題 ===================== */
 
+let seqNo = 0;
+/** [鍵, 正解か, 日時] の並びからログを作る（id は通し番号） */
+const logOf = (...rows) => rows.map(([key, ok, at]) => ({ id: 'd:' + (++seqNo), key, at, ok }));
+const T = (h) => `2026-09-20T${String(h).padStart(2, '0')}:00:00.000Z`;
+
 test('filterWrong: 最後に解いたとき不正解だった問題だけ', () => {
-  let st = {};
-  st = Q.updateStats(st, 's1::a', false, 't1');   // 不正解のまま
-  st = Q.updateStats(st, 's1::b', true, 't1');    // 正解
-  st = Q.updateStats(st, 's2::a', false, 't1');   // 不正解のまま
+  const sum = Q.summarizeLog(logOf(['s1::a', false, T(1)], ['s1::b', true, T(1)], ['s2::a', false, T(1)]));
   // s1::c・s1::d は解いていない
-  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, st)), ['s1::a', 's2::a']);
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum)), ['s1::a', 's2::a']);
 });
 
-test('filterWrong: 間違えたあと最後に正解したら外れる', () => {
-  let st = {};
-  st = Q.updateStats(st, 's1::a', false, 't1');
-  st = Q.updateStats(st, 's1::a', true, 't2');
-  st = Q.updateStats(st, 's1::b', true, 't1');
-  st = Q.updateStats(st, 's1::b', false, 't2');
-  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, st)), ['s1::b']);
+test('filterWrong: 間違えたあと最後に正解したら外れる（ログの並びではなく日時で決める）', () => {
+  const sum = Q.summarizeLog(logOf(
+    ['s1::a', true, T(2)], ['s1::a', false, T(1)],   // 後で正解
+    ['s1::b', false, T(2)], ['s1::b', true, T(1)],   // 後で不正解
+  ));
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum)), ['s1::b']);
 });
 
 test('filterWrong: 範囲は渡した問題集の中だけ（問題 id が同じでも別の問題集は別扱い）', () => {
-  let st = {};
-  st = Q.updateStats(st, 's2::a', false, 't1');
+  const sum = Q.summarizeLog(logOf(['s2::a', false, T(1)]));
   const onlyS1 = tagged.filter((s) => s.id === 's1');
-  assert.deepStrictEqual(keysOf(Q.filterWrong(onlyS1, st)), []);
-  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, st)), ['s2::a']);
+  assert.deepStrictEqual(keysOf(Q.filterWrong(onlyS1, sum)), []);
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum)), ['s2::a']);
 });
 
 test('filterWrong と絞り込み・出題数の組み合わせ', () => {
-  let st = {};
-  ['s1::a', 's1::b', 's1::c', 's1::d'].forEach((k) => { st = Q.updateStats(st, k, false, 't'); });
-  const wrong = Q.filterSets(Q.filterWrong(tagged, st), { type: 'exclude', tag: 'タグ甲' });
+  const sum = Q.summarizeLog(logOf(...['s1::a', 's1::b', 's1::c', 's1::d'].map((k) => [k, false, T(1)])));
+  const wrong = Q.filterSets(Q.filterWrong(tagged, sum), { type: 'exclude', tag: 'タグ甲' });
   assert.deepStrictEqual(keysOf(wrong), ['s1::b', 's1::c']);
   const order = Q.allRandomOrder(wrong, 1, () => 0);
   assert.strictEqual(order.length, 1);
@@ -403,122 +393,244 @@ test('correctPosition: 表示順の中の代表の正解の位置', () => {
   assert.strictEqual(Q.correctPosition(q('a', { answer: 1, answers: [2, 1] }), [1, 2, 3, 0]), 0);
 });
 
-/* ===================== 学習の記録の書き出し・読み込み ===================== */
+/* ===================== 学習の記録（回答のログ） ===================== */
 
-const rec = (attempts, corrects, last, lastAt) => ({ attempts, corrects, last, lastAt });
+const e = (id, key, at, ok) => ({ id, key, at, ok });
 
-test('mergeHistory: 最後に解いた日時が新しい方を丸ごと採る（回数は足さない）', () => {
-  const cur = { 's::a': rec(3, 1, 'wrong', '2026-09-20T10:00:00.000Z') };
-  const inc = { 's::a': rec(5, 4, 'correct', '2026-09-21T10:00:00.000Z') };
-  const r = Q.mergeHistory(cur, {}, inc, {});
-  assert.deepStrictEqual(r.stats['s::a'], rec(5, 4, 'correct', '2026-09-21T10:00:00.000Z'));
-  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [0, 1, 0]);
-
-  // 読み込んだ方が古ければ今の端末のまま
-  const r2 = Q.mergeHistory(inc, {}, cur, {});
-  assert.deepStrictEqual(r2.stats['s::a'], rec(5, 4, 'correct', '2026-09-21T10:00:00.000Z'));
-  assert.deepStrictEqual([r2.added, r2.updated, r2.unchanged], [0, 0, 1]);
+test('summarizeLog: 回数・正解・不正解・正答率・最後の結果と日時をログから計算する', () => {
+  const sum = Q.summarizeLog([
+    e('x1', 's::a', T(1), true),
+    e('x2', 's::a', T(3), false),
+    e('x3', 's::a', T(2), true),
+    e('x4', 's::b', T(1), true),
+  ]);
+  assert.deepStrictEqual(sum['s::a'], { attempts: 3, corrects: 2, wrongs: 1, rate: 2 / 3, last: 'wrong', lastAt: T(3) });
+  assert.deepStrictEqual(sum['s::b'], { attempts: 1, corrects: 1, wrongs: 0, rate: 1, last: 'correct', lastAt: T(1) });
+  assert.strictEqual(sum['s::c'], undefined);
 });
 
-test('mergeHistory: 同じ日時なら今の端末の記録を残す', () => {
-  const cur = { 's::a': rec(2, 2, 'correct', '2026-09-20T10:00:00.000Z') };
-  const inc = { 's::a': rec(9, 0, 'wrong', '2026-09-20T10:00:00.000Z') };
-  const r = Q.mergeHistory(cur, {}, inc, {});
-  assert.deepStrictEqual(r.stats['s::a'], rec(2, 2, 'correct', '2026-09-20T10:00:00.000Z'));
-  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [0, 0, 1]);
+test('summarizeLog: 同じ日時なら id の大きい方を後とみなす（並びに左右されない）', () => {
+  const a = e('p:1', 's::a', T(1), true);
+  const b = e('p:2', 's::a', T(1), false);
+  assert.strictEqual(Q.summarizeLog([a, b])['s::a'].last, 'wrong');
+  assert.strictEqual(Q.summarizeLog([b, a])['s::a'].last, 'wrong');
 });
 
-test('mergeHistory: 今の端末にない鍵は追加する。分析用の項目は落とす。引数は書き換えない', () => {
-  const cur = { 's::a': rec(1, 1, 'correct', '2026-09-20T10:00:00.000Z') };
-  const inc = { 's::b': Object.assign(rec(1, 0, 'wrong', '2026-09-19T10:00:00.000Z'), { setTitle: 'T', no: 2, tags: ['甲'] }) };
-  const r = Q.mergeHistory(cur, {}, inc, {});
-  assert.deepStrictEqual(Object.keys(r.stats).sort(), ['s::a', 's::b']);
-  assert.deepStrictEqual(r.stats['s::b'], rec(1, 0, 'wrong', '2026-09-19T10:00:00.000Z'));
-  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [1, 0, 0]);
-  assert.deepStrictEqual(Object.keys(cur), ['s::a']);
+test('unionLog: 同じ id は1件にまとめ、2台分は合算される。何度読み込んでも増えない', () => {
+  const ipad = [e('ipad:1', 's::a', T(1), false), e('ipad:2', 's::a', T(2), true)];
+  const iphone = [e('iphone:1', 's::a', T(3), false)];
+  const once = Q.unionLog(iphone, ipad);
+  assert.strictEqual(once.added.length, 2);
+  assert.strictEqual(once.log.length, 3);
+  assert.deepStrictEqual(Q.summarizeLog(once.log)['s::a'],
+    { attempts: 3, corrects: 1, wrongs: 2, rate: 1 / 3, last: 'wrong', lastAt: T(3) });
+
+  const twice = Q.unionLog(once.log, ipad);
+  assert.strictEqual(twice.added.length, 0);
+  assert.strictEqual(twice.log.length, 3);
+  // 読み込むファイルの中の重複も1件
+  assert.strictEqual(Q.unionLog([], [ipad[0], ipad[0]]).log.length, 1);
+  // 引数は書き換えない
+  assert.strictEqual(iphone.length, 1);
 });
 
-test('mergeHistory: 同じ記録を2回読み込んでも回数は増えない', () => {
-  const inc = { 's::a': rec(4, 2, 'wrong', '2026-09-20T10:00:00.000Z') };
-  const once = Q.mergeHistory({}, {}, inc, {});
-  const twice = Q.mergeHistory(once.stats, once.positions, inc, {});
-  assert.deepStrictEqual(twice.stats['s::a'], rec(4, 2, 'wrong', '2026-09-20T10:00:00.000Z'));
-  assert.deepStrictEqual([twice.added, twice.updated, twice.unchanged], [0, 0, 1]);
+test('mergePositions: 今の端末に無い鍵だけ足す', () => {
+  assert.deepStrictEqual(Q.mergePositions({ 's::a': 1 }, { 's::a': 2, 's::b': 3 }), { 's::a': 1, 's::b': 3 });
+  assert.deepStrictEqual(Q.mergePositions({ 's::a': 1 }, undefined), { 's::a': 1 });
 });
 
-test('mergeHistory: positions は history で採った側の値を使う', () => {
-  const cur = {
-    's::new': rec(1, 1, 'correct', '2026-09-20T00:00:00.000Z'),   // 読み込んだ方が新しい
-    's::old': rec(1, 1, 'correct', '2026-09-22T00:00:00.000Z'),   // 今の端末が新しい
-  };
-  const inc = {
-    's::new': rec(2, 1, 'wrong', '2026-09-21T00:00:00.000Z'),
-    's::old': rec(2, 1, 'wrong', '2026-09-21T00:00:00.000Z'),
-  };
-  const r = Q.mergeHistory(cur, { 's::new': 0, 's::old': 0 }, inc, { 's::new': 3, 's::old': 3 });
-  assert.strictEqual(r.positions['s::new'], 3);
-  assert.strictEqual(r.positions['s::old'], 0);
+/* ===================== 移行 ===================== */
+
+test('migrateStats: 正解 corrects 件・不正解 attempts−corrects 件を作り、最後の1件が last になる', () => {
+  const log = Q.migrateStats({
+    's::a': { attempts: 4, corrects: 1, last: 'correct', lastAt: '2026-09-20T10:00:00.000Z' },
+    's::b': { attempts: 3, corrects: 2, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z' },
+  });
+  const a = log.filter((x) => x.key === 's::a');
+  assert.strictEqual(a.length, 4);
+  assert.strictEqual(a.filter((x) => x.ok).length, 1);
+  assert.deepStrictEqual(a.map((x) => x.at), [
+    '2026-09-20T09:59:57.000Z', '2026-09-20T09:59:58.000Z', '2026-09-20T09:59:59.000Z', '2026-09-20T10:00:00.000Z',
+  ]);
+  assert.strictEqual(a[3].ok, true);
+  assert.strictEqual(a[0].id, 'mig:s::a:4:1:2026-09-20T10:00:00.000Z:0');
+
+  const sum = Q.summarizeLog(log);
+  assert.deepStrictEqual(sum['s::a'], { attempts: 4, corrects: 1, wrongs: 3, rate: 0.25, last: 'correct', lastAt: '2026-09-20T10:00:00.000Z' });
+  assert.deepStrictEqual(sum['s::b'], { attempts: 3, corrects: 2, wrongs: 1, rate: 2 / 3, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z' });
 });
 
-test('mergeHistory: history にない鍵の positions は、今の端末に無いときだけ追加する', () => {
-  const r = Q.mergeHistory({}, { 's::x': 1 }, {}, { 's::x': 2, 's::y': 3 });
-  assert.deepStrictEqual(r.positions, { 's::x': 1, 's::y': 3 });
-  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [0, 0, 0]);
+test('migrateStats: 同じ集計なら同じ id になり、2台分を和集合にしても二重にならない', () => {
+  const stats = { 's::a': { attempts: 2, corrects: 1, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z' } };
+  const iphone = Q.migrateStats(stats);
+  const ipad = Q.migrateStats(JSON.parse(JSON.stringify(stats)));
+  assert.deepStrictEqual(iphone.map((x) => x.id), ipad.map((x) => x.id));
+  assert.strictEqual(Q.unionLog(iphone, ipad).log.length, 2);
+  // 集計が違えば id も違う（別の記録として足される）
+  const other = Q.migrateStats({ 's::a': { attempts: 3, corrects: 1, last: 'wrong', lastAt: '2026-09-21T10:00:00.000Z' } });
+  assert.strictEqual(Q.unionLog(iphone, other).log.length, 5);
 });
 
-test('validateHistory: 正しいファイルを通し、format 違い・型の不正を拒否する', () => {
-  const good = { format: 'yontaku-drill-history/1', exportedAt: '2026-09-27T00:00:00.000Z',
-    history: { 's::a': rec(2, 1, 'wrong', '2026-09-20T10:00:00.000Z') }, positions: { 's::a': 1 } };
+test('migrateStats: last と回数が食い違うときは回数を優先する。回数0は作らない', () => {
+  const log = Q.migrateStats({
+    's::a': { attempts: 2, corrects: 0, last: 'correct', lastAt: '2026-09-20T10:00:00.000Z' },
+    's::b': { attempts: 0, corrects: 0, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z' },
+  });
+  assert.deepStrictEqual(log.map((x) => x.ok), [false, false]);
+});
+
+/* ===================== 書き出し・読み込み ===================== */
+
+test('validateHistory: 新形式を通し、format 違い・型の不正を拒否する', () => {
+  const good = { format: 'yontaku-drill-history/2', exportedAt: T(0), log: [e('d:1', 's::a', T(1), true)], positions: { 's::a': 1 } };
   assert.deepStrictEqual(Q.validateHistory(good), { ok: true, errors: [] });
-
   assert.strictEqual(Q.validateHistory(Object.assign({}, good, { format: 'yontaku-drill/1' })).ok, false);
-  assert.strictEqual(Q.validateHistory(Object.assign({}, good, { history: [] })).ok, false);
-  assert.strictEqual(Q.validateHistory(Object.assign({}, good, { history: null })).ok, false);
+  assert.strictEqual(Q.validateHistory(Object.assign({}, good, { log: {} })).ok, false);
 
-  const bad = (r) => Q.validateHistory(Object.assign({}, good, { history: { 's::a': r } }));
-  assert.match(bad(rec('2', 1, 'wrong', '2026-09-20T10:00:00.000Z')).errors[0], /attempts/);
-  assert.match(bad(rec(2, 1.5, 'wrong', '2026-09-20T10:00:00.000Z')).errors[0], /corrects/);
-  assert.match(bad(rec(1, 2, 'wrong', '2026-09-20T10:00:00.000Z')).errors[0], /corrects が attempts より多く/);
-  assert.match(bad(rec(2, 1, 'maybe', '2026-09-20T10:00:00.000Z')).errors[0], /last/);
-  assert.match(bad(rec(2, 1, 'wrong', 'きのう')).errors[0], /lastAt/);
+  const bad = (x) => Q.validateHistory(Object.assign({}, good, { log: [x] })).errors[0];
+  assert.match(bad(e('', 's::a', T(1), true)), /id/);
+  assert.match(bad(e('d:1', 5, T(1), true)), /key/);
+  assert.match(bad(e('d:1', 's::a', 'きのう', true)), /at/);
+  assert.match(bad(e('d:1', 's::a', T(1), 'true')), /ok/);
   assert.match(Q.validateHistory(Object.assign({}, good, { positions: { 's::a': -1 } })).errors[0], /positions/);
 });
 
-test('buildHistoryExport: 鍵と数値と日時が入り、問題文や選択肢は入らない', () => {
+test('validateHistory / historyToLog: 旧形式も読み込め、移行と同じ規則でログになる', () => {
+  const v1 = { format: 'yontaku-drill-history/1', exportedAt: T(0),
+    history: { 's::a': { attempts: 3, corrects: 1, last: 'wrong', lastAt: T(5), setTitle: 'T' } }, positions: {} };
+  assert.deepStrictEqual(Q.validateHistory(v1), { ok: true, errors: [] });
+  const log = Q.historyToLog(v1);
+  assert.strictEqual(log.length, 3);
+  assert.deepStrictEqual(log.map((x) => x.id), Q.migrateStats({ 's::a': { attempts: 3, corrects: 1, last: 'wrong', lastAt: T(5) } }).map((x) => x.id));
+
+  const badV1 = Object.assign({}, v1, { history: { 's::a': { attempts: 'a', corrects: 0, last: 'wrong', lastAt: T(5) } } });
+  assert.match(Q.validateHistory(badV1).errors[0], /attempts/);
+});
+
+test('historyToLog: 新形式はアプリが使う項目だけを取り出す', () => {
+  const data = { format: 'yontaku-drill-history/2', log: [Object.assign(e('d:1', 's::a', T(1), true), { extra: 1 })] };
+  assert.deepStrictEqual(Q.historyToLog(data), [e('d:1', 's::a', T(1), true)]);
+});
+
+test('buildHistoryExport: ログと集計が入り、問題文や選択肢は入らない', () => {
   const sets = [{ id: 's', title: '問題集T', questions: [
     q('a', { no: 7, category: '分類1', tags: ['甲'], question: 'ひみつの問題文', choices: ['ひみつA', 'い', 'う', 'え'],
       explanation: 'ひみつの解説' }),
     q('b', { question: 'ひみつその2' }),
   ] }];
-  const stats = {
-    's::a': rec(2, 1, 'wrong', '2026-09-20T10:00:00.000Z'),
-    's::b': rec(1, 1, 'correct', '2026-09-20T11:00:00.000Z'),
-    'gone::z': rec(3, 0, 'wrong', '2026-09-19T10:00:00.000Z'),   // 問題集が読み込まれていない
-  };
-  const out = Q.buildHistoryExport(stats, { 's::a': 2 }, sets, new Date('2026-09-27T01:02:03.000Z'));
+  const log = [e('d:1', 's::a', T(1), false), e('d:2', 's::a', T(2), true), e('d:3', 's::b', T(1), true), e('d:4', 'gone::z', T(1), false)];
+  const out = Q.buildHistoryExport(log, { 's::a': 2 }, sets, new Date('2026-09-27T01:02:03.000Z'));
 
-  assert.strictEqual(out.format, 'yontaku-drill-history/1');
+  assert.strictEqual(out.format, 'yontaku-drill-history/2');
   assert.strictEqual(out.exportedAt, '2026-09-27T01:02:03.000Z');
+  assert.deepStrictEqual(out.log, log);
   assert.deepStrictEqual(out.positions, { 's::a': 2 });
-  assert.deepStrictEqual(out.history['s::a'], {
-    attempts: 2, corrects: 1, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z',
+  assert.deepStrictEqual(out.summary['s::a'], {
+    attempts: 2, corrects: 1, wrongs: 1, rate: 0.5, last: 'correct', lastAt: T(2),
     setTitle: '問題集T', no: 7, category: '分類1', tags: ['甲'],
   });
-  assert.deepStrictEqual(out.history['s::b'], {
-    attempts: 1, corrects: 1, last: 'correct', lastAt: '2026-09-20T11:00:00.000Z', setTitle: '問題集T', no: 2,
-  });
-  assert.deepStrictEqual(out.history['gone::z'], rec(3, 0, 'wrong', '2026-09-19T10:00:00.000Z'));
+  assert.strictEqual(out.summary['s::b'].no, 2);
+  assert.deepStrictEqual(out.summary['gone::z'], { attempts: 1, corrects: 0, wrongs: 1, rate: 0, last: 'wrong', lastAt: T(1) });
   assert.doesNotMatch(JSON.stringify(out), /ひみつ/);
-  // 書き出したものはそのまま読み込める
   assert.strictEqual(Q.validateHistory(JSON.parse(JSON.stringify(out))).ok, true);
+  assert.strictEqual(Q.HISTORY_FILE_NAME, 'quiz-drill-記録.json');
 });
 
-test('historyFileName: 端末の時刻で quiz-drill-記録-YYYYMMDD-HHMM.json', () => {
-  assert.strictEqual(Q.historyFileName(new Date(2026, 0, 5, 9, 7)), 'quiz-drill-記録-20260105-0907.json');
+test('historySummary: 解いた問題の数・最後に不正解だった数・回答の総数', () => {
+  const sum = Q.summarizeLog([e('1', 'a', T(1), false), e('2', 'b', T(1), true), e('3', 'b', T(2), true), e('4', 'c', T(1), false)]);
+  assert.deepStrictEqual(Q.historySummary(sum), { answered: 3, wrong: 2, answers: 4 });
 });
 
-test('historySummary: 解いた問題の数と、最後に不正解だった問題の数', () => {
-  assert.deepStrictEqual(Q.historySummary({
-    'a': rec(1, 0, 'wrong', 't'), 'b': rec(2, 2, 'correct', 't'), 'c': rec(3, 1, 'wrong', 't'),
-  }), { answered: 3, wrong: 2 });
+/* ===================== 苦手な問題 ===================== */
+
+/** 鍵ごとに [正解数, 不正解数, 最後の結果] から集計を作る（ログを経由する） */
+function summaryOf(spec) {
+  const log = [];
+  let n = 0;
+  Object.entries(spec).forEach(([key, [c, w, last]]) => {
+    // 最後の1件を last にし、それより前に残りを並べる
+    const flags = [];
+    let cc = c - (last ? 1 : 0);
+    let ww = w - (last ? 0 : 1);
+    while (ww-- > 0) flags.push(false);
+    while (cc-- > 0) flags.push(true);
+    flags.push(last);
+    flags.forEach((ok, i) => log.push(e('t:' + (++n), key, `2026-09-20T00:00:${String(i).padStart(2, '0')}.000Z`, ok)));
+  });
+  return Q.summarizeLog(log);
+}
+
+const weakSets = [{ id: 's', title: 'T', questions: ['a', 'b', 'c', 'd', 'e', 'f'].map((id, i) => q(id, { no: i + 1 })) }];
+
+test('isWeak: 正答率がしきい値未満、または最後に不正解。しきい値ちょうどは苦手ではない', () => {
+  const sum = summaryOf({
+    's::a': [7, 3, true],    // 70%・最後は正解
+    's::b': [6, 4, true],    // 60%
+    's::c': [9, 1, false],   // 90% だが最後は不正解
+    's::d': [8, 2, true],    // 80%
+  });
+  assert.strictEqual(Q.isWeak(sum['s::a'], 0.7), false);
+  assert.strictEqual(Q.isWeak(sum['s::a'], 0.8), true);
+  assert.strictEqual(Q.isWeak(sum['s::b'], 0.7), true);
+  assert.strictEqual(Q.isWeak(sum['s::b'], 0.5), false);
+  assert.strictEqual(Q.isWeak(sum['s::c'], 0.5), true);
+  assert.strictEqual(Q.isWeak(sum['s::d'], 0.8), false);
+  assert.strictEqual(Q.isWeak(undefined, 0.7), false);   // 解いていない問題は苦手に入れない
+  assert.deepStrictEqual(keysOf(Q.filterWeak(weakSets, sum, 0.7)), ['s::b', 's::c']);
+});
+
+test('weakOrder: 正答率の低い順、同じなら不正解の多い順、さらに同じなら乱数で決まる', () => {
+  const sum = summaryOf({
+    's::a': [1, 1, true],    // 50%・不正解1
+    's::b': [0, 2, false],   // 0%・不正解2
+    's::c': [2, 2, true],    // 50%・不正解2
+    's::d': [1, 1, false],   // 50%・不正解1（a と同点）
+    's::e': [0, 1, false],   // 0%・不正解1
+  });
+  const weak = Q.filterWeak(weakSets, sum, 0.7);
+  const orders = new Set();
+  for (let seed = 1; seed <= 50; seed++) {
+    const o = Q.weakOrder(weak, sum, null, lcg(seed));
+    assert.deepStrictEqual(o.slice(0, 3), ['s::b', 's::e', 's::c']);
+    assert.deepStrictEqual(o.slice(3).sort(), ['s::a', 's::d']);
+    orders.add(o.slice(3).join(','));
+  }
+  assert.deepStrictEqual([...orders].sort(), ['s::a,s::d', 's::d,s::a']);
+  assert.deepStrictEqual(Q.weakOrder(weak, sum, 2, lcg(1)), ['s::b', 's::e']);
+});
+
+test('statsReport: 全体・問題集ごと・分類ごとの集計と、苦手の一覧', () => {
+  const sets = [
+    { id: 's1', title: 'T1', questions: [q('a', { category: '甲' }), q('b', { category: '乙' }), q('c', { category: '甲' })] },
+    { id: 's2', title: 'T2', questions: [q('a', { category: '乙' }), q('b')] },
+  ];
+  const sum = Object.assign(summaryOf({
+    's1::a': [1, 3, false],   // 25%・苦手
+    's1::b': [3, 0, true],    // 100%
+    's2::a': [1, 1, true],    // 50%・苦手
+  }), { 'gone::x': { attempts: 9, corrects: 0, wrongs: 9, rate: 0, last: 'wrong', lastAt: T(1) } });
+  const r = Q.statsReport(sets, sum, 0.7);
+
+  assert.deepStrictEqual(r.total, { questions: 5, answered: 3, answers: 9, corrects: 5, rate: 5 / 9, weak: 2 });
+  assert.deepStrictEqual(r.bySet, [
+    { id: 's1', title: 'T1', questions: 3, answered: 2, answers: 7, corrects: 4, rate: 4 / 7, weak: 1 },
+    { id: 's2', title: 'T2', questions: 2, answered: 1, answers: 2, corrects: 1, rate: 0.5, weak: 1 },
+  ]);
+  assert.deepStrictEqual(r.byCategory, [
+    { category: '甲', questions: 2, answered: 1, answers: 4, corrects: 1, rate: 0.25, weak: 1 },
+    { category: '乙', questions: 2, answered: 2, answers: 5, corrects: 4, rate: 0.8, weak: 1 },
+    { category: null, questions: 1, answered: 0, answers: 0, corrects: 0, rate: null, weak: 0 },
+  ]);
+  assert.deepStrictEqual(r.weakList.map((w) => w.key), ['s1::a', 's2::a']);
+  assert.deepStrictEqual(r.weakList[0], { key: 's1::a', attempts: 4, corrects: 1, wrongs: 3, rate: 0.25 });
+});
+
+test('statsReport: 苦手の一覧は最大30件', () => {
+  const questions = Array.from({ length: 40 }, (_, i) => q('q' + i, { no: i + 1 }));
+  const spec = {};
+  questions.forEach((x) => { spec['s::' + x.id] = [0, 1, false]; });
+  const r = Q.statsReport([{ id: 's', title: 'T', questions }], summaryOf(spec), 0.7);
+  assert.strictEqual(r.weakList.length, 30);
+  assert.strictEqual(r.total.weak, 40);
+  assert.strictEqual(r.weakList[0].key, 's::q0');   // 同点は問題集の中の順
 });

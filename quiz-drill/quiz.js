@@ -265,12 +265,12 @@ var QD_QUIZ = (function () {
   }
 
   /**
-   * 前に間違えた問題: 成績の記録で「最後に解いたとき不正解」だった問題だけに絞る。
-   * stats は updateStats() で作ったもの（鍵 → { last: 'correct' | 'wrong', ... }）。
+   * 前に間違えた問題: 記録で「最後に解いたとき不正解」だった問題だけに絞る。
+   * summary は summarizeLog() の返り値（鍵 → { last: 'correct' | 'wrong', ... }）。
    */
-  function filterWrong(sets, stats) {
+  function filterWrong(sets, summary) {
     return selectQuestions(sets, function (set, q) {
-      var st = stats[questionKey(set.id, q.id)];
+      var st = summary[questionKey(set.id, q.id)];
       return !!st && st.last === 'wrong';
     });
   }
@@ -362,51 +362,133 @@ var QD_QUIZ = (function () {
     return s.length > max ? s.slice(0, max) + '…' : s;
   }
 
-  /**
-   * 問題ごとの成績を1件更新する。now は ISO 文字列など、呼び出し側が渡す。
-   * 返り値は新しいオブジェクト（引数は書き換えない）。
-   */
-  function updateStats(stats, key, correct, now) {
-    var next = Object.assign({}, stats);
-    var prev = stats[key] || { attempts: 0, corrects: 0 };
-    next[key] = {
-      attempts: prev.attempts + 1,
-      corrects: prev.corrects + (correct ? 1 : 0),
-      last: correct ? 'correct' : 'wrong',
-      lastAt: now,
-    };
-    return next;
-  }
-
-  /* ===================== 学習の記録の書き出し・読み込み =====================
-   * 記録は「成績（stats）」と「前回の正解の表示位置（positions）」の2つ。どちらも鍵は
-   * 「問題集id::問題id」。書き出すファイルには問題文などの中身を入れない（ID と数値と日時だけ）。
+  /* ===================== 学習の記録（回答のログ） =====================
+   * 記録は「1回答えるごとに1件」のログ { id, key, at, ok } を積み上げる形。
+   *   id  : 一意なID（端末ID＋時刻＋連番。2台で衝突しない）
+   *   key : 「問題集id::問題id」
+   *   at  : 答えた日時（ISO 文字列）
+   *   ok  : 正解なら true
+   * 回数や正答率はすべてログから計算する（summarizeLog）。ログを id で和集合にすれば、
+   * 2台で解いた記録が合算され、同じファイルを何度読み込んでも増えない。
+   *
+   * 以前は問題ごとの集計 { attempts, corrects, last, lastAt } だけを持っていた。
+   * これは migrateStats() でログに変換する（旧形式のファイルの読み込みにも使う）。
    */
 
-  var HISTORY_FORMAT = 'yontaku-drill-history/1';
-  var RECORD_FIELDS = ['attempts', 'corrects', 'last', 'lastAt'];
+  var HISTORY_FORMAT = 'yontaku-drill-history/2';
+  var HISTORY_FORMAT_V1 = 'yontaku-drill-history/1';
+  var HISTORY_FILE_NAME = 'quiz-drill-記録.json';   // 保存のたびに置き換えやすいよう固定
+  var WEAK_THRESHOLDS = [0.5, 0.7, 0.8];
+  var DEFAULT_WEAK_THRESHOLD = 0.7;
+  var WEAK_LIST_MAX = 30;
 
   function isCount(v) {
     return isInt(v) && v >= 0;
   }
 
-  /** 成績の記録1件から、アプリが使う項目だけを取り出す（分析用に足した項目は落とす） */
-  function coreRecord(r) {
-    var out = {};
-    RECORD_FIELDS.forEach(function (k) { out[k] = r[k]; });
+  function isDateString(v) {
+    return typeof v === 'string' && !isNaN(Date.parse(v));
+  }
+
+  /** ログ1件から、アプリが使う項目だけを取り出す */
+  function coreEntry(e) {
+    return { id: e.id, key: e.key, at: e.at, ok: e.ok };
+  }
+
+  /**
+   * ログを問題ごとに集計する。返り値は 鍵 → { attempts, corrects, wrongs, rate, last, lastAt }。
+   * rate は 0〜1。last は最後に解いたときの結果（'correct' | 'wrong'）。
+   * 同じ日時のログが並んだら id の大きい方を「後」とみなす（読み込んだ順に左右されないように）。
+   */
+  function summarizeLog(log) {
+    var map = {};
+    var lastMs = {};
+    var lastId = {};
+    log.forEach(function (e) {
+      var s = map[e.key];
+      if (!s) s = map[e.key] = { attempts: 0, corrects: 0, wrongs: 0, rate: 0, last: null, lastAt: null };
+      s.attempts += 1;
+      if (e.ok) s.corrects += 1; else s.wrongs += 1;
+      var ms = Date.parse(e.at);
+      if (s.lastAt === null || ms > lastMs[e.key] || (ms === lastMs[e.key] && e.id > lastId[e.key])) {
+        s.last = e.ok ? 'correct' : 'wrong';
+        s.lastAt = e.at;
+        lastMs[e.key] = ms;
+        lastId[e.key] = e.id;
+      }
+    });
+    Object.keys(map).forEach(function (k) { map[k].rate = map[k].corrects / map[k].attempts; });
+    return map;
+  }
+
+  /**
+   * 以前の集計 { 鍵: { attempts, corrects, last, lastAt } } をログに変換する。
+   * 各問題について corrects 件の正解と attempts−corrects 件の不正解を作り、日時は lastAt から
+   * 1秒ずつさかのぼらせる。最後の1件が last になるように置き、それより前は不正解を先に並べる。
+   * id は集計の値だけから決まる形（mig:鍵:attempts:corrects:lastAt:連番）。2台が同じ集計を
+   * 持っていれば同じ id になり、和集合で二重にならない。
+   * last と回数が食い違う（last が正解なのに corrects が0など）ときは回数を優先する。
+   */
+  function migrateStats(stats) {
+    var out = [];
+    Object.keys(stats).forEach(function (key) {
+      var r = stats[key];
+      var n = r.attempts;
+      var c = r.corrects;
+      if (!(n > 0)) return;
+      var lastOk = r.last === 'correct';
+      if (lastOk && c === 0) lastOk = false;
+      if (!lastOk && c === n) lastOk = true;
+      var olderCorrects = c - (lastOk ? 1 : 0);
+      var flags = [];
+      for (var i = 0; i < n - 1; i++) flags.push(i >= (n - 1) - olderCorrects);   // 前が不正解・後ろが正解
+      flags.push(lastOk);
+      var base = Date.parse(r.lastAt);
+      flags.forEach(function (ok, i) {
+        out.push({
+          id: 'mig:' + key + ':' + n + ':' + c + ':' + r.lastAt + ':' + i,
+          key: key,
+          at: new Date(base - (n - 1 - i) * 1000).toISOString(),
+          ok: ok,
+        });
+      });
+    });
+    return out;
+  }
+
+  /** ログの和集合（id で1件にまとめる）。返り値 { log, added }。引数は書き換えない */
+  function unionLog(current, incoming) {
+    var seen = {};
+    current.forEach(function (e) { seen[e.id] = true; });
+    var added = [];
+    incoming.forEach(function (e) {
+      if (seen[e.id]) return;
+      seen[e.id] = true;
+      added.push(coreEntry(e));
+    });
+    return { log: current.concat(added), added: added };
+  }
+
+  /** 前回の正解の位置: 今の端末に無い鍵だけ足す（ある鍵は今の端末を残す） */
+  function mergePositions(current, incoming) {
+    var out = Object.assign({}, current);
+    Object.keys(incoming || {}).forEach(function (k) {
+      if (out[k] === undefined) out[k] = incoming[k];
+    });
     return out;
   }
 
   /**
-   * 書き出す中身を作る。now は Date。
-   * 分析しやすいよう、問題集が読み込まれている記録には問題集の表示名・問番号・分類・タグを添える
-   * （読み込むときは無視する）。問番号は no が無ければ問題集の中の位置（1 始まり）。
+   * 書き出す中身を作る。now は Date。問題文などの中身は入れない。
+   * summary は分析用（読み込むときは無視する）。問題集が読み込まれている記録にだけ、
+   * 問題集の表示名・問番号・分類・タグを添える。問番号は no が無ければ問題集の中の位置（1 始まり）。
    */
-  function buildHistoryExport(stats, positions, sets, now) {
+  function buildHistoryExport(log, positions, sets, now) {
     var index = indexSets(sets);
-    var history = {};
-    Object.keys(stats).forEach(function (key) {
-      var rec = coreRecord(stats[key]);
+    var sum = summarizeLog(log);
+    var summary = {};
+    Object.keys(sum).forEach(function (key) {
+      var rec = Object.assign({}, sum[key]);
       var e = index[key];
       if (e) {
         rec.setTitle = e.set.title;
@@ -414,36 +496,22 @@ var QD_QUIZ = (function () {
         if (e.question.category !== undefined) rec.category = e.question.category;
         if (e.question.tags !== undefined) rec.tags = e.question.tags.slice();
       }
-      history[key] = rec;
+      summary[key] = rec;
     });
     return {
       format: HISTORY_FORMAT,
       exportedAt: now.toISOString(),
-      history: history,
+      log: log.map(coreEntry),
       positions: Object.assign({}, positions),
+      summary: summary,
     };
   }
 
-  /** 書き出すファイル名。端末の時刻で quiz-drill-記録-YYYYMMDD-HHMM.json */
-  function historyFileName(now) {
-    var p = function (n) { return (n < 10 ? '0' : '') + n; };
-    return 'quiz-drill-記録-' + now.getFullYear() + p(now.getMonth() + 1) + p(now.getDate()) +
-      '-' + p(now.getHours()) + p(now.getMinutes()) + '.json';
-  }
-
-  /** 記録のファイルを検証する。返り値 { ok, errors } */
-  function validateHistory(data) {
-    if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      return { ok: false, errors: ['学習の記録のファイルではありません'] };
-    }
-    if (data.format !== HISTORY_FORMAT) {
-      return { ok: false, errors: ['format が "' + HISTORY_FORMAT + '" ではありません（' + JSON.stringify(data.format) + '）'] };
-    }
-    var h = data.history;
+  function validateV1(h, errors) {
     if (!h || typeof h !== 'object' || Array.isArray(h)) {
-      return { ok: false, errors: ['history がオブジェクトではありません'] };
+      errors.push('history がオブジェクトではありません');
+      return;
     }
-    var errors = [];
     Object.keys(h).forEach(function (key) {
       var r = h[key];
       var where = '記録「' + key + '」: ';
@@ -455,8 +523,39 @@ var QD_QUIZ = (function () {
       if (!isCount(r.corrects)) errors.push(where + 'corrects は0以上の整数で書いてください');
       else if (isCount(r.attempts) && r.corrects > r.attempts) errors.push(where + 'corrects が attempts より多くなっています');
       if (r.last !== 'correct' && r.last !== 'wrong') errors.push(where + 'last は "correct" か "wrong" で書いてください');
-      if (typeof r.lastAt !== 'string' || isNaN(Date.parse(r.lastAt))) errors.push(where + 'lastAt が日時ではありません');
+      if (!isDateString(r.lastAt)) errors.push(where + 'lastAt が日時ではありません');
     });
+  }
+
+  function validateV2(log, errors) {
+    if (!Array.isArray(log)) {
+      errors.push('log が配列ではありません');
+      return;
+    }
+    log.forEach(function (e, i) {
+      var where = (i + 1) + '件目の回答' + (e && isNonEmptyString(e.id) ? '（id: ' + e.id + '）' : '') + ': ';
+      if (!e || typeof e !== 'object' || Array.isArray(e)) {
+        errors.push(where + 'オブジェクトではありません');
+        return;
+      }
+      if (!isNonEmptyString(e.id)) errors.push(where + 'id がありません');
+      if (!isNonEmptyString(e.key)) errors.push(where + 'key がありません');
+      if (!isDateString(e.at)) errors.push(where + 'at が日時ではありません');
+      if (typeof e.ok !== 'boolean') errors.push(where + 'ok は true か false で書いてください');
+    });
+  }
+
+  /** 記録のファイルを検証する（新旧どちらの形式も）。返り値 { ok, errors } */
+  function validateHistory(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return { ok: false, errors: ['学習の記録のファイルではありません'] };
+    }
+    var errors = [];
+    if (data.format === HISTORY_FORMAT) validateV2(data.log, errors);
+    else if (data.format === HISTORY_FORMAT_V1) validateV1(data.history, errors);
+    else {
+      return { ok: false, errors: ['format が "' + HISTORY_FORMAT + '" ではありません（' + JSON.stringify(data.format) + '）'] };
+    }
     if (data.positions !== undefined) {
       var p = data.positions;
       if (!p || typeof p !== 'object' || Array.isArray(p)) {
@@ -470,66 +569,129 @@ var QD_QUIZ = (function () {
     return { ok: errors.length === 0, errors: errors };
   }
 
-  /**
-   * 今の端末の記録に、読み込んだ記録を統合する。二重に数えないよう回数は足さない。
-   *   - 鍵ごとに、最後に解いた日時（lastAt）が新しい方の記録を丸ごと採る。同じ日時なら今の端末を残す
-   *   - 今の端末にない鍵は追加する
-   *   - positions は、history で採った側の値を使う。採った側に値が無ければもう一方の値を残す。
-   *     history にない鍵の positions は、今の端末に無いときだけ追加する
-   * 返り値 { stats, positions, added, updated, unchanged }（件数は history の鍵で数える）。引数は書き換えない。
-   */
-  function mergeHistory(curStats, curPos, inStats, inPos) {
-    var stats = Object.assign({}, curStats);
-    var positions = Object.assign({}, curPos);
-    var incomingPos = inPos || {};
-    var added = 0, updated = 0, unchanged = 0;
-
-    Object.keys(inStats).forEach(function (key) {
-      var mine = curStats[key];
-      var theirs = coreRecord(inStats[key]);
-      var takeTheirs;
-      if (!mine) {
-        added += 1;
-        takeTheirs = true;
-      } else if (Date.parse(theirs.lastAt) > Date.parse(mine.lastAt)) {
-        updated += 1;
-        takeTheirs = true;
-      } else {
-        unchanged += 1;
-        takeTheirs = false;
-      }
-      if (takeTheirs) {
-        stats[key] = theirs;
-        if (incomingPos[key] !== undefined) positions[key] = incomingPos[key];
-      } else if (positions[key] === undefined && incomingPos[key] !== undefined) {
-        positions[key] = incomingPos[key];
-      }
-    });
-
-    Object.keys(incomingPos).forEach(function (key) {
-      if (inStats[key] === undefined && positions[key] === undefined) positions[key] = incomingPos[key];
-    });
-
-    return { stats: stats, positions: positions, added: added, updated: updated, unchanged: unchanged };
+  /** 検証済みのファイルからログを取り出す。旧形式は migrateStats() で変換する */
+  function historyToLog(data) {
+    return data.format === HISTORY_FORMAT_V1 ? migrateStats(data.history) : data.log.map(coreEntry);
   }
 
-  /** 記録の概要: 解いた問題の数と、最後に不正解だった問題の数（読み込んでいない問題集の分も含む） */
-  function historySummary(stats) {
-    var keys = Object.keys(stats);
+  /** 記録の概要: 解いた問題の数・最後に不正解だった問題の数・回答の総数（読み込んでいない問題集の分も含む） */
+  function historySummary(summary) {
+    var keys = Object.keys(summary);
     return {
       answered: keys.length,
-      wrong: keys.filter(function (k) { return stats[k].last === 'wrong'; }).length,
+      wrong: keys.filter(function (k) { return summary[k].last === 'wrong'; }).length,
+      answers: keys.reduce(function (n, k) { return n + summary[k].attempts; }, 0),
+    };
+  }
+
+  /* ===================== 苦手な問題 ===================== */
+
+  /** 苦手: 1回以上解いていて、正答率がしきい値未満か、最後に不正解 */
+  function isWeak(s, threshold) {
+    return !!s && s.attempts > 0 && (s.rate < threshold || s.last === 'wrong');
+  }
+
+  function filterWeak(sets, summary, threshold) {
+    return selectQuestions(sets, function (set, q) {
+      return isWeak(summary[questionKey(set.id, q.id)], threshold);
+    });
+  }
+
+  /** 苦手の並べ方: 正答率の低い順、同じなら不正解の回数が多い順 */
+  function compareWeak(a, b) {
+    return a.rate - b.rate || b.wrongs - a.wrongs;
+  }
+
+  /**
+   * 苦手な問題の出題順。sets は filterWeak() などで絞ったもの。
+   * 正答率・不正解の回数が同じ問題どうしは無作為な順にする（先に混ぜてから安定ソートする）。
+   */
+  function weakOrder(sets, summary, count, rand) {
+    var keys = [];
+    sets.forEach(function (set) { keys = keys.concat(sequentialOrder(set)); });
+    var sorted = shuffle(keys, rand).sort(function (a, b) { return compareWeak(summary[a], summary[b]); });
+    return count == null ? sorted : sorted.slice(0, count);
+  }
+
+  function emptyGroup() {
+    return { questions: 0, answered: 0, answers: 0, corrects: 0, rate: null, weak: 0 };
+  }
+
+  function addToGroup(g, s, threshold) {
+    g.questions += 1;
+    if (!s) return;
+    g.answered += 1;
+    g.answers += s.attempts;
+    g.corrects += s.corrects;
+    if (isWeak(s, threshold)) g.weak += 1;
+  }
+
+  function finishGroup(g) {
+    g.rate = g.answers > 0 ? g.corrects / g.answers : null;
+    return g;
+  }
+
+  /**
+   * 成績の画面の中身。読み込んでいる問題集の問題だけを数える。
+   * 返り値 {
+   *   total: 集計, bySet: [{ id, title, ...集計 }], byCategory: [{ category, ...集計 }],
+   *   weakList: [{ key, attempts, corrects, wrongs, rate }]（苦手を正答率の低い順に最大30件）
+   * }。集計は { questions, answered, answers, corrects, rate（回答が無ければ null）, weak }。
+   * 分類の無い問題は category: null にまとめる。分類の並びは最初に出てきた順。
+   */
+  function statsReport(sets, summary, threshold) {
+    var total = emptyGroup();
+    var bySet = [];
+    var cats = {};
+    var catOrder = [];
+    var weak = [];
+    sets.forEach(function (set) {
+      var g = Object.assign({ id: set.id, title: set.title }, emptyGroup());
+      var idx = indexSets([set]);
+      sequentialOrder(set).forEach(function (key) {
+        var q = idx[key].question;
+        var s = summary[key];
+        var cat = q.category !== undefined ? q.category : null;
+        var ck = cat === null ? '\u0000' : 'c:' + cat;
+        if (!cats[ck]) { cats[ck] = Object.assign({ category: cat }, emptyGroup()); catOrder.push(ck); }
+        addToGroup(total, s, threshold);
+        addToGroup(g, s, threshold);
+        addToGroup(cats[ck], s, threshold);
+        if (isWeak(s, threshold)) {
+          weak.push({ key: key, attempts: s.attempts, corrects: s.corrects, wrongs: s.wrongs, rate: s.rate });
+        }
+      });
+      bySet.push(finishGroup(g));
+    });
+    // 同点は問題集の順・問番号の順のまま（Array.prototype.sort は安定）
+    weak.sort(compareWeak);
+    return {
+      total: finishGroup(total),
+      bySet: bySet,
+      byCategory: catOrder.map(function (k) { return finishGroup(cats[k]); }),
+      weakList: weak.slice(0, WEAK_LIST_MAX),
     };
   }
 
   return {
     FORMAT: FORMAT,
     HISTORY_FORMAT: HISTORY_FORMAT,
+    HISTORY_FORMAT_V1: HISTORY_FORMAT_V1,
+    HISTORY_FILE_NAME: HISTORY_FILE_NAME,
+    WEAK_THRESHOLDS: WEAK_THRESHOLDS,
+    DEFAULT_WEAK_THRESHOLD: DEFAULT_WEAK_THRESHOLD,
+    summarizeLog: summarizeLog,
+    migrateStats: migrateStats,
+    unionLog: unionLog,
+    mergePositions: mergePositions,
     buildHistoryExport: buildHistoryExport,
-    historyFileName: historyFileName,
     validateHistory: validateHistory,
-    mergeHistory: mergeHistory,
+    historyToLog: historyToLog,
     historySummary: historySummary,
+    isWeak: isWeak,
+    filterWeak: filterWeak,
+    weakOrder: weakOrder,
+    statsReport: statsReport,
     validateFile: validateFile,
     mergeSets: mergeSets,
     questionKey: questionKey,
@@ -552,7 +714,6 @@ var QD_QUIZ = (function () {
     questionLabel: questionLabel,
     circled: circled,
     excerpt: excerpt,
-    updateStats: updateStats,
   };
 })();
 
