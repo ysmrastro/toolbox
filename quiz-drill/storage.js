@@ -5,7 +5,7 @@
  * （1ファイル 5〜6MB）が入らないため。レコードは問題集1つにつき1件（keyPath は問題集の id）
  * なので、同じ id を put すれば置き換え、違う id なら追加になる。
  *
- * 進行中のセッションと問題ごとの成績は小さいので localStorage に置く。
+ * 進行中のセッション・問題ごとの成績・前回の正解の表示位置は小さいので localStorage に置く。
  * localStorage はプライベートブラウズなどで例外を投げることがあるので、読み書きは握りつぶす
  * （保存できなくても出題はできる）。
  */
@@ -17,6 +17,7 @@ var QD_STORAGE = (function () {
   var STORE = 'sets';
   var SESSION_KEY = 'quiz-drill.session';
   var STATS_KEY = 'quiz-drill.stats';
+  var POSITIONS_KEY = 'quiz-drill.positions';   // 鍵 → 前回表示したときの代表の正解の表示位置
 
   var dbPromise = null;
 
@@ -112,5 +113,7 @@ var QD_STORAGE = (function () {
     clearSession: function () { writeJson(SESSION_KEY, null); },
     loadStats: function () { return readJson(STATS_KEY) || {}; },
     saveStats: function (s) { writeJson(STATS_KEY, s); },
+    loadPositions: function () { return readJson(POSITIONS_KEY) || {}; },
+    savePositions: function (p) { writeJson(POSITIONS_KEY, p); },
   };
 })();

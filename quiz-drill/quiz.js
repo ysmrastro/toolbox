@@ -285,10 +285,31 @@ var QD_QUIZ = (function () {
   /**
    * 表示順を作る。返り値は「表示位置 → 元の添字」の配列（0 始まり）。
    * fixedOrder の問題は並べ替えない（選択肢が画像の中の番号を指す問題など）。
+   *
+   * prevPos は、前回この問題を表示したときの代表の正解（correctIndices の先頭）の表示位置。
+   * 渡されたら、代表の正解を**それ以外の位置**に置く。完全な無作為だと 1/選択肢数 の確率で
+   * 前回と同じ位置に正解が来て、番号で覚えてしまうため。
+   * 作り方: 代表の正解の位置を prevPos 以外から無作為に選び、残りの選択肢を残りの位置に
+   * 無作為に並べる。prevPos が無い（範囲外を含む）ときは今までどおり全体を無作為に並べる。
    */
-  function choiceOrder(question, rand) {
+  function choiceOrder(question, rand, prevPos) {
+    var n = question.choices.length;
     var identity = question.choices.map(function (_, i) { return i; });
-    return question.fixedOrder ? identity : shuffle(identity, rand);
+    if (question.fixedOrder) return identity;
+    if (!isInt(prevPos) || prevPos < 0 || prevPos >= n || n < 2) return shuffle(identity, rand);
+
+    var main = correctIndices(question)[0];
+    var free = identity.filter(function (i) { return i !== prevPos; });   // 正解を置ける位置
+    var pos = free[Math.floor(rand() * free.length)];
+    var rest = shuffle(identity.filter(function (i) { return i !== main; }), rand);
+    var order = [];
+    for (var d = 0, k = 0; d < n; d++) order.push(d === pos ? main : rest[k++]);
+    return order;
+  }
+
+  /** 表示順の中で代表の正解が置かれた位置（次回の choiceOrder に渡す値） */
+  function correctPosition(question, order) {
+    return order.indexOf(correctIndices(question)[0]);
   }
 
   /** 正解の元の添字（0 始まり）。answers があればそのどれでも正解 */
@@ -373,6 +394,7 @@ var QD_QUIZ = (function () {
     filterWrong: filterWrong,
     countQuestions: countQuestions,
     choiceOrder: choiceOrder,
+    correctPosition: correctPosition,
     correctIndices: correctIndices,
     isCorrectOriginal: isCorrectOriginal,
     judge: judge,
