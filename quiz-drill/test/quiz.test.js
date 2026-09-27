@@ -634,3 +634,98 @@ test('statsReport: 苦手の一覧は最大30件', () => {
   assert.strictEqual(r.total.weak, 40);
   assert.strictEqual(r.weakList[0].key, 's::q0');   // 同点は問題集の中の順
 });
+
+/* ===================== 問題集ごとに記録を消す（消去の印） ===================== */
+
+const clr = (id, setId, at) => ({ id, kind: 'clear', setId, at });
+
+test('消去の印: 印より前（同時刻を含む）の回答は数えず、後の回答は数える', () => {
+  const log = [
+    e('1', 's1::a', T(1), false),
+    e('2', 's1::a', T(2), true),     // 印と同時刻 → 数えない
+    clr('c1', 's1', T(2)),
+    e('3', 's1::a', T(3), false),    // 印より後 → 数える
+  ];
+  assert.deepStrictEqual(Q.summarizeLog(log)['s1::a'],
+    { attempts: 1, corrects: 0, wrongs: 1, rate: 0, last: 'wrong', lastAt: T(3) });
+  assert.deepStrictEqual(Q.effectiveLog(log).map((x) => x.id), ['3']);
+});
+
+test('消去の印: ほかの問題集には影響しない（id の先頭が同じ問題集も別扱い）', () => {
+  const log = [
+    e('1', 's1::a', T(1), false),
+    e('2', 's10::a', T(1), false),
+    e('3', 's2::a', T(1), true),
+    clr('c1', 's1', T(5)),
+  ];
+  const sum = Q.summarizeLog(log);
+  assert.strictEqual(sum['s1::a'], undefined);
+  assert.strictEqual(sum['s10::a'].attempts, 1);
+  assert.strictEqual(sum['s2::a'].attempts, 1);
+  assert.deepStrictEqual(Q.historySummary(sum), { answered: 2, wrong: 1, answers: 2 });
+});
+
+test('消去の印: 印が複数あれば最新のものを使う（並びに左右されない）', () => {
+  const log = [
+    clr('c2', 's1', T(4)),
+    e('1', 's1::a', T(3), true),     // 古い印より後だが新しい印より前 → 数えない
+    e('2', 's1::b', T(5), true),     // 最新の印より後 → 数える
+    clr('c1', 's1', T(2)),
+  ];
+  const sum = Q.summarizeLog(log);
+  assert.strictEqual(sum['s1::a'], undefined);
+  assert.strictEqual(sum['s1::b'].attempts, 1);
+});
+
+test('countSetAnswers: 消したら数えなくなる件数（すでに消した分は含めない）', () => {
+  const log = [
+    e('1', 's1::a', T(1), true), e('2', 's1::b', T(2), false), e('3', 's2::a', T(2), false),
+    clr('c1', 's1', T(1)),
+  ];
+  assert.strictEqual(Q.countSetAnswers(log, 's1'), 1);
+  assert.strictEqual(Q.countSetAnswers(log, 's2'), 1);
+  assert.strictEqual(Q.countSetAnswers(log, 'none'), 0);
+});
+
+test('removeSetPositions: その問題集の分だけ除く', () => {
+  assert.deepStrictEqual(Q.removeSetPositions({ 's1::a': 1, 's1::b': 2, 's10::a': 3, 's2::a': 0 }, 's1'),
+    { 's10::a': 3, 's2::a': 0 });
+});
+
+test('消去の印の和集合: もう一方の端末に印が伝わり、そちらの集計でも消える。何度読み込んでも1件', () => {
+  // どちらの端末も消す前の同じ回答を持っている
+  const shared = [e('d1', 's1::a', T(1), false), e('d2', 's1::b', T(1), true), e('d3', 's2::a', T(1), false)];
+  const iphone = shared.concat([clr('c1', 's1', T(2))]);   // iPhone で s1 を消した
+  const ipad = shared.concat([e('d4', 's1::a', T(3), true)]);   // iPad で印より後に解いた
+
+  const merged = Q.unionLog(ipad, iphone);
+  assert.deepStrictEqual(merged.added.map((x) => x.id), ['c1']);
+  const sum = Q.summarizeLog(merged.log);
+  assert.strictEqual(sum['s1::b'], undefined);
+  assert.deepStrictEqual(sum['s1::a'], { attempts: 1, corrects: 1, wrongs: 0, rate: 1, last: 'correct', lastAt: T(3) });
+  assert.strictEqual(sum['s2::a'].attempts, 1);
+
+  const again = Q.unionLog(merged.log, iphone);
+  assert.strictEqual(again.added.length, 0);
+  assert.strictEqual(again.log.filter((x) => x.kind === 'clear').length, 1);
+});
+
+test('消去の印: 書き出しの log に印が入り、summary は印を反映する。読み込むと印の形のまま', () => {
+  const sets = [{ id: 's1', title: 'T1', questions: [q('a')] }];
+  const log = [e('1', 's1::a', T(1), false), clr('c1', 's1', T(2)), e('2', 's1::a', T(3), true)];
+  const out = Q.buildHistoryExport(log, {}, sets, new Date(T(4)));
+  assert.deepStrictEqual(out.log[1], { id: 'c1', kind: 'clear', setId: 's1', at: T(2) });
+  assert.strictEqual(out.summary['s1::a'].attempts, 1);
+  assert.strictEqual(Q.validateHistory(JSON.parse(JSON.stringify(out))).ok, true);
+  assert.deepStrictEqual(Q.historyToLog(out)[1], { id: 'c1', kind: 'clear', setId: 's1', at: T(2) });
+});
+
+test('validateHistory: kind が clear の要素（setId・at 必須）を通し、不正を拒否する', () => {
+  const wrap = (x) => Q.validateHistory({ format: 'yontaku-drill-history/2', log: [x] });
+  assert.deepStrictEqual(wrap(clr('c1', 's1', T(1))), { ok: true, errors: [] });
+  assert.match(wrap({ id: 'c1', kind: 'clear', at: T(1) }).errors[0], /setId/);
+  assert.match(wrap({ id: 'c1', kind: 'clear', setId: 's1' }).errors[0], /at/);
+  assert.match(wrap({ id: 'c1', kind: 'clear', setId: '', at: T(1) }).errors[0], /setId/);
+  assert.match(wrap({ id: 'c1', kind: 'delete', setId: 's1', at: T(1) }).errors[0], /kind/);
+  assert.match(wrap({ kind: 'clear', setId: 's1', at: T(1) }).errors[0], /id/);
+});

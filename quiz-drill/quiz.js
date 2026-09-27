@@ -373,6 +373,11 @@ var QD_QUIZ = (function () {
    *
    * 以前は問題ごとの集計 { attempts, corrects, last, lastAt } だけを持っていた。
    * これは migrateStats() でログに変換する（旧形式のファイルの読み込みにも使う）。
+   *
+   * 問題集の記録を消すときは、ログから消すのではなく「消去の印」{ id, kind: 'clear', setId, at } を足す
+   * （墓標）。ログを消すだけだと、もう一方の端末のファイルを読み込んだときに和集合で戻ってしまうため。
+   * 集計では、その問題集の回答のうち最新の印の at 以前のものを数えない（effectiveLog）。
+   * kind の無い要素は回答として扱う。
    */
 
   var HISTORY_FORMAT = 'yontaku-drill-history/2';
@@ -392,19 +397,64 @@ var QD_QUIZ = (function () {
 
   /** ログ1件から、アプリが使う項目だけを取り出す */
   function coreEntry(e) {
+    if (e.kind === 'clear') return { id: e.id, kind: 'clear', setId: e.setId, at: e.at };
     return { id: e.id, key: e.key, at: e.at, ok: e.ok };
+  }
+
+  function isClear(e) {
+    return e.kind === 'clear';
+  }
+
+  function inSet(key, setId) {
+    return key.indexOf(setId + '::') === 0;
+  }
+
+  /**
+   * 集計に使う回答だけを返す。消去の印そのものと、印のある問題集の回答のうち
+   * 最新の印の at 以前のものを除く。印より後の回答はふつうに数える。
+   */
+  function effectiveLog(log) {
+    var clearedAt = {};   // 問題集id → 最新の印の時刻（ミリ秒）
+    log.forEach(function (e) {
+      if (!isClear(e)) return;
+      var ms = Date.parse(e.at);
+      if (clearedAt[e.setId] === undefined || ms > clearedAt[e.setId]) clearedAt[e.setId] = ms;
+    });
+    var ids = Object.keys(clearedAt);
+    return log.filter(function (e) {
+      if (isClear(e)) return false;
+      for (var i = 0; i < ids.length; i++) {
+        if (inSet(e.key, ids[i]) && Date.parse(e.at) <= clearedAt[ids[i]]) return false;
+      }
+      return true;
+    });
+  }
+
+  /** 問題集の記録を消したら数えなくなる回答の件数（今数えている分） */
+  function countSetAnswers(log, setId) {
+    return effectiveLog(log).filter(function (e) { return inSet(e.key, setId); }).length;
+  }
+
+  /** 前回の正解の位置から、その問題集の分を除いた写し */
+  function removeSetPositions(positions, setId) {
+    var out = {};
+    Object.keys(positions).forEach(function (k) {
+      if (!inSet(k, setId)) out[k] = positions[k];
+    });
+    return out;
   }
 
   /**
    * ログを問題ごとに集計する。返り値は 鍵 → { attempts, corrects, wrongs, rate, last, lastAt }。
    * rate は 0〜1。last は最後に解いたときの結果（'correct' | 'wrong'）。
    * 同じ日時のログが並んだら id の大きい方を「後」とみなす（読み込んだ順に左右されないように）。
+   * 消去の印は反映する（effectiveLog）。
    */
   function summarizeLog(log) {
     var map = {};
     var lastMs = {};
     var lastId = {};
-    log.forEach(function (e) {
+    effectiveLog(log).forEach(function (e) {
       var s = map[e.key];
       if (!s) s = map[e.key] = { attempts: 0, corrects: 0, wrongs: 0, rate: 0, last: null, lastAt: null };
       s.attempts += 1;
@@ -533,15 +583,21 @@ var QD_QUIZ = (function () {
       return;
     }
     log.forEach(function (e, i) {
-      var where = (i + 1) + '件目の回答' + (e && isNonEmptyString(e.id) ? '（id: ' + e.id + '）' : '') + ': ';
+      var where = (i + 1) + '件目の記録' + (e && isNonEmptyString(e.id) ? '（id: ' + e.id + '）' : '') + ': ';
       if (!e || typeof e !== 'object' || Array.isArray(e)) {
         errors.push(where + 'オブジェクトではありません');
         return;
       }
       if (!isNonEmptyString(e.id)) errors.push(where + 'id がありません');
-      if (!isNonEmptyString(e.key)) errors.push(where + 'key がありません');
       if (!isDateString(e.at)) errors.push(where + 'at が日時ではありません');
-      if (typeof e.ok !== 'boolean') errors.push(where + 'ok は true か false で書いてください');
+      if (e.kind === 'clear') {
+        if (!isNonEmptyString(e.setId)) errors.push(where + '消去の印に setId がありません');
+      } else if (e.kind !== undefined) {
+        errors.push(where + 'kind は "clear" か、書かない（回答）かのどちらかです');
+      } else {
+        if (!isNonEmptyString(e.key)) errors.push(where + 'key がありません');
+        if (typeof e.ok !== 'boolean') errors.push(where + 'ok は true か false で書いてください');
+      }
     });
   }
 
@@ -681,6 +737,9 @@ var QD_QUIZ = (function () {
     WEAK_THRESHOLDS: WEAK_THRESHOLDS,
     DEFAULT_WEAK_THRESHOLD: DEFAULT_WEAK_THRESHOLD,
     summarizeLog: summarizeLog,
+    effectiveLog: effectiveLog,
+    countSetAnswers: countSetAnswers,
+    removeSetPositions: removeSetPositions,
     migrateStats: migrateStats,
     unionLog: unionLog,
     mergePositions: mergePositions,
