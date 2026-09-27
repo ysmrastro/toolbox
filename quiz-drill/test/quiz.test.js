@@ -404,8 +404,8 @@ test('summarizeLog: 回数・正解・不正解・正答率・最後の結果と
     e('x3', 's::a', T(2), true),
     e('x4', 's::b', T(1), true),
   ]);
-  assert.deepStrictEqual(sum['s::a'], { attempts: 3, corrects: 2, wrongs: 1, rate: 2 / 3, last: 'wrong', lastAt: T(3) });
-  assert.deepStrictEqual(sum['s::b'], { attempts: 1, corrects: 1, wrongs: 0, rate: 1, last: 'correct', lastAt: T(1) });
+  assert.deepStrictEqual(sum['s::a'], { attempts: 3, corrects: 2, wrongs: 1, lucky: 0, rate: 2 / 3, last: 'wrong', lastAt: T(3), lastLucky: false });
+  assert.deepStrictEqual(sum['s::b'], { attempts: 1, corrects: 1, wrongs: 0, lucky: 0, rate: 1, last: 'correct', lastAt: T(1), lastLucky: false });
   assert.strictEqual(sum['s::c'], undefined);
 });
 
@@ -423,7 +423,7 @@ test('unionLog: 同じ id は1件にまとめ、2台分は合算される。何�
   assert.strictEqual(once.added.length, 2);
   assert.strictEqual(once.log.length, 3);
   assert.deepStrictEqual(Q.summarizeLog(once.log)['s::a'],
-    { attempts: 3, corrects: 1, wrongs: 2, rate: 1 / 3, last: 'wrong', lastAt: T(3) });
+    { attempts: 3, corrects: 1, wrongs: 2, lucky: 0, rate: 1 / 3, last: 'wrong', lastAt: T(3), lastLucky: false });
 
   const twice = Q.unionLog(once.log, ipad);
   assert.strictEqual(twice.added.length, 0);
@@ -456,8 +456,8 @@ test('migrateStats: 正解 corrects 件・不正解 attempts−corrects 件を�
   assert.strictEqual(a[0].id, 'mig:s::a:4:1:2026-09-20T10:00:00.000Z:0');
 
   const sum = Q.summarizeLog(log);
-  assert.deepStrictEqual(sum['s::a'], { attempts: 4, corrects: 1, wrongs: 3, rate: 0.25, last: 'correct', lastAt: '2026-09-20T10:00:00.000Z' });
-  assert.deepStrictEqual(sum['s::b'], { attempts: 3, corrects: 2, wrongs: 1, rate: 2 / 3, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z' });
+  assert.deepStrictEqual(sum['s::a'], { attempts: 4, corrects: 1, wrongs: 3, lucky: 0, rate: 0.25, last: 'correct', lastAt: '2026-09-20T10:00:00.000Z', lastLucky: false });
+  assert.deepStrictEqual(sum['s::b'], { attempts: 3, corrects: 2, wrongs: 1, lucky: 0, rate: 2 / 3, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z', lastLucky: false });
 });
 
 test('migrateStats: 同じ集計なら同じ id になり、2台分を和集合にしても二重にならない', () => {
@@ -467,7 +467,7 @@ test('migrateStats: 同じ集計なら同じ id になり、2台分を和集合�
   assert.deepStrictEqual(iphone.map((x) => x.id), ipad.map((x) => x.id));
   assert.strictEqual(Q.unionLog(iphone, ipad).log.length, 2);
   // 集計が違えば id も違う（別の記録として足される）
-  const other = Q.migrateStats({ 's::a': { attempts: 3, corrects: 1, last: 'wrong', lastAt: '2026-09-21T10:00:00.000Z' } });
+  const other = Q.migrateStats({ 's::a': { attempts: 3, corrects: 1, last: 'wrong', lastAt: '2026-09-21T10:00:00.000Z', lastLucky: false } });
   assert.strictEqual(Q.unionLog(iphone, other).log.length, 5);
 });
 
@@ -501,7 +501,7 @@ test('validateHistory / historyToLog: 旧形式も読み込め、移行と同じ
   assert.deepStrictEqual(Q.validateHistory(v1), { ok: true, errors: [] });
   const log = Q.historyToLog(v1);
   assert.strictEqual(log.length, 3);
-  assert.deepStrictEqual(log.map((x) => x.id), Q.migrateStats({ 's::a': { attempts: 3, corrects: 1, last: 'wrong', lastAt: T(5) } }).map((x) => x.id));
+  assert.deepStrictEqual(log.map((x) => x.id), Q.migrateStats({ 's::a': { attempts: 3, corrects: 1, last: 'wrong', lastAt: T(5), lastLucky: false } }).map((x) => x.id));
 
   const badV1 = Object.assign({}, v1, { history: { 's::a': { attempts: 'a', corrects: 0, last: 'wrong', lastAt: T(5) } } });
   assert.match(Q.validateHistory(badV1).errors[0], /attempts/);
@@ -526,11 +526,11 @@ test('buildHistoryExport: ログと集計が入り、問題文や選択肢は入
   assert.deepStrictEqual(out.log, log);
   assert.deepStrictEqual(out.positions, { 's::a': 2 });
   assert.deepStrictEqual(out.summary['s::a'], {
-    attempts: 2, corrects: 1, wrongs: 1, rate: 0.5, last: 'correct', lastAt: T(2),
+    attempts: 2, corrects: 1, wrongs: 1, lucky: 0, rate: 0.5, last: 'correct', lastAt: T(2), lastLucky: false,
     setTitle: '問題集T', no: 7, category: '分類1', tags: ['甲'],
   });
   assert.strictEqual(out.summary['s::b'].no, 2);
-  assert.deepStrictEqual(out.summary['gone::z'], { attempts: 1, corrects: 0, wrongs: 1, rate: 0, last: 'wrong', lastAt: T(1) });
+  assert.deepStrictEqual(out.summary['gone::z'], { attempts: 1, corrects: 0, wrongs: 1, lucky: 0, rate: 0, last: 'wrong', lastAt: T(1), lastLucky: false });
   assert.doesNotMatch(JSON.stringify(out), /ひみつ/);
   assert.strictEqual(Q.validateHistory(JSON.parse(JSON.stringify(out))).ok, true);
   assert.strictEqual(Q.HISTORY_FILE_NAME, 'quiz-drill-記録.json');
@@ -608,18 +608,18 @@ test('statsReport: 全体・問題集ごと・分類ごとの集計と、苦手�
     's1::a': [1, 3, false],   // 25%・苦手
     's1::b': [3, 0, true],    // 100%
     's2::a': [1, 1, true],    // 50%・苦手
-  }), { 'gone::x': { attempts: 9, corrects: 0, wrongs: 9, rate: 0, last: 'wrong', lastAt: T(1) } });
+  }), { 'gone::x': { attempts: 9, corrects: 0, wrongs: 9, lucky: 0, rate: 0, last: 'wrong', lastAt: T(1), lastLucky: false } });
   const r = Q.statsReport(sets, sum, 0.7);
 
-  assert.deepStrictEqual(r.total, { questions: 5, answered: 3, answers: 9, corrects: 5, rate: 5 / 9, weak: 2 });
+  assert.deepStrictEqual(r.total, { questions: 5, answered: 3, answers: 9, corrects: 5, rate: 5 / 9, weak: 2, lucky: 0 });
   assert.deepStrictEqual(r.bySet, [
-    { id: 's1', title: 'T1', questions: 3, answered: 2, answers: 7, corrects: 4, rate: 4 / 7, weak: 1 },
-    { id: 's2', title: 'T2', questions: 2, answered: 1, answers: 2, corrects: 1, rate: 0.5, weak: 1 },
+    { id: 's1', title: 'T1', questions: 3, answered: 2, answers: 7, corrects: 4, rate: 4 / 7, weak: 1, lucky: 0 },
+    { id: 's2', title: 'T2', questions: 2, answered: 1, answers: 2, corrects: 1, rate: 0.5, weak: 1, lucky: 0 },
   ]);
   assert.deepStrictEqual(r.byCategory, [
-    { category: '甲', questions: 2, answered: 1, answers: 4, corrects: 1, rate: 0.25, weak: 1 },
-    { category: '乙', questions: 2, answered: 2, answers: 5, corrects: 4, rate: 0.8, weak: 1 },
-    { category: null, questions: 1, answered: 0, answers: 0, corrects: 0, rate: null, weak: 0 },
+    { category: '甲', questions: 2, answered: 1, answers: 4, corrects: 1, rate: 0.25, weak: 1, lucky: 0 },
+    { category: '乙', questions: 2, answered: 2, answers: 5, corrects: 4, rate: 0.8, weak: 1, lucky: 0 },
+    { category: null, questions: 1, answered: 0, answers: 0, corrects: 0, rate: null, weak: 0, lucky: 0 },
   ]);
   assert.deepStrictEqual(r.weakList.map((w) => w.key), ['s1::a', 's2::a']);
   assert.deepStrictEqual(r.weakList[0], { key: 's1::a', attempts: 4, corrects: 1, wrongs: 3, rate: 0.25 });
@@ -647,7 +647,7 @@ test('消去の印: 印より前（同時刻を含む）の回答は数えず、
     e('3', 's1::a', T(3), false),    // 印より後 → 数える
   ];
   assert.deepStrictEqual(Q.summarizeLog(log)['s1::a'],
-    { attempts: 1, corrects: 0, wrongs: 1, rate: 0, last: 'wrong', lastAt: T(3) });
+    { attempts: 1, corrects: 0, wrongs: 1, lucky: 0, rate: 0, last: 'wrong', lastAt: T(3), lastLucky: false });
   assert.deepStrictEqual(Q.effectiveLog(log).map((x) => x.id), ['3']);
 });
 
@@ -702,7 +702,7 @@ test('消去の印の和集合: もう一方の端末に印が伝わり、そち
   assert.deepStrictEqual(merged.added.map((x) => x.id), ['c1']);
   const sum = Q.summarizeLog(merged.log);
   assert.strictEqual(sum['s1::b'], undefined);
-  assert.deepStrictEqual(sum['s1::a'], { attempts: 1, corrects: 1, wrongs: 0, rate: 1, last: 'correct', lastAt: T(3) });
+  assert.deepStrictEqual(sum['s1::a'], { attempts: 1, corrects: 1, wrongs: 0, lucky: 0, rate: 1, last: 'correct', lastAt: T(3), lastLucky: false });
   assert.strictEqual(sum['s2::a'].attempts, 1);
 
   const again = Q.unionLog(merged.log, iphone);
@@ -728,4 +728,112 @@ test('validateHistory: kind が clear の要素（setId・at 必須）を通し�
   assert.match(wrap({ id: 'c1', kind: 'clear', setId: '', at: T(1) }).errors[0], /setId/);
   assert.match(wrap({ id: 'c1', kind: 'delete', setId: 's1', at: T(1) }).errors[0], /kind/);
   assert.match(wrap({ kind: 'clear', setId: 's1', at: T(1) }).errors[0], /id/);
+});
+
+/* ===================== まぐれの印 ===================== */
+
+const luck = (id, ref, on, at) => ({ id, kind: 'lucky', ref, on, at });
+
+test('まぐれ: まぐれとされた正解は不正解として数え、lucky に件数を出す', () => {
+  const log = [
+    e('a1', 's::a', T(1), true),
+    e('a2', 's::a', T(2), true),
+    luck('m1', 'a2', true, T(3)),
+  ];
+  assert.deepStrictEqual(Q.summarizeLog(log)['s::a'], {
+    attempts: 2, corrects: 1, wrongs: 1, lucky: 1, rate: 0.5, last: 'wrong', lastAt: T(2), lastLucky: true,
+  });
+  // 前に間違えた問題に入る
+  const sets = [{ id: 's', title: 'T', questions: [q('a')] }];
+  assert.deepStrictEqual(keysOf(Q.filterWrong(sets, Q.summarizeLog(log))), ['s::a']);
+  // 元のログは書き換えない
+  assert.strictEqual(log[1].ok, true);
+});
+
+test('まぐれ: 取り消す（on:false の印を後に足す）と正解に戻る。もう一度付ければまた不正解', () => {
+  const base = [e('a1', 's::a', T(1), true), luck('m1', 'a1', true, T(2))];
+  const undone = base.concat([luck('m2', 'a1', false, T(3))]);
+  assert.deepStrictEqual(Q.summarizeLog(undone)['s::a'], {
+    attempts: 1, corrects: 1, wrongs: 0, lucky: 0, rate: 1, last: 'correct', lastAt: T(1), lastLucky: false,
+  });
+  const again = undone.concat([luck('m3', 'a1', true, T(4))]);
+  assert.strictEqual(Q.summarizeLog(again)['s::a'].last, 'wrong');
+  // 並びではなく at で決める。at が同じなら id の大きい方
+  assert.strictEqual(Q.summarizeLog([undone[2], undone[0], undone[1]])['s::a'].corrects, 1);
+  const tie = [e('a1', 's::a', T(1), true), luck('m:2', 'a1', false, T(2)), luck('m:1', 'a1', true, T(2))];
+  assert.strictEqual(Q.summarizeLog(tie)['s::a'].corrects, 1);
+});
+
+test('まぐれ: 不正解の回答に付いた印は何もしない', () => {
+  const sum = Q.summarizeLog([e('a1', 's::a', T(1), false), luck('m1', 'a1', true, T(2))]);
+  assert.deepStrictEqual([sum['s::a'].wrongs, sum['s::a'].lucky, sum['s::a'].lastLucky], [1, 0, false]);
+});
+
+test('まぐれ: 印は和集合でもう一方の端末に伝わり、2回読み込んでも増えない', () => {
+  const shared = [e('a1', 's::a', T(1), true)];
+  const iphone = shared.concat([luck('m1', 'a1', true, T(2))]);
+  const ipad = shared.slice();
+  assert.strictEqual(Q.summarizeLog(ipad)['s::a'].corrects, 1);
+
+  const once = Q.unionLog(ipad, iphone);
+  assert.deepStrictEqual(once.added, [luck('m1', 'a1', true, T(2))]);
+  assert.strictEqual(Q.summarizeLog(once.log)['s::a'].corrects, 0);
+  const twice = Q.unionLog(once.log, iphone);
+  assert.strictEqual(twice.added.length, 0);
+  assert.strictEqual(twice.log.length, 2);
+});
+
+test('まぐれ: 消去の印と組み合わせる（消した回答の印は何もしない。消したあとの回答の印は数える）', () => {
+  const log = [
+    e('a1', 's1::a', T(1), true),
+    luck('m1', 'a1', true, T(2)),
+    clr('c1', 's1', T(3)),
+    e('a2', 's1::a', T(4), true),
+    luck('m2', 'a2', true, T(5)),
+    e('b1', 's2::a', T(1), true),
+  ];
+  const sum = Q.summarizeLog(log);
+  assert.deepStrictEqual(sum['s1::a'], {
+    attempts: 1, corrects: 0, wrongs: 1, lucky: 1, rate: 0, last: 'wrong', lastAt: T(4), lastLucky: true,
+  });
+  assert.strictEqual(sum['s2::a'].corrects, 1);
+  // 消える件数は回答の数だけ（印は数えない）
+  assert.strictEqual(Q.countSetAnswers(log, 's1'), 1);
+});
+
+test('まぐれ: 成績の画面の集計（最後の回答がまぐれの問題の数）と書き出し', () => {
+  const sets = [{ id: 's', title: 'T', questions: [q('a'), q('b'), q('c')] }];
+  const log = [
+    e('a1', 's::a', T(1), true), luck('m1', 'a1', true, T(2)),
+    e('b1', 's::b', T(1), true), luck('m2', 'b1', true, T(2)), e('b2', 's::b', T(3), true),   // 最後は本当の正解
+    e('c1', 's::c', T(1), true),
+  ];
+  const r = Q.statsReport(sets, Q.summarizeLog(log), 0.7);
+  assert.strictEqual(r.total.lucky, 1);
+  assert.strictEqual(r.bySet[0].lucky, 1);
+  assert.strictEqual(r.total.corrects, 2);
+
+  const out = Q.buildHistoryExport(log, {}, sets, new Date(T(4)));
+  assert.deepStrictEqual(out.log[1], luck('m1', 'a1', true, T(2)));
+  assert.strictEqual(out.summary['s::a'].lucky, 1);
+  assert.strictEqual(Q.validateHistory(JSON.parse(JSON.stringify(out))).ok, true);
+  assert.deepStrictEqual(Q.historyToLog(out)[1], luck('m1', 'a1', true, T(2)));
+});
+
+test('validateHistory: まぐれの印（ref・on 必須）を通し、不正を拒否する', () => {
+  const wrap = (x) => Q.validateHistory({ format: 'yontaku-drill-history/2', log: [x] });
+  assert.deepStrictEqual(wrap(luck('m1', 'a1', true, T(1))), { ok: true, errors: [] });
+  assert.deepStrictEqual(wrap(luck('m1', 'a1', false, T(1))), { ok: true, errors: [] });
+  assert.match(wrap({ id: 'm1', kind: 'lucky', on: true, at: T(1) }).errors[0], /ref/);
+  assert.match(wrap(luck('m1', '', true, T(1))).errors[0], /ref/);
+  assert.match(wrap(luck('m1', 'a1', 'true', T(1))).errors[0], /on/);
+  assert.match(wrap({ id: 'm1', kind: 'lucky', ref: 'a1', at: T(1) }).errors[0], /on/);
+  assert.match(wrap(luck('m1', 'a1', true, 'きのう')).errors[0], /at/);
+});
+
+test('answerCorrect: セッションの回答はまぐれなら不正解として数える', () => {
+  assert.strictEqual(Q.answerCorrect({ correct: true }), true);
+  assert.strictEqual(Q.answerCorrect({ correct: true, lucky: true }), false);
+  assert.strictEqual(Q.answerCorrect({ correct: false }), false);
+  assert.strictEqual(Q.answerCorrect(undefined), false);
 });

@@ -328,6 +328,13 @@ var QD_QUIZ = (function () {
     return { original: original, correct: isCorrectOriginal(question, original) };
   }
 
+  /**
+   * セッションの1問の回答（{ correct, lucky }）を正解として数えるか。まぐれにした正解は不正解として数える
+   */
+  function answerCorrect(a) {
+    return !!a && !!a.correct && !a.lucky;
+  }
+
   /* ===================== 採点・表示用の値 ===================== */
 
   /**
@@ -378,6 +385,11 @@ var QD_QUIZ = (function () {
    * （墓標）。ログを消すだけだと、もう一方の端末のファイルを読み込んだときに和集合で戻ってしまうため。
    * 集計では、その問題集の回答のうち最新の印の at 以前のものを数えない（effectiveLog）。
    * kind の無い要素は回答として扱う。
+   *
+   * たまたま当たった回答には「まぐれの印」{ id, kind: 'lucky', ref: 回答の id, on, at } を足す。
+   * 回答の ok を書き換えないのは、和集合が id で重複を捨てるため（書き換えはもう一方の端末に伝わらない）。
+   * 同じ ref の印のうち最新（at が同じなら id の大きい方）の on を採り、on なら集計では不正解として数える。
+   * 取り消すときは on: false の印を足す。
    */
 
   var HISTORY_FORMAT = 'yontaku-drill-history/2';
@@ -398,6 +410,7 @@ var QD_QUIZ = (function () {
   /** ログ1件から、アプリが使う項目だけを取り出す */
   function coreEntry(e) {
     if (e.kind === 'clear') return { id: e.id, kind: 'clear', setId: e.setId, at: e.at };
+    if (e.kind === 'lucky') return { id: e.id, kind: 'lucky', ref: e.ref, on: e.on, at: e.at };
     return { id: e.id, key: e.key, at: e.at, ok: e.ok };
   }
 
@@ -405,13 +418,33 @@ var QD_QUIZ = (function () {
     return e.kind === 'clear';
   }
 
+  /** 印の前後: at が新しい方、同じなら id の大きい方を後とみなす */
+  function isLater(a, b) {
+    var ma = Date.parse(a.at), mb = Date.parse(b.at);
+    return ma > mb || (ma === mb && a.id > b.id);
+  }
+
+  /** 回答の id → いまその回答がまぐれとされているか（同じ ref の最新の印の on） */
+  function luckyRefs(log) {
+    var latest = {};
+    log.forEach(function (e) {
+      if (e.kind !== 'lucky') return;
+      if (!latest[e.ref] || isLater(e, latest[e.ref])) latest[e.ref] = e;
+    });
+    var out = {};
+    Object.keys(latest).forEach(function (ref) { if (latest[ref].on) out[ref] = true; });
+    return out;
+  }
+
   function inSet(key, setId) {
     return key.indexOf(setId + '::') === 0;
   }
 
   /**
-   * 集計に使う回答だけを返す。消去の印そのものと、印のある問題集の回答のうち
-   * 最新の印の at 以前のものを除く。印より後の回答はふつうに数える。
+   * 集計に使う回答だけを返す。印の要素（消去・まぐれ）そのものと、消去の印のある問題集の回答のうち
+   * 最新の消去の印の at 以前のものを除く。印より後の回答はふつうに数える。
+   * まぐれとされた正解は { ...回答, ok: false, lucky: true } の写しにして返す（元のログは書き換えない）。
+   * 不正解の回答に付いたまぐれの印は何もしない。消去の印で除かれた回答に付いた印も何もしない。
    */
   function effectiveLog(log) {
     var clearedAt = {};   // 問題集id → 最新の印の時刻（ミリ秒）
@@ -421,12 +454,15 @@ var QD_QUIZ = (function () {
       if (clearedAt[e.setId] === undefined || ms > clearedAt[e.setId]) clearedAt[e.setId] = ms;
     });
     var ids = Object.keys(clearedAt);
+    var lucky = luckyRefs(log);
     return log.filter(function (e) {
-      if (isClear(e)) return false;
+      if (e.kind !== undefined) return false;
       for (var i = 0; i < ids.length; i++) {
         if (inSet(e.key, ids[i]) && Date.parse(e.at) <= clearedAt[ids[i]]) return false;
       }
       return true;
+    }).map(function (e) {
+      return e.ok && lucky[e.id] ? Object.assign({}, e, { ok: false, lucky: true }) : e;
     });
   }
 
@@ -445,8 +481,10 @@ var QD_QUIZ = (function () {
   }
 
   /**
-   * ログを問題ごとに集計する。返り値は 鍵 → { attempts, corrects, wrongs, rate, last, lastAt }。
+   * ログを問題ごとに集計する。返り値は 鍵 → { attempts, corrects, wrongs, lucky, rate, last, lastAt, lastLucky }。
    * rate は 0〜1。last は最後に解いたときの結果（'correct' | 'wrong'）。
+   * まぐれとされた回答は不正解として数える（wrongs に入り、corrects には入らない）。lucky はその件数、
+   * lastLucky は最後の回答がまぐれか。
    * 同じ日時のログが並んだら id の大きい方を「後」とみなす（読み込んだ順に左右されないように）。
    * 消去の印は反映する（effectiveLog）。
    */
@@ -456,13 +494,17 @@ var QD_QUIZ = (function () {
     var lastId = {};
     effectiveLog(log).forEach(function (e) {
       var s = map[e.key];
-      if (!s) s = map[e.key] = { attempts: 0, corrects: 0, wrongs: 0, rate: 0, last: null, lastAt: null };
+      if (!s) {
+        s = map[e.key] = { attempts: 0, corrects: 0, wrongs: 0, lucky: 0, rate: 0, last: null, lastAt: null, lastLucky: false };
+      }
       s.attempts += 1;
       if (e.ok) s.corrects += 1; else s.wrongs += 1;
+      if (e.lucky) s.lucky += 1;
       var ms = Date.parse(e.at);
       if (s.lastAt === null || ms > lastMs[e.key] || (ms === lastMs[e.key] && e.id > lastId[e.key])) {
         s.last = e.ok ? 'correct' : 'wrong';
         s.lastAt = e.at;
+        s.lastLucky = !!e.lucky;
         lastMs[e.key] = ms;
         lastId[e.key] = e.id;
       }
@@ -592,8 +634,11 @@ var QD_QUIZ = (function () {
       if (!isDateString(e.at)) errors.push(where + 'at が日時ではありません');
       if (e.kind === 'clear') {
         if (!isNonEmptyString(e.setId)) errors.push(where + '消去の印に setId がありません');
+      } else if (e.kind === 'lucky') {
+        if (!isNonEmptyString(e.ref)) errors.push(where + 'まぐれの印に ref（回答の id）がありません');
+        if (typeof e.on !== 'boolean') errors.push(where + 'まぐれの印の on は true か false で書いてください');
       } else if (e.kind !== undefined) {
-        errors.push(where + 'kind は "clear" か、書かない（回答）かのどちらかです');
+        errors.push(where + 'kind は "clear"・"lucky" か、書かない（回答）かのどれかです');
       } else {
         if (!isNonEmptyString(e.key)) errors.push(where + 'key がありません');
         if (typeof e.ok !== 'boolean') errors.push(where + 'ok は true か false で書いてください');
@@ -670,7 +715,7 @@ var QD_QUIZ = (function () {
   }
 
   function emptyGroup() {
-    return { questions: 0, answered: 0, answers: 0, corrects: 0, rate: null, weak: 0 };
+    return { questions: 0, answered: 0, answers: 0, corrects: 0, rate: null, weak: 0, lucky: 0 };
   }
 
   function addToGroup(g, s, threshold) {
@@ -680,6 +725,7 @@ var QD_QUIZ = (function () {
     g.answers += s.attempts;
     g.corrects += s.corrects;
     if (isWeak(s, threshold)) g.weak += 1;
+    if (s.lastLucky) g.lucky += 1;
   }
 
   function finishGroup(g) {
@@ -692,7 +738,8 @@ var QD_QUIZ = (function () {
    * 返り値 {
    *   total: 集計, bySet: [{ id, title, ...集計 }], byCategory: [{ category, ...集計 }],
    *   weakList: [{ key, attempts, corrects, wrongs, rate }]（苦手を正答率の低い順に最大30件）
-   * }。集計は { questions, answered, answers, corrects, rate（回答が無ければ null）, weak }。
+   * }。集計は { questions, answered, answers, corrects, rate（回答が無ければ null）, weak,
+   * lucky（最後の回答がまぐれの問題の数） }。
    * 分類の無い問題は category: null にまとめる。分類の並びは最初に出てきた順。
    */
   function statsReport(sets, summary, threshold) {
@@ -769,6 +816,7 @@ var QD_QUIZ = (function () {
     correctIndices: correctIndices,
     isCorrectOriginal: isCorrectOriginal,
     judge: judge,
+    answerCorrect: answerCorrect,
     score: score,
     questionLabel: questionLabel,
     circled: circled,

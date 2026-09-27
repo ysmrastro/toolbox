@@ -166,6 +166,9 @@
 
     <p id="q-verdict" class="qd-verdict" hidden></p>
 
+    <!-- 正解したときだけ出す。たまたま当たった問題を不正解として数え、あとで復習できるようにする -->
+    <button type="button" id="btn-lucky" class="tb-btn tb-btn--secondary tb-btn--block qd-big-btn qd-lucky-btn" hidden>まぐれ（あとで復習）</button>
+
     <section id="q-after" class="qd-after" hidden>
       <h2 class="qd-after-title">選択肢（元の番号）</h2>
       <ol id="q-original" class="qd-original"></ol>
@@ -220,6 +223,7 @@
       <h1 class="qd-card-title">結果</h1>
       <p id="r-summary" class="qd-result-big"></p>
       <p id="r-rate" class="qd-result-sub"></p>
+      <p id="r-lucky" class="qd-note" hidden></p>
       <p id="r-points" class="qd-result-sub" hidden></p>
     </div>
 
