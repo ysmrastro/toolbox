@@ -378,8 +378,158 @@ var QD_QUIZ = (function () {
     return next;
   }
 
+  /* ===================== 学習の記録の書き出し・読み込み =====================
+   * 記録は「成績（stats）」と「前回の正解の表示位置（positions）」の2つ。どちらも鍵は
+   * 「問題集id::問題id」。書き出すファイルには問題文などの中身を入れない（ID と数値と日時だけ）。
+   */
+
+  var HISTORY_FORMAT = 'yontaku-drill-history/1';
+  var RECORD_FIELDS = ['attempts', 'corrects', 'last', 'lastAt'];
+
+  function isCount(v) {
+    return isInt(v) && v >= 0;
+  }
+
+  /** 成績の記録1件から、アプリが使う項目だけを取り出す（分析用に足した項目は落とす） */
+  function coreRecord(r) {
+    var out = {};
+    RECORD_FIELDS.forEach(function (k) { out[k] = r[k]; });
+    return out;
+  }
+
+  /**
+   * 書き出す中身を作る。now は Date。
+   * 分析しやすいよう、問題集が読み込まれている記録には問題集の表示名・問番号・分類・タグを添える
+   * （読み込むときは無視する）。問番号は no が無ければ問題集の中の位置（1 始まり）。
+   */
+  function buildHistoryExport(stats, positions, sets, now) {
+    var index = indexSets(sets);
+    var history = {};
+    Object.keys(stats).forEach(function (key) {
+      var rec = coreRecord(stats[key]);
+      var e = index[key];
+      if (e) {
+        rec.setTitle = e.set.title;
+        rec.no = e.question.no !== undefined ? e.question.no : e.index + 1;
+        if (e.question.category !== undefined) rec.category = e.question.category;
+        if (e.question.tags !== undefined) rec.tags = e.question.tags.slice();
+      }
+      history[key] = rec;
+    });
+    return {
+      format: HISTORY_FORMAT,
+      exportedAt: now.toISOString(),
+      history: history,
+      positions: Object.assign({}, positions),
+    };
+  }
+
+  /** 書き出すファイル名。端末の時刻で quiz-drill-記録-YYYYMMDD-HHMM.json */
+  function historyFileName(now) {
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return 'quiz-drill-記録-' + now.getFullYear() + p(now.getMonth() + 1) + p(now.getDate()) +
+      '-' + p(now.getHours()) + p(now.getMinutes()) + '.json';
+  }
+
+  /** 記録のファイルを検証する。返り値 { ok, errors } */
+  function validateHistory(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return { ok: false, errors: ['学習の記録のファイルではありません'] };
+    }
+    if (data.format !== HISTORY_FORMAT) {
+      return { ok: false, errors: ['format が "' + HISTORY_FORMAT + '" ではありません（' + JSON.stringify(data.format) + '）'] };
+    }
+    var h = data.history;
+    if (!h || typeof h !== 'object' || Array.isArray(h)) {
+      return { ok: false, errors: ['history がオブジェクトではありません'] };
+    }
+    var errors = [];
+    Object.keys(h).forEach(function (key) {
+      var r = h[key];
+      var where = '記録「' + key + '」: ';
+      if (!r || typeof r !== 'object' || Array.isArray(r)) {
+        errors.push(where + 'オブジェクトではありません');
+        return;
+      }
+      if (!isCount(r.attempts)) errors.push(where + 'attempts は0以上の整数で書いてください');
+      if (!isCount(r.corrects)) errors.push(where + 'corrects は0以上の整数で書いてください');
+      else if (isCount(r.attempts) && r.corrects > r.attempts) errors.push(where + 'corrects が attempts より多くなっています');
+      if (r.last !== 'correct' && r.last !== 'wrong') errors.push(where + 'last は "correct" か "wrong" で書いてください');
+      if (typeof r.lastAt !== 'string' || isNaN(Date.parse(r.lastAt))) errors.push(where + 'lastAt が日時ではありません');
+    });
+    if (data.positions !== undefined) {
+      var p = data.positions;
+      if (!p || typeof p !== 'object' || Array.isArray(p)) {
+        errors.push('positions がオブジェクトではありません');
+      } else {
+        Object.keys(p).forEach(function (key) {
+          if (!isCount(p[key])) errors.push('positions「' + key + '」: 0以上の整数で書いてください');
+        });
+      }
+    }
+    return { ok: errors.length === 0, errors: errors };
+  }
+
+  /**
+   * 今の端末の記録に、読み込んだ記録を統合する。二重に数えないよう回数は足さない。
+   *   - 鍵ごとに、最後に解いた日時（lastAt）が新しい方の記録を丸ごと採る。同じ日時なら今の端末を残す
+   *   - 今の端末にない鍵は追加する
+   *   - positions は、history で採った側の値を使う。採った側に値が無ければもう一方の値を残す。
+   *     history にない鍵の positions は、今の端末に無いときだけ追加する
+   * 返り値 { stats, positions, added, updated, unchanged }（件数は history の鍵で数える）。引数は書き換えない。
+   */
+  function mergeHistory(curStats, curPos, inStats, inPos) {
+    var stats = Object.assign({}, curStats);
+    var positions = Object.assign({}, curPos);
+    var incomingPos = inPos || {};
+    var added = 0, updated = 0, unchanged = 0;
+
+    Object.keys(inStats).forEach(function (key) {
+      var mine = curStats[key];
+      var theirs = coreRecord(inStats[key]);
+      var takeTheirs;
+      if (!mine) {
+        added += 1;
+        takeTheirs = true;
+      } else if (Date.parse(theirs.lastAt) > Date.parse(mine.lastAt)) {
+        updated += 1;
+        takeTheirs = true;
+      } else {
+        unchanged += 1;
+        takeTheirs = false;
+      }
+      if (takeTheirs) {
+        stats[key] = theirs;
+        if (incomingPos[key] !== undefined) positions[key] = incomingPos[key];
+      } else if (positions[key] === undefined && incomingPos[key] !== undefined) {
+        positions[key] = incomingPos[key];
+      }
+    });
+
+    Object.keys(incomingPos).forEach(function (key) {
+      if (inStats[key] === undefined && positions[key] === undefined) positions[key] = incomingPos[key];
+    });
+
+    return { stats: stats, positions: positions, added: added, updated: updated, unchanged: unchanged };
+  }
+
+  /** 記録の概要: 解いた問題の数と、最後に不正解だった問題の数（読み込んでいない問題集の分も含む） */
+  function historySummary(stats) {
+    var keys = Object.keys(stats);
+    return {
+      answered: keys.length,
+      wrong: keys.filter(function (k) { return stats[k].last === 'wrong'; }).length,
+    };
+  }
+
   return {
     FORMAT: FORMAT,
+    HISTORY_FORMAT: HISTORY_FORMAT,
+    buildHistoryExport: buildHistoryExport,
+    historyFileName: historyFileName,
+    validateHistory: validateHistory,
+    mergeHistory: mergeHistory,
+    historySummary: historySummary,
     validateFile: validateFile,
     mergeSets: mergeSets,
     questionKey: questionKey,

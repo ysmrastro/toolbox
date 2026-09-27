@@ -140,6 +140,19 @@ body {
 }
 .qd-start-count.is-empty { color: var(--qd-wrong); font-weight: 700; }
 
+/* 学習の記録 */
+.qd-history-summary {
+  font-size: var(--tb-font-size-base);
+  color: var(--tb-text-primary);
+  margin-bottom: var(--tb-space-sm);
+}
+.qd-history-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--tb-space-sm);
+}
+.qd-history-btns .qd-file-btn { margin-top: 0; }
+
 /* 問題集の一覧 */
 .qd-set-list { list-style: none; margin-bottom: var(--tb-space-sm); }
 .qd-set-item {

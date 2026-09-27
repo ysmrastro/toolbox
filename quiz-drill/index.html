@@ -99,6 +99,21 @@
       <button type="button" id="btn-start" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">はじめる</button>
     </section>
 
+    <!-- 解いた記録（成績と前回の正解の位置）を端末の外に保存して戻せるようにする。問題文は含めない -->
+    <section id="history-card" class="qd-card">
+      <h2 class="qd-card-title">学習の記録</h2>
+      <p id="history-summary" class="qd-history-summary"></p>
+      <div class="qd-history-btns">
+        <button type="button" id="btn-export" class="tb-btn tb-btn--secondary qd-big-btn">記録を書き出す</button>
+        <label class="tb-btn tb-btn--secondary qd-big-btn qd-file-btn">
+          記録を読み込む
+          <input type="file" id="history-input" accept=".json,application/json">
+        </label>
+      </div>
+      <p class="qd-note">書き出したファイルには、問題のIDと成績だけが入ります（問題文は入りません）。</p>
+      <div id="history-msg" class="qd-load-msg" hidden></div>
+    </section>
+
     <section class="qd-card">
       <h2 class="qd-card-title">読み込んだ問題集</h2>
       <ul id="set-list" class="qd-set-list"></ul>
