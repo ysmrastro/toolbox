@@ -474,6 +474,14 @@ body {
   color: var(--tb-text-primary);
   overflow-wrap: anywhere;
 }
+.qd-stat-clear {
+  min-height: var(--qd-tap);
+  margin-top: var(--tb-space-xs);
+  padding-left: 0;
+  color: var(--tb-danger);
+  font-size: var(--tb-font-size-sm);
+}
+.qd-stat-clear:hover:not(:disabled) { color: var(--tb-danger); }
 .qd-stat-line {
   display: block;
   font-size: var(--tb-font-size-sm);

@@ -421,7 +421,9 @@
       state.positions = Q.mergePositions(state.positions, data.positions);
       S.savePositions(state.positions);
       renderHome();
-      showMessage(['記録を読み込みました（追加 ' + r.added.length + '件の回答・合計 ' + r.log.length + '件）。'],
+      var marks = r.added.filter(function (x) { return x.kind === 'clear'; }).length;
+      showMessage(['記録を読み込みました（追加 ' + (r.added.length - marks) + '件の回答' +
+        (marks ? '・消去の印 ' + marks + '件' : '') + '・合計 ' + r.log.length + '件）。'],
         false, 'history-msg');
     }).catch(function (e) {
       showMessage(['記録を保存できませんでした: ' + e], true, 'history-msg');
@@ -752,6 +754,28 @@
     return li;
   }
 
+  /**
+   * 問題集の記録を消す。ログからは消さず「消去の印」を足す（墓標）。消すだけだと、もう一方の
+   * 端末のファイルを読み込んだときに和集合で戻ってしまうため。印は書き出し・読み込みで伝わる。
+   * 前回の正解の位置は端末の中だけで消す。進行中のセッションには触れない。
+   */
+  function clearSetRecord(set) {
+    var n = Q.countSetAnswers(state.log, set.id);
+    if (!confirm('「' + set.title + '」の記録（回答 ' + n + '件）を消します。' +
+      'ほかの端末でも、この端末の記録を読み込むと消えます。元に戻せません。よろしいですか？')) return;
+    var now = new Date();
+    var mark = { id: S.newLogId(now), kind: 'clear', setId: set.id, at: now.toISOString() };
+    S.addLog([mark]).then(function () {
+      setLog(state.log.concat([mark]));
+      state.positions = Q.removeSetPositions(state.positions, set.id);
+      S.savePositions(state.positions);
+      renderHome();
+      renderStats();
+    }).catch(function (e) {
+      alert('記録を消せませんでした: ' + e);
+    });
+  }
+
   function renderStats() {
     var th = Q.DEFAULT_WEAK_THRESHOLD;
     var r = Q.statsReport(state.sets, state.summary, th);
@@ -761,7 +785,18 @@
 
     var bySet = $('st-sets');
     bySet.textContent = '';
-    r.bySet.forEach(function (g) { bySet.appendChild(statCard(g.title, g)); });
+    r.bySet.forEach(function (g) {
+      var li = statCard(g.title, g);
+      var set = state.sets.filter(function (x) { return x.id === g.id; })[0];
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tb-btn tb-btn--ghost qd-stat-clear';
+      btn.textContent = 'この問題集の記録を消す';
+      btn.disabled = g.answers === 0;   // 数えている回答が無ければ消すものが無い
+      btn.addEventListener('click', function () { clearSetRecord(set); });
+      li.appendChild(btn);
+      bySet.appendChild(li);
+    });
 
     var byCat = $('st-cats');
     byCat.textContent = '';
