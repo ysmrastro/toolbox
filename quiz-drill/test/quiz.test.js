@@ -327,3 +327,78 @@ test('filterWrong と絞り込み・出題数の組み合わせ', () => {
   const order = Q.allRandomOrder(wrong, 1, () => 0);
   assert.strictEqual(order.length, 1);
 });
+
+/* ===================== 前回と違う位置に正解を置く ===================== */
+
+/** 表示順が「元の添字をちょうど1回ずつ含む並び」になっているか */
+function isPermutation(order, n) {
+  return order.length === n && [...order].sort((a, b) => a - b).every((v, i) => v === i);
+}
+
+test('choiceOrder: 前回の位置を渡すと、正解はその位置に来ない（乱数を変えて何通りも）', () => {
+  const question = q('a', { answer: 3 });            // 代表の正解は元の添字 2
+  for (let prev = 0; prev < 4; prev++) {
+    const seen = new Set();
+    for (let seed = 1; seed <= 200; seed++) {
+      const order = Q.choiceOrder(question, lcg(seed), prev);
+      assert.ok(isPermutation(order, 4), JSON.stringify(order));
+      const pos = order.indexOf(2);
+      assert.notStrictEqual(pos, prev, `prev=${prev} seed=${seed} order=${order}`);
+      seen.add(pos);
+    }
+    // 前回の位置以外の3か所には、どこにも来得る
+    assert.deepStrictEqual([...seen].sort(), [0, 1, 2, 3].filter((p) => p !== prev));
+  }
+});
+
+test('choiceOrder: 乱数の端の値でも前回の位置を避ける', () => {
+  const question = q('a', { answer: 1 });            // 元の添字 0
+  // 常に 0 → 置ける位置 [1,2,3] の先頭、残り [1,2,3] は [2,3,1] に並ぶ
+  assert.deepStrictEqual(Q.choiceOrder(question, () => 0, 0), [2, 0, 3, 1]);
+  // 常に 0.999 → 置ける位置 [0,1,2] の末尾、残りは並べ替わらない
+  assert.deepStrictEqual(Q.choiceOrder(question, () => 0.999, 3), [1, 2, 0, 3]);
+});
+
+test('choiceOrder: 前回の記録がなければ、正解はどの位置にも来得る', () => {
+  const question = q('a', { answer: 3 });
+  const seen = new Set();
+  for (let seed = 1; seed <= 200; seed++) {
+    seen.add(Q.choiceOrder(question, lcg(seed)).indexOf(2));
+    seen.add(Q.choiceOrder(question, lcg(seed), undefined).indexOf(2));
+    seen.add(Q.choiceOrder(question, lcg(seed), null).indexOf(2));
+  }
+  assert.deepStrictEqual([...seen].sort(), [0, 1, 2, 3]);
+});
+
+test('choiceOrder: 前回の位置が範囲外なら記録なしと同じに扱う', () => {
+  const question = q('a', { choices: ['あ', 'い'], answer: 1 });
+  const seen = new Set();
+  for (let seed = 1; seed <= 50; seed++) seen.add(Q.choiceOrder(question, lcg(seed), 5).indexOf(0));
+  assert.deepStrictEqual([...seen].sort(), [0, 1]);
+});
+
+test('choiceOrder: 選択肢2つなら、前回と逆の位置に正解が来る', () => {
+  const question = q('a', { choices: ['はい', 'いいえ'], answer: 2 });   // 元の添字 1
+  for (let seed = 1; seed <= 50; seed++) {
+    assert.deepStrictEqual(Q.choiceOrder(question, lcg(seed), 1), [1, 0]);
+    assert.deepStrictEqual(Q.choiceOrder(question, lcg(seed), 0), [0, 1]);
+  }
+});
+
+test('choiceOrder: answers 複数なら、代表（answers の先頭）の位置が前回と変わる', () => {
+  const question = q('a', { answer: 2, answers: [4, 2] });   // 代表は元の 4 番（添字 3）
+  for (let seed = 1; seed <= 200; seed++) {
+    const order = Q.choiceOrder(question, lcg(seed), 1);
+    assert.notStrictEqual(order.indexOf(3), 1);
+    assert.strictEqual(Q.correctPosition(question, order), order.indexOf(3));
+  }
+});
+
+test('choiceOrder: fixedOrder の問題は前回の位置があっても並べ替えない', () => {
+  assert.deepStrictEqual(Q.choiceOrder(q('a', { fixedOrder: true, answer: 1 }), lcg(1), 0), [0, 1, 2, 3]);
+});
+
+test('correctPosition: 表示順の中の代表の正解の位置', () => {
+  assert.strictEqual(Q.correctPosition(q('a', { answer: 3 }), [1, 2, 3, 0]), 1);
+  assert.strictEqual(Q.correctPosition(q('a', { answer: 1, answers: [2, 1] }), [1, 2, 3, 0]), 0);
+});

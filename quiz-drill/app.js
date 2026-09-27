@@ -6,8 +6,10 @@
  *
  * セッション（localStorage）の形:
  *   { mode, order: [問題の鍵], pos: いま何問目か（0 始まり）,
- *     answers: { 鍵: { order: 表示順, picked: 選んだ元の添字, correct } } }
+ *     answers: { 鍵: { order: 表示順, picked: 選んだ元の添字, correct } },
+ *     shown: { key, order } 回答前の問題を表示したときの表示順 }
  * 回答するたびに保存するので、途中で閉じても同じ問題から再開できる。
+ * shown があるので、回答前に閉じて「続きから」で戻っても同じ並びで描く（並べ替え直さない）。
  */
 (function () {
   'use strict';
@@ -32,6 +34,7 @@
     session: null,     // 進行中のセッション
     finished: null,    // 直前に終えたセッション（結果画面と見返し用）
     stats: S.loadStats(),
+    positions: S.loadPositions(),   // 鍵 → 前回表示したときの代表の正解の表示位置
     currentOrder: null, // 回答前の問題の表示順
     reviewKey: null,   // 結果画面から見返している問題の鍵
     loaded: false,     // 保存済みの問題集を読み出せたか
@@ -358,9 +361,28 @@
     var s = state.session;
     var key = s.order[s.pos];
     var answer = s.answers[key] || null;
-    if (!answer) state.currentOrder = Q.choiceOrder(state.index[key].question, Math.random);
+    if (!answer) state.currentOrder = orderForDisplay(s, key);
     drawQuestion(key, answer ? answer.order : state.currentOrder, answer, false);
     showScreen('quiz');
+  }
+
+  /**
+   * 回答前の問題の表示順。同じ問題をもう一度描くとき（続きから）はセッションに残した並びを使い、
+   * 並べ替えも位置の記録もしない。新しく表示するときは、前回の正解の位置を避けて並べ、
+   * その位置を記録する（回答しなくても、次に出すときは別の位置になる）。
+   */
+  function orderForDisplay(s, key) {
+    if (s.shown && s.shown.key === key) return s.shown.order;
+    var q = state.index[key].question;
+    var order = Q.choiceOrder(q, Math.random, state.positions[key]);
+    if (!q.fixedOrder) {
+      state.positions = Object.assign({}, state.positions);
+      state.positions[key] = Q.correctPosition(q, order);
+      S.savePositions(state.positions);
+    }
+    s.shown = { key: key, order: order };
+    S.saveSession(s);
+    return order;
   }
 
   /**
