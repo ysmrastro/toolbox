@@ -402,3 +402,123 @@ test('correctPosition: 表示順の中の代表の正解の位置', () => {
   assert.strictEqual(Q.correctPosition(q('a', { answer: 3 }), [1, 2, 3, 0]), 1);
   assert.strictEqual(Q.correctPosition(q('a', { answer: 1, answers: [2, 1] }), [1, 2, 3, 0]), 0);
 });
+
+/* ===================== 学習の記録の書き出し・読み込み ===================== */
+
+const rec = (attempts, corrects, last, lastAt) => ({ attempts, corrects, last, lastAt });
+
+test('mergeHistory: 最後に解いた日時が新しい方を丸ごと採る（回数は足さない）', () => {
+  const cur = { 's::a': rec(3, 1, 'wrong', '2026-09-20T10:00:00.000Z') };
+  const inc = { 's::a': rec(5, 4, 'correct', '2026-09-21T10:00:00.000Z') };
+  const r = Q.mergeHistory(cur, {}, inc, {});
+  assert.deepStrictEqual(r.stats['s::a'], rec(5, 4, 'correct', '2026-09-21T10:00:00.000Z'));
+  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [0, 1, 0]);
+
+  // 読み込んだ方が古ければ今の端末のまま
+  const r2 = Q.mergeHistory(inc, {}, cur, {});
+  assert.deepStrictEqual(r2.stats['s::a'], rec(5, 4, 'correct', '2026-09-21T10:00:00.000Z'));
+  assert.deepStrictEqual([r2.added, r2.updated, r2.unchanged], [0, 0, 1]);
+});
+
+test('mergeHistory: 同じ日時なら今の端末の記録を残す', () => {
+  const cur = { 's::a': rec(2, 2, 'correct', '2026-09-20T10:00:00.000Z') };
+  const inc = { 's::a': rec(9, 0, 'wrong', '2026-09-20T10:00:00.000Z') };
+  const r = Q.mergeHistory(cur, {}, inc, {});
+  assert.deepStrictEqual(r.stats['s::a'], rec(2, 2, 'correct', '2026-09-20T10:00:00.000Z'));
+  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [0, 0, 1]);
+});
+
+test('mergeHistory: 今の端末にない鍵は追加する。分析用の項目は落とす。引数は書き換えない', () => {
+  const cur = { 's::a': rec(1, 1, 'correct', '2026-09-20T10:00:00.000Z') };
+  const inc = { 's::b': Object.assign(rec(1, 0, 'wrong', '2026-09-19T10:00:00.000Z'), { setTitle: 'T', no: 2, tags: ['甲'] }) };
+  const r = Q.mergeHistory(cur, {}, inc, {});
+  assert.deepStrictEqual(Object.keys(r.stats).sort(), ['s::a', 's::b']);
+  assert.deepStrictEqual(r.stats['s::b'], rec(1, 0, 'wrong', '2026-09-19T10:00:00.000Z'));
+  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [1, 0, 0]);
+  assert.deepStrictEqual(Object.keys(cur), ['s::a']);
+});
+
+test('mergeHistory: 同じ記録を2回読み込んでも回数は増えない', () => {
+  const inc = { 's::a': rec(4, 2, 'wrong', '2026-09-20T10:00:00.000Z') };
+  const once = Q.mergeHistory({}, {}, inc, {});
+  const twice = Q.mergeHistory(once.stats, once.positions, inc, {});
+  assert.deepStrictEqual(twice.stats['s::a'], rec(4, 2, 'wrong', '2026-09-20T10:00:00.000Z'));
+  assert.deepStrictEqual([twice.added, twice.updated, twice.unchanged], [0, 0, 1]);
+});
+
+test('mergeHistory: positions は history で採った側の値を使う', () => {
+  const cur = {
+    's::new': rec(1, 1, 'correct', '2026-09-20T00:00:00.000Z'),   // 読み込んだ方が新しい
+    's::old': rec(1, 1, 'correct', '2026-09-22T00:00:00.000Z'),   // 今の端末が新しい
+  };
+  const inc = {
+    's::new': rec(2, 1, 'wrong', '2026-09-21T00:00:00.000Z'),
+    's::old': rec(2, 1, 'wrong', '2026-09-21T00:00:00.000Z'),
+  };
+  const r = Q.mergeHistory(cur, { 's::new': 0, 's::old': 0 }, inc, { 's::new': 3, 's::old': 3 });
+  assert.strictEqual(r.positions['s::new'], 3);
+  assert.strictEqual(r.positions['s::old'], 0);
+});
+
+test('mergeHistory: history にない鍵の positions は、今の端末に無いときだけ追加する', () => {
+  const r = Q.mergeHistory({}, { 's::x': 1 }, {}, { 's::x': 2, 's::y': 3 });
+  assert.deepStrictEqual(r.positions, { 's::x': 1, 's::y': 3 });
+  assert.deepStrictEqual([r.added, r.updated, r.unchanged], [0, 0, 0]);
+});
+
+test('validateHistory: 正しいファイルを通し、format 違い・型の不正を拒否する', () => {
+  const good = { format: 'yontaku-drill-history/1', exportedAt: '2026-09-27T00:00:00.000Z',
+    history: { 's::a': rec(2, 1, 'wrong', '2026-09-20T10:00:00.000Z') }, positions: { 's::a': 1 } };
+  assert.deepStrictEqual(Q.validateHistory(good), { ok: true, errors: [] });
+
+  assert.strictEqual(Q.validateHistory(Object.assign({}, good, { format: 'yontaku-drill/1' })).ok, false);
+  assert.strictEqual(Q.validateHistory(Object.assign({}, good, { history: [] })).ok, false);
+  assert.strictEqual(Q.validateHistory(Object.assign({}, good, { history: null })).ok, false);
+
+  const bad = (r) => Q.validateHistory(Object.assign({}, good, { history: { 's::a': r } }));
+  assert.match(bad(rec('2', 1, 'wrong', '2026-09-20T10:00:00.000Z')).errors[0], /attempts/);
+  assert.match(bad(rec(2, 1.5, 'wrong', '2026-09-20T10:00:00.000Z')).errors[0], /corrects/);
+  assert.match(bad(rec(1, 2, 'wrong', '2026-09-20T10:00:00.000Z')).errors[0], /corrects が attempts より多く/);
+  assert.match(bad(rec(2, 1, 'maybe', '2026-09-20T10:00:00.000Z')).errors[0], /last/);
+  assert.match(bad(rec(2, 1, 'wrong', 'きのう')).errors[0], /lastAt/);
+  assert.match(Q.validateHistory(Object.assign({}, good, { positions: { 's::a': -1 } })).errors[0], /positions/);
+});
+
+test('buildHistoryExport: 鍵と数値と日時が入り、問題文や選択肢は入らない', () => {
+  const sets = [{ id: 's', title: '問題集T', questions: [
+    q('a', { no: 7, category: '分類1', tags: ['甲'], question: 'ひみつの問題文', choices: ['ひみつA', 'い', 'う', 'え'],
+      explanation: 'ひみつの解説' }),
+    q('b', { question: 'ひみつその2' }),
+  ] }];
+  const stats = {
+    's::a': rec(2, 1, 'wrong', '2026-09-20T10:00:00.000Z'),
+    's::b': rec(1, 1, 'correct', '2026-09-20T11:00:00.000Z'),
+    'gone::z': rec(3, 0, 'wrong', '2026-09-19T10:00:00.000Z'),   // 問題集が読み込まれていない
+  };
+  const out = Q.buildHistoryExport(stats, { 's::a': 2 }, sets, new Date('2026-09-27T01:02:03.000Z'));
+
+  assert.strictEqual(out.format, 'yontaku-drill-history/1');
+  assert.strictEqual(out.exportedAt, '2026-09-27T01:02:03.000Z');
+  assert.deepStrictEqual(out.positions, { 's::a': 2 });
+  assert.deepStrictEqual(out.history['s::a'], {
+    attempts: 2, corrects: 1, last: 'wrong', lastAt: '2026-09-20T10:00:00.000Z',
+    setTitle: '問題集T', no: 7, category: '分類1', tags: ['甲'],
+  });
+  assert.deepStrictEqual(out.history['s::b'], {
+    attempts: 1, corrects: 1, last: 'correct', lastAt: '2026-09-20T11:00:00.000Z', setTitle: '問題集T', no: 2,
+  });
+  assert.deepStrictEqual(out.history['gone::z'], rec(3, 0, 'wrong', '2026-09-19T10:00:00.000Z'));
+  assert.doesNotMatch(JSON.stringify(out), /ひみつ/);
+  // 書き出したものはそのまま読み込める
+  assert.strictEqual(Q.validateHistory(JSON.parse(JSON.stringify(out))).ok, true);
+});
+
+test('historyFileName: 端末の時刻で quiz-drill-記録-YYYYMMDD-HHMM.json', () => {
+  assert.strictEqual(Q.historyFileName(new Date(2026, 0, 5, 9, 7)), 'quiz-drill-記録-20260105-0907.json');
+});
+
+test('historySummary: 解いた問題の数と、最後に不正解だった問題の数', () => {
+  assert.deepStrictEqual(Q.historySummary({
+    'a': rec(1, 0, 'wrong', 't'), 'b': rec(2, 2, 'correct', 't'), 'c': rec(3, 1, 'wrong', 't'),
+  }), { answered: 3, wrong: 2 });
+});

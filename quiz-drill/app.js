@@ -95,6 +95,7 @@
     });
 
     fillFilterSelect();
+    renderHistory();
 
     // 続きから
     // 読み出しに失敗したとき（loaded でない）は、途中の分を消さずに残しておく
@@ -231,8 +232,8 @@
     });
   }
 
-  function showMessage(lines, isError) {
-    var box = $('load-msg');
+  function showMessage(lines, isError, boxId) {
+    var box = $(boxId || 'load-msg');
     box.textContent = '';
     box.classList.toggle('is-error', !!isError);
     lines.forEach(function (line) {
@@ -312,6 +313,86 @@
       })
       .then(function (text) { return importTexts([{ name: 'sample.json', text: text }]); })
       .catch(function (e) { showMessage(['見本を読み込めませんでした: ' + e], true); });
+  }
+
+  /* ===================== 学習の記録の書き出し・読み込み ===================== */
+
+  function renderHistory() {
+    var sum = Q.historySummary(state.stats);
+    $('history-summary').textContent = sum.answered > 0
+      ? '解いた問題 ' + sum.answered + '問・前に間違えた問題 ' + sum.wrong + '問'
+      : 'まだ記録がありません。';
+    $('btn-export').disabled = sum.answered === 0;
+  }
+
+  /**
+   * 記録を書き出す。iPhone では共有メニュー（「"ファイル"に保存」で iCloud Drive へ）で渡し、
+   * Web Share API でファイルを渡せないブラウザではダウンロードにする。
+   */
+  function exportHistory() {
+    var now = new Date();
+    var data = Q.buildHistoryExport(state.stats, state.positions, state.sets, now);
+    var name = Q.historyFileName(now);
+    var json = JSON.stringify(data, null, 2) + '\n';
+    var file = null;
+    try {
+      file = new File([json], name, { type: 'application/json' });
+    } catch (e) { /* File を作れない古いブラウザはダウンロードだけにする */ }
+
+    if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file] }).catch(function (e) {
+        if (e && e.name === 'AbortError') return;   // 共有を取り消しただけ。何も出さない
+        download(json, name);
+      });
+      return;
+    }
+    download(json, name);
+  }
+
+  function download(text, name) {
+    var url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /** 記録を読み込んで統合する。進行中のセッションには触れない */
+  function importHistory(name, text) {
+    var data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      showMessage(['「' + name + '」: JSON として読めません。記録は変えていません。'], true, 'history-msg');
+      return;
+    }
+    var v = Q.validateHistory(data);
+    if (!v.ok) {
+      var lines = ['「' + name + '」に誤りがあるため、記録は変えていません:'];
+      v.errors.slice(0, MAX_ERRORS_SHOWN).forEach(function (e) { lines.push('・' + e); });
+      if (v.errors.length > MAX_ERRORS_SHOWN) lines.push('ほか ' + (v.errors.length - MAX_ERRORS_SHOWN) + ' 件');
+      showMessage(lines, true, 'history-msg');
+      return;
+    }
+    var r = Q.mergeHistory(state.stats, state.positions, data.history, data.positions);
+    state.stats = r.stats;
+    state.positions = r.positions;
+    S.saveStats(state.stats);
+    S.savePositions(state.positions);
+    renderHome();
+    showMessage(['記録を読み込みました（追加 ' + r.added + '件・更新 ' + r.updated + '件・変更なし ' + r.unchanged + '件）。'],
+      false, 'history-msg');
+  }
+
+  function onHistoryFile(ev) {
+    var file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    file.text().then(function (text) { importHistory(file.name, text); }).finally(function () {
+      ev.target.value = '';
+    });
   }
 
   /* ===================== セッションの開始 ===================== */
@@ -616,6 +697,8 @@
   /* ===================== 起動 ===================== */
 
   $('file-input').addEventListener('change', onFiles);
+  $('btn-export').addEventListener('click', exportHistory);
+  $('history-input').addEventListener('change', onHistoryFile);
   $('btn-sample').addEventListener('click', loadSample);
   $('btn-start').addEventListener('click', onStart);
   $('btn-resume').addEventListener('click', renderQuestion);
