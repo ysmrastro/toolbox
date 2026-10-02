@@ -896,6 +896,7 @@
 
   $('file-input').addEventListener('change', onFiles);
   $('btn-export').addEventListener('click', exportHistory);
+  $('btn-export-result').addEventListener('click', exportHistory);
   $('btn-stats').addEventListener('click', openStats);
   $('btn-stats-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
   $('history-input').addEventListener('change', onHistoryFile);
