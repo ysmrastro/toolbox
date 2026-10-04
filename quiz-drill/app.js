@@ -36,6 +36,7 @@
     sets: [],          // 読み込み済みの問題集（保存順）
     texts: [],         // 読み込み済みの自作テキスト（保存順）
     tab: S.loadTab() === 'book' ? 'book' : 'drill',   // ホームで開いているタブ
+    bookId: S.loadBookTab(),   // 自作テキストのサブタブで選んでいるテキストの id
     index: {},         // 鍵 → { set, question, index }
     session: null,     // 進行中のセッション
     finished: null,    // 直前に終えたセッション（結果画面と見返し用）
@@ -53,7 +54,7 @@
   /* ===================== 画面の切り替え ===================== */
 
   function showScreen(name) {
-    ['home', 'quiz', 'result', 'stats', 'book'].forEach(function (n) {
+    ['home', 'quiz', 'result', 'stats'].forEach(function (n) {
       $('screen-' + n).hidden = n !== name;
     });
     window.scrollTo(0, 0);
@@ -359,11 +360,9 @@
     state.texts.forEach(function (text) {
       var li = document.createElement('li');
       li.className = 'qd-set-item';
-      var open = document.createElement('button');
-      open.type = 'button';
-      open.className = 'qd-set-name qd-book-open';
-      open.textContent = text.title;
-      open.addEventListener('click', function () { openBook(text); });
+      var name = document.createElement('span');
+      name.className = 'qd-set-name';
+      name.textContent = text.title;
       var count = document.createElement('span');
       count.className = 'qd-set-count';
       count.textContent = Q.countTextItems(text) + '項目';
@@ -373,16 +372,44 @@
       del.textContent = '削除';
       del.setAttribute('aria-label', '「' + text.title + '」を削除');
       del.addEventListener('click', function () { removeBook(text); });
-      li.appendChild(open);
+      li.appendChild(name);
       li.appendChild(count);
       li.appendChild(del);
       list.appendChild(li);
     });
+    renderBookTabs();
   }
 
-  /** テキストを開く。節ごとにカードを作り、先頭に節への目次を置く */
-  function openBook(text) {
-    $('bk-title').textContent = text.title;
+  /** テキストごとのサブタブを作り、選んでいるテキストの中身を出す。選んでいたものが無ければ先頭 */
+  function renderBookTabs() {
+    var bar = $('book-subtabs');
+    bar.textContent = '';
+    var has = state.texts.length > 0;
+    bar.hidden = !has;
+    $('book-view').hidden = !has;
+    if (!has) return;
+    var current = state.texts.filter(function (t) { return t.id === state.bookId; })[0] || state.texts[0];
+    state.texts.forEach(function (text) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.setAttribute('role', 'tab');
+      btn.className = 'qd-subtab' + (text === current ? ' is-active' : '');
+      btn.setAttribute('aria-selected', text === current ? 'true' : 'false');
+      btn.textContent = text.title;
+      btn.addEventListener('click', function () { selectBook(text.id); });
+      bar.appendChild(btn);
+    });
+    renderBook(current);
+  }
+
+  function selectBook(id) {
+    state.bookId = id;
+    S.saveBookTab(id);
+    renderBookTabs();
+  }
+
+  /** テキストの中身を描く。節ごとにカードを作り、先頭に節への目次を置く */
+  function renderBook(text) {
     var toc = $('bk-toc');
     var body = $('bk-body');
     toc.textContent = '';
@@ -435,7 +462,6 @@
       card.appendChild(dl);
       body.appendChild(card);
     });
-    showScreen('book');
   }
 
   function removeBook(text) {
@@ -1074,7 +1100,6 @@
   $('book-input').addEventListener('change', onBookFiles);
   $('tab-drill').addEventListener('click', function () { selectTab('drill'); });
   $('tab-book').addEventListener('click', function () { selectTab('book'); });
-  $('btn-book-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
   $('btn-export').addEventListener('click', exportHistory);
   $('btn-export-result').addEventListener('click', exportHistory);
   $('btn-stats').addEventListener('click', openStats);

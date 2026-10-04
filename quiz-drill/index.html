@@ -140,11 +140,18 @@
     </div>
 
     <div id="panel-book" role="tabpanel" aria-labelledby="tab-book" hidden>
+      <!-- 読み込んだテキストごとのサブタブ。選んだテキストの中身をその下に出す -->
+      <div id="book-subtabs" class="qd-subtabs" role="tablist" aria-label="テキスト" hidden></div>
+      <div id="book-view" role="tabpanel" hidden>
+        <nav id="bk-toc" class="qd-card qd-toc" aria-label="目次"></nav>
+        <div id="bk-body"></div>
+      </div>
+
       <!-- 自分でまとめた公式や単位の換算などを、解きながら見返せるようにする。問題集とは別のファイル -->
       <section id="book-card" class="qd-card">
         <h2 class="qd-card-title">読み込んだテキスト</h2>
         <ul id="book-list" class="qd-set-list"></ul>
-        <p id="book-empty" class="qd-note">まだありません。公式や単位の換算などをまとめたテキストファイル（JSON）を読み込むと、ここから開けます。</p>
+        <p id="book-empty" class="qd-note">まだありません。公式や単位の換算などをまとめたテキストファイル（JSON）を読み込むと、上のサブタブで切り替えて見られます。</p>
         <label class="tb-btn tb-btn--secondary tb-btn--block qd-file-btn">
           テキストファイルを読み込む
           <input type="file" id="book-input" accept=".json,application/json" multiple>
@@ -230,16 +237,6 @@
       <ul id="st-weak" class="qd-wrong-list"></ul>
       <p id="st-noweak" class="qd-note" hidden>苦手な問題はありません。</p>
     </section>
-  </section>
-
-  <!-- ===================== 自作テキスト ===================== -->
-  <section id="screen-book" class="qd-screen" hidden>
-    <div class="qd-qhead-row qd-stats-head">
-      <h1 id="bk-title" class="qd-qlabel"></h1>
-      <button type="button" id="btn-book-home" class="tb-btn tb-btn--ghost qd-quit">ホームへ</button>
-    </div>
-    <nav id="bk-toc" class="qd-card qd-toc" aria-label="目次"></nav>
-    <div id="bk-body"></div>
   </section>
 
   <!-- ===================== 結果 ===================== -->

@@ -481,16 +481,30 @@ body {
 
 /* ===================== 自作テキスト ===================== */
 
-/* 一覧のテキスト名はタップで開く */
-.qd-book-open {
-  min-height: var(--qd-tap);
-  background: none;
-  border: none;
-  padding: 0;
-  text-align: left;
-  color: var(--tb-accent);
+/* テキストごとのサブタブ。多いときは横にスクロールする */
+.qd-subtabs {
+  display: flex;
+  gap: var(--tb-space-xs);
+  overflow-x: auto;
+  margin-bottom: var(--tb-space-md);
+  -webkit-overflow-scrolling: touch;
+}
+.qd-subtab {
+  flex: none;
+  min-height: 36px;
+  padding: 0 var(--tb-space-md);
+  border: 1px solid var(--tb-border);
+  border-radius: 999px;
+  background: var(--tb-bg-secondary);
+  color: var(--tb-text-secondary);
   font: inherit;
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
   cursor: pointer;
+}
+.qd-subtab.is-active {
+  border-color: var(--tb-accent);
+  color: var(--tb-accent);
 }
 
 .qd-toc {
