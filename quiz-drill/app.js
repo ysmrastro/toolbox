@@ -34,6 +34,7 @@
 
   var state = {
     sets: [],          // 読み込み済みの問題集（保存順）
+    texts: [],         // 読み込み済みの自作テキスト（保存順）
     index: {},         // 鍵 → { set, question, index }
     session: null,     // 進行中のセッション
     finished: null,    // 直前に終えたセッション（結果画面と見返し用）
@@ -51,7 +52,7 @@
   /* ===================== 画面の切り替え ===================== */
 
   function showScreen(name) {
-    ['home', 'quiz', 'result', 'stats'].forEach(function (n) {
+    ['home', 'quiz', 'result', 'stats', 'book'].forEach(function (n) {
       $('screen-' + n).hidden = n !== name;
     });
     window.scrollTo(0, 0);
@@ -102,6 +103,7 @@
 
     fillFilterSelect();
     renderHistory();
+    renderBooks();
 
     // 続きから
     // 読み出しに失敗したとき（loaded でない）は、途中の分を消さずに残しておく
@@ -327,6 +329,161 @@
       })
       .then(function (text) { return importTexts([{ name: 'sample.json', text: text }]); })
       .catch(function (e) { showMessage(['見本を読み込めませんでした: ' + e], true); });
+  }
+
+  /* ===================== 自作テキスト ===================== */
+
+  function renderBooks() {
+    var list = $('book-list');
+    list.textContent = '';
+    $('book-empty').hidden = state.texts.length > 0;
+    state.texts.forEach(function (text) {
+      var li = document.createElement('li');
+      li.className = 'qd-set-item';
+      var open = document.createElement('button');
+      open.type = 'button';
+      open.className = 'qd-set-name qd-book-open';
+      open.textContent = text.title;
+      open.addEventListener('click', function () { openBook(text); });
+      var count = document.createElement('span');
+      count.className = 'qd-set-count';
+      count.textContent = Q.countTextItems(text) + '項目';
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'tb-btn tb-btn--ghost qd-set-del';
+      del.textContent = '削除';
+      del.setAttribute('aria-label', '「' + text.title + '」を削除');
+      del.addEventListener('click', function () { removeBook(text); });
+      li.appendChild(open);
+      li.appendChild(count);
+      li.appendChild(del);
+      list.appendChild(li);
+    });
+  }
+
+  /** テキストを開く。節ごとにカードを作り、先頭に節への目次を置く */
+  function openBook(text) {
+    $('bk-title').textContent = text.title;
+    var toc = $('bk-toc');
+    var body = $('bk-body');
+    toc.textContent = '';
+    body.textContent = '';
+    toc.hidden = text.sections.length < 2;
+    text.sections.forEach(function (sec, si) {
+      var anchor = 'bk-sec-' + si;
+      var link = document.createElement('a');
+      link.href = '#' + anchor;
+      link.textContent = sec.title;
+      link.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        $(anchor).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      toc.appendChild(link);
+
+      var card = document.createElement('section');
+      card.className = 'qd-card qd-book-sec';
+      card.id = anchor;
+      var h = document.createElement('h2');
+      h.className = 'qd-card-title';
+      h.textContent = sec.title;
+      card.appendChild(h);
+      if (sec.note) {
+        var p = document.createElement('p');
+        p.className = 'qd-note qd-book-secnote';
+        p.textContent = sec.note;
+        card.appendChild(p);
+      }
+      var dl = document.createElement('dl');
+      dl.className = 'qd-book-items';
+      sec.items.forEach(function (item) {
+        var row = document.createElement('div');
+        row.className = 'qd-book-item';
+        var dt = document.createElement('dt');
+        dt.textContent = item.term;
+        var dd = document.createElement('dd');
+        dd.className = 'qd-book-value';
+        dd.textContent = item.value;
+        row.appendChild(dt);
+        row.appendChild(dd);
+        if (item.note) {
+          var nd = document.createElement('dd');
+          nd.className = 'qd-book-note';
+          nd.textContent = item.note;
+          row.appendChild(nd);
+        }
+        dl.appendChild(row);
+      });
+      card.appendChild(dl);
+      body.appendChild(card);
+    });
+    showScreen('book');
+  }
+
+  function removeBook(text) {
+    if (!confirm('「' + text.title + '」を削除します。よろしいですか？')) return;
+    S.deleteText(text.id).then(reloadBooks).then(function () {
+      showMessage(['「' + text.title + '」を削除しました。'], false, 'book-msg');
+    }).catch(function (e) {
+      showMessage(['削除できませんでした: ' + e], true, 'book-msg');
+    });
+  }
+
+  function reloadBooks() {
+    return S.getAllTexts().then(function (texts) {
+      state.texts = texts;
+      renderBooks();
+    });
+  }
+
+  /** テキストファイル（{ name, text }）を検証して保存する。不正なファイルは保存しない */
+  function importBooks(files) {
+    var lines = [];
+    var hasError = false;
+    var incoming = [];
+    files.forEach(function (f) {
+      var data;
+      try {
+        data = JSON.parse(f.text);
+      } catch (e) {
+        hasError = true;
+        lines.push('「' + f.name + '」: JSON として読めません。保存していません。');
+        return;
+      }
+      var r = Q.validateTextFile(data);
+      if (!r.ok) {
+        hasError = true;
+        lines.push('「' + f.name + '」に誤りがあるため保存していません:');
+        r.errors.slice(0, MAX_ERRORS_SHOWN).forEach(function (e) { lines.push('・' + e); });
+        if (r.errors.length > MAX_ERRORS_SHOWN) lines.push('ほか ' + (r.errors.length - MAX_ERRORS_SHOWN) + ' 件');
+        return;
+      }
+      incoming = incoming.concat(r.texts);
+    });
+    if (incoming.length === 0) {
+      showMessage(lines, hasError, 'book-msg');
+      return Promise.resolve();
+    }
+    var merged = Q.mergeSets(state.texts, incoming);
+    return S.putTexts(incoming).then(reloadBooks).then(function () {
+      var parts = [];
+      if (merged.added.length) parts.push('追加 ' + merged.added.length + '件');
+      if (merged.replaced.length) parts.push('置き換え ' + merged.replaced.length + '件');
+      lines.unshift('テキストを読み込みました（' + parts.join('、') + '）。');
+      showMessage(lines, hasError, 'book-msg');
+    }).catch(function (e) {
+      lines.unshift('保存できませんでした: ' + e);
+      showMessage(lines, true, 'book-msg');
+    });
+  }
+
+  function onBookFiles(ev) {
+    var files = Array.prototype.slice.call(ev.target.files || []);
+    if (files.length === 0) return;
+    Promise.all(files.map(function (file) {
+      return file.text().then(function (text) { return { name: file.name, text: text }; });
+    })).then(importBooks).finally(function () {
+      ev.target.value = '';
+    });
   }
 
   /* ===================== 学習の記録の書き出し・読み込み ===================== */
@@ -895,6 +1052,8 @@
   /* ===================== 起動 ===================== */
 
   $('file-input').addEventListener('change', onFiles);
+  $('book-input').addEventListener('change', onBookFiles);
+  $('btn-book-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
   $('btn-export').addEventListener('click', exportHistory);
   $('btn-export-result').addEventListener('click', exportHistory);
   $('btn-stats').addEventListener('click', openStats);
@@ -928,5 +1087,7 @@
   }).then(reloadSets).catch(function (e) {
     renderHome();
     showMessage(['保存した問題集を読み出せませんでした: ' + e], true);
+  }).then(reloadBooks).catch(function (e) {
+    showMessage(['保存した自作テキストを読み出せませんでした: ' + e], true, 'book-msg');
   });
 })();

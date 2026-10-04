@@ -837,3 +837,64 @@ test('answerCorrect: セッションの回答はまぐれなら不正解とし�
   assert.strictEqual(Q.answerCorrect({ correct: false }), false);
   assert.strictEqual(Q.answerCorrect(undefined), false);
 });
+
+/* ===================== 自作テキスト ===================== */
+
+function textFile(texts) {
+  return { format: 'yontaku-text/1', texts };
+}
+
+function textOf(id, sections) {
+  return { id, title: 'テキスト' + id, sections };
+}
+
+test('validateTextFile: 正しいファイルを通す（任意の note つき）', () => {
+  const data = textFile([textOf('t1', [
+    { title: '距離', note: '節の補足', items: [
+      { term: '1光年', value: '約9.46×10¹² km', note: '光速 × 1年' },
+      { term: '1 au', value: '約1億5000万 km' },
+    ] },
+  ])]);
+  const r = Q.validateTextFile(data);
+  assert.strictEqual(r.ok, true, r.errors.join('\n'));
+  assert.strictEqual(r.texts.length, 1);
+});
+
+test('validateTextFile: format が違えば止める', () => {
+  const r = Q.validateTextFile({ format: 'yontaku-drill/1', texts: [] });
+  assert.strictEqual(r.ok, false);
+  assert.match(r.errors[0], /yontaku-text\/1/);
+});
+
+test('validateTextFile: 必須項目の抜けと id の重複をすべて挙げる', () => {
+  const data = textFile([
+    textOf('t1', [{ title: '節', items: [{ term: '', value: 'x' }, { term: 'y' }] }]),
+    textOf('t1', [{ items: [] }]),
+    { id: 't3', title: 'テキストt3', sections: [] },
+  ]);
+  const r = Q.validateTextFile(data);
+  assert.strictEqual(r.ok, false);
+  assert.deepStrictEqual(r.texts, []);
+  const all = r.errors.join('\n');
+  assert.match(all, /term（用語）がありません/);
+  assert.match(all, /value（値・式）がありません/);
+  assert.match(all, /id「t1」が重複しています/);
+  assert.match(all, /title（見出し）がありません/);
+  assert.match(all, /items（項目）がありません/);
+  assert.match(all, /sections（節）がありません/);
+});
+
+test('validateTextFile: note が文字列でなければ止める', () => {
+  const data = textFile([textOf('t1', [{ title: '節', note: 1, items: [{ term: 'a', value: 'b', note: 2 }] }])]);
+  const r = Q.validateTextFile(data);
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.errors.length, 2);
+});
+
+test('countTextItems: すべての節の項目を数える', () => {
+  const t = textOf('t1', [
+    { title: 'a', items: [{ term: '1', value: '1' }, { term: '2', value: '2' }] },
+    { title: 'b', items: [{ term: '3', value: '3' }] },
+  ]);
+  assert.strictEqual(Q.countTextItems(t), 3);
+});
