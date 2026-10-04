@@ -25,6 +25,7 @@
     'set-random': '問題集の中でランダム',
     'all-random': '全問題からランダム',
     'wrong': '前に間違えた問題',
+    'unseen': 'まだ解いていない問題',
     'weak': '苦手な問題',
     'retry': '間違えた問題だけもう一度',
   };
@@ -139,7 +140,7 @@
   function renderModeFields() {
     var mode = selectedMode();
     $('set-field').hidden = mode === 'all-random';
-    $('count-field').hidden = mode !== 'all-random' && mode !== 'wrong' && mode !== 'weak';
+    $('count-field').hidden = mode !== 'all-random' && mode !== 'wrong' && mode !== 'unseen' && mode !== 'weak';
     $('threshold-field').hidden = mode !== 'weak';
     fillSetSelect(mode);
     renderStartCount();
@@ -156,7 +157,7 @@
       opt.textContent = text;
       select.appendChild(opt);
     };
-    if (mode === 'wrong' || mode === 'weak') add(ALL_SETS, 'すべての問題集');
+    if (mode === 'wrong' || mode === 'unseen' || mode === 'weak') add(ALL_SETS, 'すべての問題集');
     state.sets.forEach(function (set) {
       add(set.id, set.title + '（' + set.questions.length + '問）');
     });
@@ -212,10 +213,11 @@
   function candidateSets(mode) {
     var sets = Q.filterSets(state.sets, currentFilter());
     if (mode === 'wrong') sets = Q.filterWrong(sets, state.summary);
+    if (mode === 'unseen') sets = Q.filterUnseen(sets, state.summary);
     if (mode === 'weak') sets = Q.filterWeak(sets, state.summary, selectedThreshold());
     if (mode === 'all-random') return sets;
     var id = $('set-select').value;
-    if ((mode === 'wrong' || mode === 'weak') && id === ALL_SETS) return sets;
+    if ((mode === 'wrong' || mode === 'unseen' || mode === 'weak') && id === ALL_SETS) return sets;
     return sets.filter(function (set) { return set.id === id; });
   }
 
@@ -226,6 +228,7 @@
     var n = Q.countQuestions(candidateSets(mode));
     var text;
     if (mode === 'wrong') text = n > 0 ? '前に間違えた問題: ' + n + '問' : '前に間違えた問題はありません';
+    else if (mode === 'unseen') text = n > 0 ? 'まだ解いていない問題: ' + n + '問' : 'まだ解いていない問題はありません';
     else if (mode === 'weak') text = n > 0 ? '苦手な問題: ' + n + '問' : '苦手な問題はありません';
     else text = n > 0 ? '対象: ' + n + '問' : '条件に合う問題がないため、開始できません';
     var el = $('start-count');
@@ -660,7 +663,7 @@
       return;
     }
     var order;
-    if (mode === 'all-random' || mode === 'wrong') {
+    if (mode === 'all-random' || mode === 'wrong' || mode === 'unseen') {
       order = Q.allRandomOrder(sets, selectedCount(), Math.random);
     } else if (mode === 'weak') {
       order = Q.weakOrder(sets, state.summary, selectedCount(), Math.random);

@@ -352,6 +352,17 @@ var QD_QUIZ = (function () {
     });
   }
 
+  /**
+   * まだ1回も解いていない問題だけに絞る（記録が無いか、回答が0件）。
+   * 問題集の記録を消した（消去の印）あとは、その問題集の問題もまだ解いていないものとして数える。
+   */
+  function filterUnseen(sets, summary) {
+    return selectQuestions(sets, function (set, q) {
+      var st = summary[questionKey(set.id, q.id)];
+      return !st || !(st.attempts > 0);
+    });
+  }
+
   /** 問題集の問題数の合計 */
   function countQuestions(sets) {
     return sets.reduce(function (n, set) { return n + set.questions.length; }, 0);
@@ -890,6 +901,7 @@ var QD_QUIZ = (function () {
     matchesFilter: matchesFilter,
     filterSets: filterSets,
     filterWrong: filterWrong,
+    filterUnseen: filterUnseen,
     countQuestions: countQuestions,
     choiceOrder: choiceOrder,
     correctPosition: correctPosition,
