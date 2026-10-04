@@ -41,107 +41,124 @@
       <p class="qd-subtitle">自作問題ファイルを読み込み、4択問題で練習する</p>
     </div>
 
-    <div id="resume-card" class="qd-card qd-resume" hidden>
-      <button type="button" id="btn-resume" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">続きから</button>
-      <p id="resume-desc" class="qd-note"></p>
+    <!-- ホームは2つのタブで切り替える。最後に開いていたタブを覚えておく -->
+    <div class="qd-tabs" role="tablist" aria-label="切り替え">
+      <button type="button" role="tab" id="tab-drill" class="qd-tab" aria-controls="panel-drill" aria-selected="true">4択ドリル</button>
+      <button type="button" role="tab" id="tab-book" class="qd-tab" aria-controls="panel-book" aria-selected="false">自作テキスト</button>
     </div>
 
-    <section id="empty-guide" class="qd-card" hidden>
-      <h2 class="qd-card-title">使い方</h2>
-      <ol class="qd-steps">
-        <li>問題ファイル（JSON）を用意して、この端末に送る</li>
-        <li>下の「問題ファイルを読み込む」から選ぶ</li>
-        <li>出題方法を選んで解く。選択肢をタップするとすぐ判定します</li>
-      </ol>
-      <p class="qd-note">問題はこの端末のブラウザの中にだけ保存されます。どこにも送信しません。</p>
-      <button type="button" id="btn-sample" class="tb-btn tb-btn--secondary tb-btn--block">見本の問題で試す</button>
-      <p class="qd-note"><a href="https://github.com/ysmrastro/toolbox/blob/main/quiz-drill/README.md" target="_blank" rel="noopener">問題ファイルの形式の説明</a></p>
-    </section>
-
-    <section id="start-card" class="qd-card" hidden>
-      <h2 class="qd-card-title">出題方法</h2>
-      <div class="qd-modes" role="radiogroup" aria-label="出題方法">
-        <label class="qd-mode"><input type="radio" name="mode" value="seq" checked><span>問題集ごとに通し</span></label>
-        <label class="qd-mode"><input type="radio" name="mode" value="set-random"><span>問題集の中でランダム</span></label>
-        <label class="qd-mode"><input type="radio" name="mode" value="all-random"><span>全問題からランダム</span></label>
-        <label class="qd-mode"><input type="radio" name="mode" value="wrong"><span>前に間違えた問題</span></label>
-        <label class="qd-mode"><input type="radio" name="mode" value="weak"><span>苦手な問題</span></label>
+    <div id="panel-drill" role="tabpanel" aria-labelledby="tab-drill">
+      <div id="resume-card" class="qd-card qd-resume" hidden>
+        <button type="button" id="btn-resume" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">続きから</button>
+        <p id="resume-desc" class="qd-note"></p>
       </div>
 
-      <!-- タグが1つも無ければ出さない。選択肢はデータのタグから作る -->
-      <div id="filter-field" class="tb-form-group" hidden>
-        <label class="tb-label" for="filter-select">絞り込み</label>
-        <select id="filter-select" class="tb-select"></select>
-      </div>
+      <section id="empty-guide" class="qd-card" hidden>
+        <h2 class="qd-card-title">使い方</h2>
+        <ol class="qd-steps">
+          <li>問題ファイル（JSON）を用意して、この端末に送る</li>
+          <li>下の「問題ファイルを読み込む」から選ぶ</li>
+          <li>出題方法を選んで解く。選択肢をタップするとすぐ判定します</li>
+        </ol>
+        <p class="qd-note">問題はこの端末のブラウザの中にだけ保存されます。どこにも送信しません。</p>
+        <button type="button" id="btn-sample" class="tb-btn tb-btn--secondary tb-btn--block">見本の問題で試す</button>
+        <p class="qd-note"><a href="https://github.com/ysmrastro/toolbox/blob/main/quiz-drill/README.md" target="_blank" rel="noopener">問題ファイルの形式の説明</a></p>
+      </section>
 
-      <div id="set-field" class="tb-form-group">
-        <label class="tb-label" for="set-select">問題集</label>
-        <select id="set-select" class="tb-select"></select>
-      </div>
-
-      <div id="count-field" class="tb-form-group" hidden>
-        <span class="tb-label">出題数</span>
-        <div class="qd-counts" role="radiogroup" aria-label="出題数">
-          <label class="qd-count"><input type="radio" name="count" value="10" checked><span>10問</span></label>
-          <label class="qd-count"><input type="radio" name="count" value="30"><span>30問</span></label>
-          <label class="qd-count"><input type="radio" name="count" value="60"><span>60問</span></label>
-          <label class="qd-count"><input type="radio" name="count" value="all"><span>全部</span></label>
+      <section id="start-card" class="qd-card" hidden>
+        <h2 class="qd-card-title">出題方法</h2>
+        <div class="qd-modes" role="radiogroup" aria-label="出題方法">
+          <label class="qd-mode"><input type="radio" name="mode" value="seq" checked><span>問題集ごとに通し</span></label>
+          <label class="qd-mode"><input type="radio" name="mode" value="set-random"><span>問題集の中でランダム</span></label>
+          <label class="qd-mode"><input type="radio" name="mode" value="all-random"><span>全問題からランダム</span></label>
+          <label class="qd-mode"><input type="radio" name="mode" value="wrong"><span>前に間違えた問題</span></label>
+          <label class="qd-mode"><input type="radio" name="mode" value="weak"><span>苦手な問題</span></label>
         </div>
-      </div>
 
-      <!-- 苦手な問題だけで使う。正答率がこれ未満か、最後に不正解の問題を出す -->
-      <div id="threshold-field" class="tb-form-group" hidden>
-        <span class="tb-label">苦手とみなす正答率</span>
-        <div class="qd-counts qd-counts--3" role="radiogroup" aria-label="苦手とみなす正答率">
-          <label class="qd-count"><input type="radio" name="threshold" value="50"><span>50%未満</span></label>
-          <label class="qd-count"><input type="radio" name="threshold" value="70" checked><span>70%未満</span></label>
-          <label class="qd-count"><input type="radio" name="threshold" value="80"><span>80%未満</span></label>
+        <!-- タグが1つも無ければ出さない。選択肢はデータのタグから作る -->
+        <div id="filter-field" class="tb-form-group" hidden>
+          <label class="tb-label" for="filter-select">絞り込み</label>
+          <select id="filter-select" class="tb-select"></select>
         </div>
-        <p class="qd-note">最後に不正解だった問題も含めます。</p>
-      </div>
 
-      <p id="start-count" class="qd-start-count"></p>
-      <button type="button" id="btn-start" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">はじめる</button>
-    </section>
+        <div id="set-field" class="tb-form-group">
+          <label class="tb-label" for="set-select">問題集</label>
+          <select id="set-select" class="tb-select"></select>
+        </div>
 
-    <!-- 解いた記録（成績と前回の正解の位置）を端末の外に保存して戻せるようにする。問題文は含めない -->
-    <section id="history-card" class="qd-card">
-      <h2 class="qd-card-title">学習の記録</h2>
-      <p id="history-summary" class="qd-history-summary"></p>
-      <button type="button" id="btn-stats" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn qd-stats-btn">成績を見る</button>
-      <div class="qd-history-btns">
-        <button type="button" id="btn-export" class="tb-btn tb-btn--secondary qd-big-btn">記録を書き出す</button>
-        <label class="tb-btn tb-btn--secondary qd-big-btn qd-file-btn">
-          記録を読み込む
-          <input type="file" id="history-input" accept=".json,application/json">
+        <div id="count-field" class="tb-form-group" hidden>
+          <span class="tb-label">出題数</span>
+          <div class="qd-counts" role="radiogroup" aria-label="出題数">
+            <label class="qd-count"><input type="radio" name="count" value="10" checked><span>10問</span></label>
+            <label class="qd-count"><input type="radio" name="count" value="30"><span>30問</span></label>
+            <label class="qd-count"><input type="radio" name="count" value="60"><span>60問</span></label>
+            <label class="qd-count"><input type="radio" name="count" value="all"><span>全部</span></label>
+          </div>
+        </div>
+
+        <!-- 苦手な問題だけで使う。正答率がこれ未満か、最後に不正解の問題を出す -->
+        <div id="threshold-field" class="tb-form-group" hidden>
+          <span class="tb-label">苦手とみなす正答率</span>
+          <div class="qd-counts qd-counts--3" role="radiogroup" aria-label="苦手とみなす正答率">
+            <label class="qd-count"><input type="radio" name="threshold" value="50"><span>50%未満</span></label>
+            <label class="qd-count"><input type="radio" name="threshold" value="70" checked><span>70%未満</span></label>
+            <label class="qd-count"><input type="radio" name="threshold" value="80"><span>80%未満</span></label>
+          </div>
+          <p class="qd-note">最後に不正解だった問題も含めます。</p>
+        </div>
+
+        <p id="start-count" class="qd-start-count"></p>
+        <button type="button" id="btn-start" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">はじめる</button>
+      </section>
+
+      <!-- 解いた記録（成績と前回の正解の位置）を端末の外に保存して戻せるようにする。問題文は含めない -->
+      <section id="history-card" class="qd-card">
+        <h2 class="qd-card-title">学習の記録</h2>
+        <p id="history-summary" class="qd-history-summary"></p>
+        <button type="button" id="btn-stats" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn qd-stats-btn">成績を見る</button>
+        <div class="qd-history-btns">
+          <button type="button" id="btn-export" class="tb-btn tb-btn--secondary qd-big-btn">記録を書き出す</button>
+          <label class="tb-btn tb-btn--secondary qd-big-btn qd-file-btn">
+            記録を読み込む
+            <input type="file" id="history-input" accept=".json,application/json">
+          </label>
+        </div>
+        <p class="qd-note">書き出したファイルには、問題のIDと回答の記録だけが入ります（問題文は入りません）。別の端末の記録を読み込むと合算されます。同じファイルを何度読み込んでも増えません。</p>
+        <div id="history-msg" class="qd-load-msg" hidden></div>
+      </section>
+
+      <section class="qd-card">
+        <h2 class="qd-card-title">読み込んだ問題集</h2>
+        <ul id="set-list" class="qd-set-list"></ul>
+        <p id="set-empty" class="qd-note">まだありません。</p>
+        <label class="tb-btn tb-btn--secondary tb-btn--block qd-file-btn">
+          問題ファイルを読み込む
+          <input type="file" id="file-input" accept=".json,application/json" multiple>
         </label>
+        <div id="load-msg" class="qd-load-msg" hidden></div>
+      </section>
+    </div>
+
+    <div id="panel-book" role="tabpanel" aria-labelledby="tab-book" hidden>
+      <!-- 読み込んだテキストごとのサブタブ。選んだテキストの中身をその下に出す -->
+      <div id="book-subtabs" class="qd-subtabs" role="tablist" aria-label="テキスト" hidden></div>
+      <div id="book-view" role="tabpanel" hidden>
+        <nav id="bk-toc" class="qd-card qd-toc" aria-label="目次"></nav>
+        <div id="bk-body"></div>
       </div>
-      <p class="qd-note">書き出したファイルには、問題のIDと回答の記録だけが入ります（問題文は入りません）。別の端末の記録を読み込むと合算されます。同じファイルを何度読み込んでも増えません。</p>
-      <div id="history-msg" class="qd-load-msg" hidden></div>
-    </section>
 
-    <!-- 自分でまとめた公式や単位の換算などを、解きながら見返せるようにする。問題集とは別のファイル -->
-    <section id="book-card" class="qd-card">
-      <h2 class="qd-card-title">自作テキスト</h2>
-      <ul id="book-list" class="qd-set-list"></ul>
-      <p id="book-empty" class="qd-note">まだありません。公式や単位の換算などをまとめたテキストファイル（JSON）を読み込むと、ここから開けます。</p>
-      <label class="tb-btn tb-btn--secondary tb-btn--block qd-file-btn">
-        テキストファイルを読み込む
-        <input type="file" id="book-input" accept=".json,application/json" multiple>
-      </label>
-      <div id="book-msg" class="qd-load-msg" hidden></div>
-    </section>
-
-    <section class="qd-card">
-      <h2 class="qd-card-title">読み込んだ問題集</h2>
-      <ul id="set-list" class="qd-set-list"></ul>
-      <p id="set-empty" class="qd-note">まだありません。</p>
-      <label class="tb-btn tb-btn--secondary tb-btn--block qd-file-btn">
-        問題ファイルを読み込む
-        <input type="file" id="file-input" accept=".json,application/json" multiple>
-      </label>
-      <div id="load-msg" class="qd-load-msg" hidden></div>
-    </section>
+      <!-- 自分でまとめた公式や単位の換算などを、解きながら見返せるようにする。問題集とは別のファイル -->
+      <section id="book-card" class="qd-card">
+        <h2 class="qd-card-title">読み込んだテキスト</h2>
+        <ul id="book-list" class="qd-set-list"></ul>
+        <p id="book-empty" class="qd-note">まだありません。公式や単位の換算などをまとめたテキストファイル（JSON）を読み込むと、上のサブタブで切り替えて見られます。</p>
+        <label class="tb-btn tb-btn--secondary tb-btn--block qd-file-btn">
+          テキストファイルを読み込む
+          <input type="file" id="book-input" accept=".json,application/json" multiple>
+        </label>
+        <div id="book-msg" class="qd-load-msg" hidden></div>
+      </section>
+    </div>
   </section>
 
   <!-- ===================== 問題 ===================== -->
@@ -220,16 +237,6 @@
       <ul id="st-weak" class="qd-wrong-list"></ul>
       <p id="st-noweak" class="qd-note" hidden>苦手な問題はありません。</p>
     </section>
-  </section>
-
-  <!-- ===================== 自作テキスト ===================== -->
-  <section id="screen-book" class="qd-screen" hidden>
-    <div class="qd-qhead-row qd-stats-head">
-      <h1 id="bk-title" class="qd-qlabel"></h1>
-      <button type="button" id="btn-book-home" class="tb-btn tb-btn--ghost qd-quit">ホームへ</button>
-    </div>
-    <nav id="bk-toc" class="qd-card qd-toc" aria-label="目次"></nav>
-    <div id="bk-body"></div>
   </section>
 
   <!-- ===================== 結果 ===================== -->
