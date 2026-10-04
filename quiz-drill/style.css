@@ -453,6 +453,57 @@ body {
 
 .qd-actions { display: grid; gap: var(--tb-space-sm); }
 
+/* ===================== 自作テキスト ===================== */
+
+/* 一覧のテキスト名はタップで開く */
+.qd-book-open {
+  min-height: var(--qd-tap);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  color: var(--tb-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.qd-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tb-space-xs) var(--tb-space-md);
+}
+.qd-toc a {
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-accent);
+  text-decoration: none;
+  line-height: 2;
+}
+.qd-book-sec { scroll-margin-top: var(--tb-space-md); }
+.qd-book-secnote { margin-top: 0; margin-bottom: var(--tb-space-sm); }
+.qd-book-items { margin: 0; }
+.qd-book-item {
+  padding: var(--tb-space-sm) 0;
+  border-bottom: 1px solid var(--tb-border);
+}
+.qd-book-item:last-child { border-bottom: none; padding-bottom: 0; }
+.qd-book-item dt {
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+}
+.qd-book-value {
+  margin: 2px 0 0;
+  font-size: var(--tb-font-size-base);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+  overflow-wrap: anywhere;
+}
+.qd-book-note {
+  margin: 2px 0 0;
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+  line-height: 1.6;
+}
+
 /* ===================== 成績 ===================== */
 
 .qd-stats-head {

@@ -10,6 +10,9 @@
  * localStorage の上限（5MB 前後）に近づくと、進行中のセッションまで保存できなくなるので避けた。
  * id で put するので、同じ回答を何度書いても1件のまま。
  *
+ * 自作テキスト（公式や単位の換算など）も IndexedDB に置く（store 'texts'、keyPath はテキストの id）。
+ * 扱いは問題集と同じで、同じ id を put すれば置き換え、違う id なら追加。
+ *
  * 進行中のセッション・前回の正解の表示位置・端末ID と連番は小さいので localStorage に置く。
  * 以前の成績の記録（問題ごとの集計）も localStorage に残っている。ログに移したあとも消さず、
  * 移行済みの印だけを付ける。
@@ -20,9 +23,10 @@ var QD_STORAGE = (function () {
   'use strict';
 
   var DB_NAME = 'quiz-drill';
-  var DB_VERSION = 2;   // 2 で学習の記録の store を足した
+  var DB_VERSION = 3;   // 2 で学習の記録、3 で自作テキストの store を足した
   var STORE = 'sets';
   var LOG_STORE = 'log';
+  var TEXT_STORE = 'texts';
   var SESSION_KEY = 'quiz-drill.session';
   var STATS_KEY = 'quiz-drill.stats';           // 以前の成績の記録（問題ごとの集計）。読むだけ
   var MIGRATED_KEY = 'quiz-drill.stats-migrated'; // 以前の成績の記録をログに移した印
@@ -40,6 +44,7 @@ var QD_STORAGE = (function () {
         var db = req.result;
         if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(LOG_STORE)) db.createObjectStore(LOG_STORE, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(TEXT_STORE)) db.createObjectStore(TEXT_STORE, { keyPath: 'id' });
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
@@ -61,9 +66,12 @@ var QD_STORAGE = (function () {
     });
   }
 
-  /** 保存済みの問題集をすべて返す。並びは保存した順（savedAt）にする */
-  function getAllSets() {
-    return withStore('readonly', function (store) { return store.getAll(); })
+  /**
+   * 保存済みのもの（問題集か自作テキスト）をすべて返す。並びは保存した順（savedAt）にする。
+   * レコードは { id, set, savedAt }（自作テキストも中身を set に入れる）
+   */
+  function getAll(name) {
+    return withStore('readonly', function (store) { return store.getAll(); }, name)
       .then(function (records) {
         return (records || [])
           .sort(function (a, b) { return (a.savedAt || 0) - (b.savedAt || 0); })
@@ -72,22 +80,22 @@ var QD_STORAGE = (function () {
   }
 
   /**
-   * 問題集を保存する。同じ id は置き換え。置き換えのときは元の savedAt を引き継いで
+   * 保存する。同じ id は置き換え。置き換えのときは元の savedAt を引き継いで
    * 一覧での位置を変えない。
    */
-  function putSets(sets) {
-    return getSavedAt().then(function (savedAt) {
+  function putAll(items, name) {
+    return getSavedAt(name).then(function (savedAt) {
       var now = Date.now();
       return withStore('readwrite', function (store) {
-        sets.forEach(function (set, i) {
-          store.put({ id: set.id, set: set, savedAt: savedAt[set.id] || now + i });
+        items.forEach(function (item, i) {
+          store.put({ id: item.id, set: item, savedAt: savedAt[item.id] || now + i });
         });
-      });
+      }, name);
     });
   }
 
-  function getSavedAt() {
-    return withStore('readonly', function (store) { return store.getAll(); })
+  function getSavedAt(name) {
+    return withStore('readonly', function (store) { return store.getAll(); }, name)
       .then(function (records) {
         var map = {};
         (records || []).forEach(function (r) { map[r.id] = r.savedAt; });
@@ -95,8 +103,8 @@ var QD_STORAGE = (function () {
       });
   }
 
-  function deleteSet(id) {
-    return withStore('readwrite', function (store) { store.delete(id); });
+  function deleteOne(id, name) {
+    return withStore('readwrite', function (store) { store.delete(id); }, name);
   }
 
   /* ===================== 学習の記録（ログ） ===================== */
@@ -153,9 +161,12 @@ var QD_STORAGE = (function () {
   }
 
   return {
-    getAllSets: getAllSets,
-    putSets: putSets,
-    deleteSet: deleteSet,
+    getAllSets: function () { return getAll(STORE); },
+    putSets: function (sets) { return putAll(sets, STORE); },
+    deleteSet: function (id) { return deleteOne(id, STORE); },
+    getAllTexts: function () { return getAll(TEXT_STORE); },
+    putTexts: function (texts) { return putAll(texts, TEXT_STORE); },
+    deleteText: function (id) { return deleteOne(id, TEXT_STORE); },
     loadSession: function () { return readJson(SESSION_KEY); },
     saveSession: function (s) { writeJson(SESSION_KEY, s); },
     clearSession: function () { writeJson(SESSION_KEY, null); },

@@ -171,6 +171,83 @@ var QD_QUIZ = (function () {
     return { sets: sets, added: added, replaced: replaced };
   }
 
+  /* ===================== 自作テキスト ===================== */
+
+  var TEXT_FORMAT = 'yontaku-text/1';
+
+  /**
+   * 自作テキストのファイル（公式や単位の換算などをまとめたもの）を検証する。
+   * 形は { format, texts: [{ id, title, sections: [{ title, note?, items: [{ term, value, note? }] }] }] }。
+   * 返り値 { ok, errors: [文字列], texts }。誤りが1つでもあれば ok は false。
+   */
+  function validateTextFile(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return { ok: false, errors: ['テキストファイルの形式ではありません'], texts: [] };
+    }
+    if (data.format !== TEXT_FORMAT) {
+      return {
+        ok: false,
+        errors: ['format が "' + TEXT_FORMAT + '" ではありません（' + JSON.stringify(data.format) + '）'],
+        texts: [],
+      };
+    }
+    if (!Array.isArray(data.texts) || data.texts.length === 0) {
+      return { ok: false, errors: ['texts（テキスト）がありません'], texts: [] };
+    }
+    var errors = [];
+    var ids = {};
+    data.texts.forEach(function (text, ti) {
+      var where = (ti + 1) + '番目のテキスト';
+      if (!text || typeof text !== 'object') {
+        errors.push(where + ': テキストがオブジェクトではありません');
+        return;
+      }
+      if (isNonEmptyString(text.title)) where = 'テキスト「' + text.title + '」';
+      if (!isNonEmptyString(text.id)) {
+        errors.push(where + ': id がありません');
+      } else if (ids[text.id]) {
+        errors.push(where + ': テキストの id「' + text.id + '」が重複しています');
+      } else {
+        ids[text.id] = true;
+      }
+      if (!isNonEmptyString(text.title)) errors.push(where + ': title（表示名）がありません');
+      if (!Array.isArray(text.sections) || text.sections.length === 0) {
+        errors.push(where + ': sections（節）がありません');
+        return;
+      }
+      text.sections.forEach(function (sec, si) {
+        var sWhere = where + ' の' + (si + 1) + '番目の節';
+        if (!sec || typeof sec !== 'object') {
+          errors.push(sWhere + ': 節がオブジェクトではありません');
+          return;
+        }
+        if (!isNonEmptyString(sec.title)) errors.push(sWhere + ': title（見出し）がありません');
+        else sWhere = where + ' の節「' + sec.title + '」';
+        if (sec.note !== undefined && typeof sec.note !== 'string') errors.push(sWhere + ': note は文字列にしてください');
+        if (!Array.isArray(sec.items) || sec.items.length === 0) {
+          errors.push(sWhere + ': items（項目）がありません');
+          return;
+        }
+        sec.items.forEach(function (item, ii) {
+          var iWhere = sWhere + ' の' + (ii + 1) + '番目の項目';
+          if (!item || typeof item !== 'object') {
+            errors.push(iWhere + ': 項目がオブジェクトではありません');
+            return;
+          }
+          if (!isNonEmptyString(item.term)) errors.push(iWhere + ': term（用語）がありません');
+          if (!isNonEmptyString(item.value)) errors.push(iWhere + ': value（値・式）がありません');
+          if (item.note !== undefined && typeof item.note !== 'string') errors.push(iWhere + ': note は文字列にしてください');
+        });
+      });
+    });
+    return { ok: errors.length === 0, errors: errors, texts: errors.length ? [] : data.texts };
+  }
+
+  /** 自作テキストの項目の数 */
+  function countTextItems(text) {
+    return text.sections.reduce(function (n, sec) { return n + sec.items.length; }, 0);
+  }
+
   /* ===================== 出題順 ===================== */
 
   /** 問題を指す鍵。問題の id は問題集の中でしか一意でないので、問題集の id と組にする */
@@ -799,6 +876,9 @@ var QD_QUIZ = (function () {
     weakOrder: weakOrder,
     statsReport: statsReport,
     validateFile: validateFile,
+    TEXT_FORMAT: TEXT_FORMAT,
+    validateTextFile: validateTextFile,
+    countTextItems: countTextItems,
     mergeSets: mergeSets,
     questionKey: questionKey,
     indexSets: indexSets,
