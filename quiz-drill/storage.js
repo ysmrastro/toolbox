@@ -32,6 +32,7 @@ var QD_STORAGE = (function () {
   var MIGRATED_KEY = 'quiz-drill.stats-migrated'; // 以前の成績の記録をログに移した印
   var DEVICE_KEY = 'quiz-drill.device';           // 端末ごとに固定のランダムな ID
   var SEQ_KEY = 'quiz-drill.seq';                 // 回答の id に付ける連番
+  var TAB_KEY = 'quiz-drill.tab';                 // ホームで最後に開いていたタブ（'drill' | 'book'）
   var POSITIONS_KEY = 'quiz-drill.positions';   // 鍵 → 前回表示したときの代表の正解の表示位置
 
   var dbPromise = null;
@@ -178,5 +179,7 @@ var QD_STORAGE = (function () {
     markMigrated: function () { writeJson(MIGRATED_KEY, true); },
     loadPositions: function () { return readJson(POSITIONS_KEY) || {}; },
     savePositions: function (p) { writeJson(POSITIONS_KEY, p); },
+    loadTab: function () { return readJson(TAB_KEY); },
+    saveTab: function (t) { writeJson(TAB_KEY, t); },
   };
 })();

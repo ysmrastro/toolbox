@@ -35,6 +35,7 @@
   var state = {
     sets: [],          // 読み込み済みの問題集（保存順）
     texts: [],         // 読み込み済みの自作テキスト（保存順）
+    tab: S.loadTab() === 'book' ? 'book' : 'drill',   // ホームで開いているタブ
     index: {},         // 鍵 → { set, question, index }
     session: null,     // 進行中のセッション
     finished: null,    // 直前に終えたセッション（結果画面と見返し用）
@@ -104,6 +105,7 @@
     fillFilterSelect();
     renderHistory();
     renderBooks();
+    renderTab();
 
     // 続きから
     // 読み出しに失敗したとき（loaded でない）は、途中の分を消さずに残しておく
@@ -329,6 +331,23 @@
       })
       .then(function (text) { return importTexts([{ name: 'sample.json', text: text }]); })
       .catch(function (e) { showMessage(['見本を読み込めませんでした: ' + e], true); });
+  }
+
+  /* ===================== ホームのタブ ===================== */
+
+  function renderTab() {
+    ['drill', 'book'].forEach(function (name) {
+      var on = state.tab === name;
+      $('tab-' + name).setAttribute('aria-selected', on ? 'true' : 'false');
+      $('tab-' + name).classList.toggle('is-active', on);
+      $('panel-' + name).hidden = !on;
+    });
+  }
+
+  function selectTab(name) {
+    state.tab = name;
+    S.saveTab(name);
+    renderTab();
   }
 
   /* ===================== 自作テキスト ===================== */
@@ -1053,6 +1072,8 @@
 
   $('file-input').addEventListener('change', onFiles);
   $('book-input').addEventListener('change', onBookFiles);
+  $('tab-drill').addEventListener('click', function () { selectTab('drill'); });
+  $('tab-book').addEventListener('click', function () { selectTab('book'); });
   $('btn-book-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
   $('btn-export').addEventListener('click', exportHistory);
   $('btn-export-result').addEventListener('click', exportHistory);

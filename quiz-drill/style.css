@@ -453,6 +453,32 @@ body {
 
 .qd-actions { display: grid; gap: var(--tb-space-sm); }
 
+/* ホームのタブ（4択ドリル / 自作テキスト） */
+.qd-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: var(--tb-space-md);
+  background: var(--tb-bg-secondary);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-xl);
+}
+.qd-tab {
+  min-height: var(--qd-tap);
+  border: none;
+  border-radius: var(--tb-radius-lg);
+  background: none;
+  color: var(--tb-text-secondary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.qd-tab.is-active {
+  background: var(--tb-accent);
+  color: var(--tb-bg-primary);
+}
+
 /* ===================== 自作テキスト ===================== */
 
 /* 一覧のテキスト名はタップで開く */
