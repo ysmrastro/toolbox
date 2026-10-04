@@ -898,3 +898,19 @@ test('countTextItems: すべての節の項目を数える', () => {
   ]);
   assert.strictEqual(Q.countTextItems(t), 3);
 });
+
+test('filterUnseen: 記録が無いか回答0件の問題だけ残す', () => {
+  const sets = [{ id: 's1', title: 'A', questions: [q('1'), q('2'), q('3')] }];
+  const summary = {
+    's1::1': { attempts: 2, corrects: 1, wrongs: 1, rate: 0.5, last: 'wrong' },
+    's1::2': { attempts: 0, corrects: 0, wrongs: 0, rate: 0, last: null },
+  };
+  const r = Q.filterUnseen(sets, summary);
+  assert.deepStrictEqual(r[0].questions.map((x) => x.id), ['2', '3']);
+});
+
+test('filterUnseen: すべて解いた問題集は外す', () => {
+  const sets = [{ id: 's1', title: 'A', questions: [q('1')] }];
+  const r = Q.filterUnseen(sets, { 's1::1': { attempts: 1, corrects: 1, wrongs: 0, rate: 1, last: 'correct' } });
+  assert.deepStrictEqual(r, []);
+});
