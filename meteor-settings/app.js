@@ -1156,13 +1156,13 @@
 
     $('calList').innerHTML =
       `<p class="hint">${locationLine()}` +
-      '<br>日付はその夜が始まる日（夕方）です。極大は未明なので前夜から狙います。</p>' +
+      '<br>日付はその夜が始まる日（夕方）です。極大の時刻を含む夜を選んでいます。</p>' +
       rows.map(showerRowHtml).join('');
   }
 
   /**
    * 極大の夜1件ぶんの行。計画タブの「次の流星群」と年間カレンダーで共通に使う。
-   * 左の日付は「その夜が始まる日」で、極大日（未明）とは1日ずれる。
+   * 左の日付は「その夜が始まる日」で、極大が未明に来る群では極大の日付と1日ずれる。
    */
   function showerRowHtml(r) {
     const v = calendarVerdict(r);
@@ -1182,7 +1182,7 @@
           <div class="cal-row__name">${escapeHtml(showerLabel(r.shower))}
             <span class="cal-badge cal-badge--${v.rank}">${v.label}</span></div>
           <div class="cal-row__sub">
-            極大 ${peakLabel(r.shower)} 未明／ZHR ${r.shower.zhr}／
+            極大 ${peakLabel(r.shower, r.maxTime)}／ZHR ${r.shower.zhr}／
             放射点 最高 <b>${fmt(r.peakAlt, 0)}°</b>
             ${r.peakTime ? '（' + hhmm(r.peakTime) + '）' : ''}
           </div>
@@ -1204,10 +1204,10 @@
 
   /** 見通しの対象。指定がなければいま選んでいる群（散在のように極大が無い群は除く） */
   function outlookShower() {
-    const byId = D.showers.find((s) => s.id === outlookShowerId && s.peak);
+    const byId = D.showers.find((s) => s.id === outlookShowerId && P.hasPeak(s));
     if (byId) return byId;
     const cur = shower();
-    return cur.peak ? cur : D.showers.find((s) => s.peak);
+    return P.hasPeak(cur) ? cur : D.showers.find(P.hasPeak);
   }
 
   function renderCalendarByShower() {
@@ -1219,7 +1219,7 @@
     /* 群を選ぶチップは素の名前で横1行にする。ふりがな付きで折り返すと14個が
        縦に伸び、肝心の結論が画面の外へ押し出される。読みは下の見出しで見せる */
     const chipBox = $('calShowers');
-    chipBox.innerHTML = D.showers.filter((s) => s.peak).map((s) =>
+    chipBox.innerHTML = D.showers.filter(P.hasPeak).map((s) =>
       `<button type="button" class="chip${s.id === sh.id ? ' active' : ''}"` +
       ` data-outlook-shower="${s.id}">${escapeHtml(s.name)}</button>`).join('');
     // 選んでいる群が右の見えない位置にあることがあるので、横スクロールを合わせる
@@ -1359,8 +1359,8 @@
    * 極大が遠い時期は機材より予定のほうが知りたいので、これを最初のタブにしている。
    *
    * カレンダーの1マスは「日付」ではなく「その夜」を表す。
-   * 8/12 のマス＝8/12 の日没から 8/13 の夜明けまで。流星群の極大は未明が本番なので、
-   * 極大日（例 8/13）の印はその前夜（8/12）のマスに置く。
+   * 8/12 のマス＝8/12 の日没から 8/13 の夜明けまで。極大の印は極大の時刻を含む夜の
+   * マスに置く（極大 8/13 11時なら 8/12 のマス）。決め方は MS_PLAN.peakOfYear。
    */
 
   /** カレンダーが表示している月の1日。null なら選んでいる夜の月を出す */
@@ -1457,7 +1457,7 @@
     if (peaks) {
       r += '　<span class="mcell__peak mcell__peak--legend"></span>' +
         `<span style="color:var(--tb-accent)"> ` +
-        peaks.map((s) => escapeHtml(showerLabel(s)) + '（極大 ' + peakLabel(s) + '）').join('・') +
+        peaks.map((s) => escapeHtml(showerLabel(s)) + '（極大 ' + peakLabel(s, night) + '）').join('・') +
         'の夜</span>';
     }
     r += '<br>';
@@ -1511,7 +1511,7 @@
         <div class="stat"><div class="stat__label">流星の角速度</div><div class="stat__value">${fmt(res.cfg.omegaDeg, 1)} °/s</div></div>
         <div class="stat"><div class="stat__label">平均光度</div><div class="stat__value">${signed(sh.meanMag)} 等</div></div>
         <div class="stat"><div class="stat__label">光度分布 r</div><div class="stat__value">${sh.r}</div></div>
-        <div class="stat"><div class="stat__label">極大</div><div class="stat__value">${sh.peak ? sh.peak.replace('-', '/') : '—'}</div></div>
+        <div class="stat"><div class="stat__label">極大</div><div class="stat__value">${peakLabel(sh, currentDate())}</div></div>
         <div class="stat"><div class="stat__label">ZHR</div><div class="stat__value">${sh.zhr}</div></div>
       </div>
       <div>${tags.join('')}</div>

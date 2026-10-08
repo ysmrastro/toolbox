@@ -25,7 +25,7 @@ var MS_PLAN = (function () {
 
   /* ===================== 夜の数え方 =====================
    * このアプリの「1日」は日付ではなく夜。8/12 の夜＝8/12 の日没〜8/13 の朝。
-   * 流星群の極大は未明が本番なので、極大日（8/13）の印は前夜（8/12）に付く。
+   * 極大の印は、極大の時刻を含む夜に付く（peakOfYear）。8/13 11時の極大は 8/12 の夜。
    */
 
   /** その夜を代表する日付（0時0分）。未明は前の日の夜の続きとして扱う */
@@ -97,11 +97,12 @@ var MS_PLAN = (function () {
     });
   }
 
-  /** 'MM-DD' を「8/13」の形にする（0埋めのままだと日付に見えにくい） */
-  function peakLabel(sh) {
-    if (!sh.peak) return '—';
-    var p = sh.peak.split('-').map(Number);
-    return p[0] + '/' + p[1];
+  /** date にいちばん近い極大の時刻を「8/13 11時頃」の形にする。極大を持たない群は '—' */
+  function peakLabel(sh, date) {
+    if (!hasPeak(sh)) return '—';
+    // 時の単位に丸める（数十分の精度しかないので分までは出さない）
+    var t = new Date(nearestPeak(sh, date).time.getTime() + 30 * 60000);
+    return (t.getMonth() + 1) + '/' + t.getDate() + ' ' + t.getHours() + '時頃';
   }
 
   /** 「今年」「来年」「N年後」 */
@@ -109,19 +110,53 @@ var MS_PLAN = (function () {
     return n === 0 ? '今年' : n === 1 ? '来年' : n + '年後';
   }
 
+  /* ===================== 極大の夜 =====================
+   * 極大は日付ではなく太陽黄経で持ち、年ごとに時刻を求める（MS_ASTRO.peakInstant）。
+   * その極大を狙う夜は「極大の時刻にいちばん近い真夜中を挟む夜」、つまり
+   * 極大の12時間前が属する日の夜とする。
+   *   8/13 11時 → 8/12 の夜　／　10/22 3時 → 10/21 の夜　／　12/14 22時 → 12/14 の夜
+   * 以前は日付を固定で持ち「極大日の未明＝前夜」と決め打ちしていた。これで合うのは
+   * 極大が日本時間の朝〜昼に来る群だけで、オリオン座・ふたご座など大半の群が
+   * 1晩早く出ていた（v1.10.2 で修正）。
+   */
+
+  function hasPeak(sh) { return sh.peakLon != null; }
+
+  /** その年の極大。time は極大の時刻、night はそれを狙う夜（0時0分） */
+  function peakOfYear(sh, year) {
+    var time = A.peakInstant(sh, year);
+    var night = new Date(time.getTime() - 12 * 3600000);
+    night.setHours(0, 0, 0, 0);
+    return { time: time, night: night };
+  }
+
+  /** date にいちばん近い極大（年をまたぐ群があるので前後の年も見る） */
+  function nearestPeak(sh, date) {
+    var best = null;
+    [-1, 0, 1].forEach(function (dy) {
+      var p = peakOfYear(sh, date.getFullYear() + dy);
+      if (!best || Math.abs(p.time - date) < Math.abs(best.time - date)) best = p;
+    });
+    return best;
+  }
+
+  /** その夜の代表時刻（翌日の 01:00）。nightTimeline はこれを前日の夜として扱う */
+  function nightRepresentative(night) {
+    return new Date(night.getFullYear(), night.getMonth(), night.getDate() + 1, 1, 0, 0, 0);
+  }
+
   /** 選択中の流星群の「次の極大の夜」の 01:00 */
   function nextPeakDate(sh, now) {
-    if (!sh.peak) {
+    if (!hasPeak(sh)) {
       var d = new Date(now.getTime() + 86400000);
       d.setHours(1, 0, 0, 0);
       return d;
     }
-    var p = sh.peak.split('-').map(Number);
     for (var dy = 0; dy <= 1; dy++) {
-      var c = new Date(now.getFullYear() + dy, p[0] - 1, p[1], 1, 0, 0, 0);
+      var c = nightRepresentative(peakOfYear(sh, now.getFullYear() + dy).night);
       if (c.getTime() > now.getTime()) return c;
     }
-    return new Date(now.getFullYear() + 1, p[0] - 1, p[1], 1, 0, 0, 0);
+    return nightRepresentative(peakOfYear(sh, now.getFullYear() + 2).night);
   }
 
   /* ===================== 極大の夜の評価 =====================
@@ -149,17 +184,18 @@ var MS_PLAN = (function () {
    * 年間カレンダー（1年 × 全群）と群別の見通し（1群 × 20年）で共通に使う。
    */
   function evaluatePeakNight(sh, year, lat, lon) {
-    var p = sh.peak.split('-').map(Number);
-    // 極大日の未明（01:00）を代表時刻にする。nightTimeline は前日の夜として扱う
-    var night = new Date(year, p[0] - 1, p[1], 1, 0, 0, 0);
+    var p = peakOfYear(sh, year);
+    // その夜の 01:00 を代表時刻にする。nightTimeline は前日の夜として扱う
+    var night = nightRepresentative(p.night);
     var tl = A.nightTimeline(night, lat, lon, sh);
     /* 月齢と輝面比は「その夜が始まる日の正午」の値にする。
        マンスリーカレンダーのマスと同じ数え方に揃えて、別の数字が並ばないようにする */
-    var noon = new Date(night.getTime() - 13 * 3600000);   // 極大日01:00 → 前日12:00
+    var noon = new Date(night.getTime() - 13 * 3600000);   // 翌日01:00 → その夜の日の12:00
     var moonNoon = A.moonInfo(noon, lat, lon);
     return {
       shower: sh,
       date: night,
+      maxTime: p.time,
       timeline: tl,
       goldenMinutes: tl.goldenMinutes,
       illumination: moonNoon.illumination,
@@ -174,7 +210,7 @@ var MS_PLAN = (function () {
     var key = year + '|' + locKey(lat, lon);
     if (calCache.has(key)) return calCache.get(key);
 
-    var rows = D.showers.filter(function (sh) { return sh.peak; })
+    var rows = D.showers.filter(hasPeak)
       .map(function (sh) { return evaluatePeakNight(sh, year, lat, lon); });
     if (calCache.size >= CAL_CACHE_MAX) calCache.delete(calCache.keys().next().value);
     calCache.set(key, rows);
@@ -205,11 +241,10 @@ var MS_PLAN = (function () {
   /** 表示中の月に極大がある夜を { 日: [流星群] } で返す */
   function peakNightsOfMonth(year, month) {
     var map = {};
-    D.showers.filter(function (sh) { return sh.peak; }).forEach(function (sh) {
-      var p = sh.peak.split('-').map(Number);
+    D.showers.filter(hasPeak).forEach(function (sh) {
       // 1月・12月のマスには隣の年の極大が入るので前後の年も見る
       [year - 1, year, year + 1].forEach(function (y) {
-        var night = nightAnchor(new Date(y, p[0] - 1, p[1], 1, 0, 0, 0));
+        var night = peakOfYear(sh, y).night;
         if (night.getFullYear() !== year || night.getMonth() !== month) return;
         var key = night.getDate();
         if (!map[key]) map[key] = [];
@@ -234,7 +269,7 @@ var MS_PLAN = (function () {
   }
 
   /* 群別の見通しの年数。
-     極大の日付は固定で、同じ日付なら放射点の高さも毎年ほとんど変わらない。
+     極大の日付は年で最大1日しか動かず、同じ日付なら放射点の高さも毎年ほとんど変わらない。
      つまり年ごとの差はほぼ月の条件だけで決まる。月の満ち欠けは約19年で同じ日付に
      戻る（メトン周期）ので、20年ぶん並べれば「次の当たり」は必ずこの中に入る。 */
   var OUTLOOK_YEARS = 20;
@@ -327,6 +362,9 @@ var MS_PLAN = (function () {
 
     showerLabel: showerLabel,
     peakLabel: peakLabel,
+    hasPeak: hasPeak,
+    peakOfYear: peakOfYear,
+    nearestPeak: nearestPeak,
     yearsAwayLabel: yearsAwayLabel,
     nextPeakDate: nextPeakDate,
 
