@@ -204,20 +204,46 @@ const MS_ASTRO = (function () {
   }
 
   /**
+   * 太陽の黄経を J2000 の分点に戻した値 [度]。
+   * IMO が極大を示す太陽黄経は J2000 なので、その日の分点の値（sunLongitude）から
+   * 歳差（1.397°/世紀）を引いてそろえる。2026年で 0.36°＝約9時間ぶんの差になる。
+   */
+  function sunLongitudeJ2000(date) {
+    const T = (julianDay(date) - 2451545.0) / 36525;
+    return norm360(sunLongitude(date) - 1.397 * T);
+  }
+
+  /**
+   * その年（UT の暦年）に太陽が極大の黄経 shower.peakLon に来る時刻。
+   * 極大の日付は年によって数時間〜1日ずれる（うるう年の周期）ので、日付ではなく
+   * 太陽黄経で持ち、年ごとに時刻を求める。極大を持たない群は null。
+   */
+  function peakInstant(shower, year) {
+    if (shower.peakLon == null) return null;
+    const RATE = 0.98560;   // 太陽の黄経の平均の進み [度/日]
+    let t = Date.UTC(year, 0, 1);
+    t += norm360(shower.peakLon - sunLongitudeJ2000(new Date(t))) / RATE * 86400000;
+    // 平均の進みで当てた位置から、ずれ（±180°に畳む）を詰める。3回で1分以内に収まる
+    for (let i = 0; i < 3; i++) {
+      const d = ((shower.peakLon - sunLongitudeJ2000(new Date(t)) + 540) % 360) - 180;
+      t += d / RATE * 86400000;
+    }
+    return new Date(t);
+  }
+
+  /**
    * 流星群の放射点の位置
-   * 極大日からのずれを raDrift / decDrift で補正する。
+   * 極大からのずれを raDrift / decDrift で補正する。
    */
   function radiantPosition(date, shower) {
     if (shower.ra == null) return null;
     let days = 0;
-    if (shower.peak) {
-      const [mm, dd] = shower.peak.split('-').map(Number);
+    if (shower.peakLon != null) {
       const year = date.getUTCFullYear();
-      // 年をまたぐケースに備えて前後の年も見て、最も近い極大日を採用する
+      // 年をまたぐケースに備えて前後の年も見て、最も近い極大を採用する
       let best = null;
       [-1, 0, 1].forEach((dy) => {
-        const peak = Date.UTC(year + dy, mm - 1, dd, 0, 0, 0);
-        const diff = (date.getTime() - peak) / 86400000;
+        const diff = (date.getTime() - peakInstant(shower, year + dy).getTime()) / 86400000;
         if (best === null || Math.abs(diff) < Math.abs(best)) best = diff;
       });
       days = best;
@@ -471,6 +497,8 @@ const MS_ASTRO = (function () {
     compassName: compassName,
     eclipticToEquatorial: eclipticToEquatorial,
     sunPosition: sunPosition,
+    sunLongitudeJ2000: sunLongitudeJ2000,
+    peakInstant: peakInstant,
     moonInfo: moonInfo,
     moonPosition: moonPosition,
     moonAge: moonAge,

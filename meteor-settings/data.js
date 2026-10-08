@@ -18,8 +18,8 @@ const MS_DATA = {};
  *   メジャー → よほどの変更のときだけ
  * リリース時は appUpdated と sw.js の CACHE 名も一緒に更新する。
  */
-MS_DATA.appVersion = '1.10.1';
-MS_DATA.appUpdated = '2026-08-16 23:48';
+MS_DATA.appVersion = '1.10.2';
+MS_DATA.appUpdated = '2026-10-08 22:40';
 
 /* ---------------- 画角プレビューの枠 ----------------
  * 空は地平線を基準に描き、枠（＝センサーの写る範囲）だけを構図に合わせて回す。
@@ -53,6 +53,13 @@ MS_DATA.greekReadings = {
  * 書くのは「使う人に見える変化」だけ。内部の整理やドキュメント修正は載せない。
  */
 MS_DATA.changelog = [
+  {
+    version: '1.10.2', date: '2026-10-08', items: [
+      '流星群の極大の夜が1晩早く出ていたのを修正。オリオン座・しし座・ふたご座・りゅう座など、極大が日本時間の夕方以降に来る群が前の晩になっていた',
+      '極大を日付ではなく太陽黄経で持ち、年ごとに極大の時刻を計算するようにした。表示も「極大 10/22 4時頃」のように時刻まで出す',
+      'おうし座南流星群の極大を現行の IMO の一覧に合わせて 10/10 頃にした（以前は 11/5）',
+    ],
+  },
   {
     version: '1.10.0', date: '2026-08-16', items: [
       '流星群の名前のギリシャ文字にふりがなを付けた（やぎ座α（アルファ）流星群）。読めない名前は人に伝えられないため',
@@ -337,6 +344,9 @@ MS_DATA.trailQuality = [
 
 /* ---------------- 主要流星群 ---------------- */
 /*
+ * peakLon : 極大の太陽黄経（J2000, 度）。IMO の Working List の値。
+ *           日付で持つと年による数時間〜1日のずれを拾えず、極大の夜を1晩取り違える
+ *           （v1.10.2 で修正）。時刻は MS_ASTRO.peakInstant() で年ごとに求める
  * ra/dec  : 極大時の放射点座標（J2000, 度）
  * raDrift : 放射点の日々の移動量（度/日）— 極大日からのずれを補正するのに使う
  * velocity: 対地速度 [km/s]
@@ -347,21 +357,21 @@ MS_DATA.trailQuality = [
  * fireball: 火球の出やすさ（'high' / 'mid' / 'low'）
  */
 MS_DATA.showers = [
-  { id: 'per', name: 'ペルセウス座流星群',       peak: '08-13', ra: 48,  dec: 58,  raDrift: 1.35, decDrift: 0.15, velocity: 59, zhr: 100, r: 2.2, meanMag: 1.63, fireball: 'mid',  note: '記事が基準にしている群。主要群で最速クラスで、角速度が大きく撮影は不利。' },
-  { id: 'gem', name: 'ふたご座流星群',           peak: '12-14', ra: 112, dec: 33,  raDrift: 1.02, decDrift: -0.15, velocity: 35, zhr: 150, r: 2.6, meanMag: 1.23, fireball: 'mid',  note: '対地速度が遅く角速度が小さいため、ペルセウス座より約0.5等有利。' },
-  { id: 'qua', name: 'しぶんぎ座流星群',         peak: '01-04', ra: 230, dec: 49,  raDrift: 0.40, decDrift: -0.20, velocity: 41, zhr: 110, r: 2.1, meanMag: 1.43, fireball: 'low',  note: '極大が数時間しか続かない。放射点は夜半以降に高くなる。' },
-  { id: 'ori', name: 'オリオン座流星群',         peak: '10-21', ra: 95,  dec: 16,  raDrift: 1.10, decDrift: 0.10, velocity: 66, zhr: 20,  r: 2.5, meanMag: 1.93, fireball: 'mid',  note: '主要群で最速。角速度が非常に大きく、撮影条件は最も厳しい。' },
-  { id: 'leo', name: 'しし座流星群',             peak: '11-17', ra: 152, dec: 22,  raDrift: 0.95, decDrift: -0.40, velocity: 71, zhr: 15,  r: 2.5, meanMag: 1.83, fireball: 'mid',  note: '最速級。速い代わりに明るい流星の割合は比較的高い。' },
-  { id: 'lyr', name: 'こと座流星群',             peak: '04-22', ra: 271, dec: 34,  raDrift: 1.10, decDrift: 0.00, velocity: 49, zhr: 18,  r: 2.1, meanMag: 1.73, fireball: 'mid' },
-  { id: 'eta', name: 'みずがめ座η流星群',        peak: '05-06', ra: 338, dec: -1,  raDrift: 0.90, decDrift: 0.40, velocity: 66, zhr: 50,  r: 2.4, meanMag: 1.83, fireball: 'mid',  note: '日本からは放射点が低く、明け方の短時間しか狙えない。' },
-  { id: 'sda', name: 'みずがめ座δ南流星群',      peak: '07-30', ra: 340, dec: -16, raDrift: 0.78, decDrift: 0.18, velocity: 41, zhr: 25,  r: 3.2, meanMag: 2.33, fireball: 'low',  note: '暗い流星が多く（r が大きい）、到達等級の要求が厳しい。' },
-  { id: 'cap', name: 'やぎ座α流星群',            peak: '07-30', ra: 307, dec: -10, raDrift: 0.90, decDrift: 0.30, velocity: 22, zhr: 5,   r: 2.5, meanMag: 1.03, fireball: 'high', note: '対地速度が最も遅く、明るい火球が多い。出現数は少ないが火球狙いの本命。' },
-  { id: 'sta', name: 'おうし座南流星群',         peak: '11-05', ra: 52,  dec: 15,  raDrift: 0.79, decDrift: 0.19, velocity: 27, zhr: 5,   r: 2.3, meanMag: 1.33, fireball: 'high', note: '低速で火球が多い。数は少ないが1本の価値が大きい。' },
-  { id: 'nta', name: 'おうし座北流星群',         peak: '11-12', ra: 58,  dec: 22,  raDrift: 0.79, decDrift: 0.19, velocity: 29, zhr: 5,   r: 2.3, meanMag: 1.33, fireball: 'high', note: 'おうし座南流星群と同様に低速・火球型。' },
-  { id: 'kcg', name: 'はくちょう座κ流星群',      peak: '08-17', ra: 286, dec: 52,  raDrift: 0.60, decDrift: 0.20, velocity: 25, zhr: 3,   r: 3.0, meanMag: 1.23, fireball: 'high', note: '低速で火球が出やすい。ペルセウス座の直後に放射点が高い。' },
-  { id: 'dra', name: 'りゅう座流星群',           peak: '10-08', ra: 262, dec: 54,  raDrift: 0.60, decDrift: -0.10, velocity: 20, zhr: 5,   r: 2.6, meanMag: 2.03, fireball: 'mid',  note: '最低速の群。突発出現があり、宵の時間帯に放射点が高い。' },
-  { id: 'urs', name: 'こぐま座流星群',           peak: '12-22', ra: 217, dec: 76,  raDrift: 0.30, decDrift: -0.10, velocity: 33, zhr: 10,  r: 3.0, meanMag: 2.03, fireball: 'low' },
-  { id: 'spo', name: '散在流星（群に属さない）', peak: null,    ra: null, dec: null, raDrift: 0,   decDrift: 0,    velocity: 40, zhr: 8,   r: 3.0, meanMag: 2.03, fireball: 'mid',  note: '放射点を持たないため、離角の平均的な値（60°）で計算する。' },
+  { id: 'per', name: 'ペルセウス座流星群',       peakLon: 140.0,  ra: 48,  dec: 58,  raDrift: 1.35, decDrift: 0.15, velocity: 59, zhr: 100, r: 2.2, meanMag: 1.63, fireball: 'mid',  note: '記事が基準にしている群。主要群で最速クラスで、角速度が大きく撮影は不利。' },
+  { id: 'gem', name: 'ふたご座流星群',           peakLon: 262.2,  ra: 112, dec: 33,  raDrift: 1.02, decDrift: -0.15, velocity: 35, zhr: 150, r: 2.6, meanMag: 1.23, fireball: 'mid',  note: '対地速度が遅く角速度が小さいため、ペルセウス座より約0.5等有利。' },
+  { id: 'qua', name: 'しぶんぎ座流星群',         peakLon: 283.15, ra: 230, dec: 49,  raDrift: 0.40, decDrift: -0.20, velocity: 41, zhr: 110, r: 2.1, meanMag: 1.43, fireball: 'low',  note: '極大が数時間しか続かない。放射点は夜半以降に高くなる。' },
+  { id: 'ori', name: 'オリオン座流星群',         peakLon: 208.0,  ra: 95,  dec: 16,  raDrift: 1.10, decDrift: 0.10, velocity: 66, zhr: 20,  r: 2.5, meanMag: 1.93, fireball: 'mid',  note: '主要群で最速。角速度が非常に大きく、撮影条件は最も厳しい。' },
+  { id: 'leo', name: 'しし座流星群',             peakLon: 235.27, ra: 152, dec: 22,  raDrift: 0.95, decDrift: -0.40, velocity: 71, zhr: 15,  r: 2.5, meanMag: 1.83, fireball: 'mid',  note: '最速級。速い代わりに明るい流星の割合は比較的高い。' },
+  { id: 'lyr', name: 'こと座流星群',             peakLon: 32.32,  ra: 271, dec: 34,  raDrift: 1.10, decDrift: 0.00, velocity: 49, zhr: 18,  r: 2.1, meanMag: 1.73, fireball: 'mid' },
+  { id: 'eta', name: 'みずがめ座η流星群',        peakLon: 45.5,   ra: 338, dec: -1,  raDrift: 0.90, decDrift: 0.40, velocity: 66, zhr: 50,  r: 2.4, meanMag: 1.83, fireball: 'mid',  note: '日本からは放射点が低く、明け方の短時間しか狙えない。' },
+  { id: 'sda', name: 'みずがめ座δ南流星群',      peakLon: 127.0,  ra: 340, dec: -16, raDrift: 0.78, decDrift: 0.18, velocity: 41, zhr: 25,  r: 3.2, meanMag: 2.33, fireball: 'low',  note: '暗い流星が多く（r が大きい）、到達等級の要求が厳しい。' },
+  { id: 'cap', name: 'やぎ座α流星群',            peakLon: 127.0,  ra: 307, dec: -10, raDrift: 0.90, decDrift: 0.30, velocity: 22, zhr: 5,   r: 2.5, meanMag: 1.03, fireball: 'high', note: '対地速度が最も遅く、明るい火球が多い。出現数は少ないが火球狙いの本命。' },
+  { id: 'sta', name: 'おうし座南流星群',         peakLon: 197.0,  ra: 32,  dec: 9,   raDrift: 0.79, decDrift: 0.19, velocity: 27, zhr: 5,   r: 2.3, meanMag: 1.33, fireball: 'high', note: '低速で火球が多い。数は少ないが1本の価値が大きい。' },
+  { id: 'nta', name: 'おうし座北流星群',         peakLon: 230.0,  ra: 58,  dec: 22,  raDrift: 0.79, decDrift: 0.19, velocity: 29, zhr: 5,   r: 2.3, meanMag: 1.33, fireball: 'high', note: 'おうし座南流星群と同様に低速・火球型。' },
+  { id: 'kcg', name: 'はくちょう座κ流星群',      peakLon: 145.0,  ra: 286, dec: 52,  raDrift: 0.60, decDrift: 0.20, velocity: 25, zhr: 3,   r: 3.0, meanMag: 1.23, fireball: 'high', note: '低速で火球が出やすい。ペルセウス座の直後に放射点が高い。' },
+  { id: 'dra', name: 'りゅう座流星群',           peakLon: 195.4,  ra: 262, dec: 54,  raDrift: 0.60, decDrift: -0.10, velocity: 20, zhr: 5,   r: 2.6, meanMag: 2.03, fireball: 'mid',  note: '最低速の群。突発出現があり、宵の時間帯に放射点が高い。' },
+  { id: 'urs', name: 'こぐま座流星群',           peakLon: 270.7,  ra: 217, dec: 76,  raDrift: 0.30, decDrift: -0.10, velocity: 33, zhr: 10,  r: 3.0, meanMag: 2.03, fireball: 'low' },
+  { id: 'spo', name: '散在流星（群に属さない）', peakLon: null,  ra: null, dec: null, raDrift: 0,   decDrift: 0,    velocity: 40, zhr: 8,   r: 3.0, meanMag: 2.03, fireball: 'mid',  note: '放射点を持たないため、離角の平均的な値（60°）で計算する。' },
 ];
 
 /* ---------------- 空の明るさプリセット ---------------- */

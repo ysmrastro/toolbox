@@ -105,9 +105,10 @@ test('showerLabel: 群を足しても読みが付く（読みは文字に持た�
 });
 
 test('peakLabel / yearsAwayLabel', () => {
-  assert.strictEqual(P.peakLabel(per), '8/13', '0埋めを外す');
-  assert.strictEqual(P.peakLabel(D.showers.find((s) => s.id === 'qua')), '1/4');
-  assert.strictEqual(P.peakLabel(spo), '—', '極大を持たない群');
+  assert.strictEqual(P.peakLabel(per, new Date(2026, 7, 1)), '8/13 11時頃', '0埋めを外し、時まで出す');
+  assert.strictEqual(P.peakLabel(D.showers.find((s) => s.id === 'qua'), new Date(2026, 0, 1)), '1/4 6時頃');
+  assert.strictEqual(P.peakLabel(per, new Date(2027, 7, 1)), '8/13 17時頃', '年が変われば時刻も変わる');
+  assert.strictEqual(P.peakLabel(spo, new Date(2026, 7, 1)), '—', '極大を持たない群');
 
   assert.strictEqual(P.yearsAwayLabel(0), '今年');
   assert.strictEqual(P.yearsAwayLabel(1), '来年');
@@ -115,9 +116,10 @@ test('peakLabel / yearsAwayLabel', () => {
 });
 
 test('nextPeakDate: 過ぎていれば翌年の極大を返す', () => {
-  // ペルセウスの極大は 8-13。8/1 時点ではこの年、8/20 時点では翌年
+  /* ペルセウスの極大は 2026年 8/13 11時頃（→ 8/12 の夜）、2027年 8/13 17時頃（→ 8/13 の夜）。
+     返すのはその夜の 01:00 なので、日付は夜の翌日になる */
   assert.strictEqual(ymd(P.nextPeakDate(per, new Date(2026, 7, 1))), '2026-8-13');
-  assert.strictEqual(ymd(P.nextPeakDate(per, new Date(2026, 7, 20))), '2027-8-13');
+  assert.strictEqual(ymd(P.nextPeakDate(per, new Date(2026, 7, 20))), '2027-8-14');
   assert.strictEqual(P.nextPeakDate(per, new Date(2026, 7, 1)).getHours(), 1, '未明01:00');
   // 極大を持たない群は翌日の01:00
   assert.strictEqual(ymd(P.nextPeakDate(spo, new Date(2026, 7, 16, 22, 0))), '2026-8-17');
@@ -125,10 +127,11 @@ test('nextPeakDate: 過ぎていれば翌年の極大を返す', () => {
 
 /* ===================== 極大の夜の評価 ===================== */
 
-test('evaluatePeakNight: 極大日の未明を、その前夜として評価する', () => {
+test('evaluatePeakNight: 極大の時刻を含む夜を評価する', () => {
   const r = P.evaluatePeakNight(per, 2026, TOKYO.lat, TOKYO.lon);
-  assert.strictEqual(ymd(r.date), '2026-8-13', '代表時刻は極大日の未明');
-  assert.strictEqual(ymd(P.nightAnchor(r.date)), '2026-8-12', 'その夜は前日から始まる');
+  assert.strictEqual(ymd(r.date), '2026-8-13', '代表時刻はその夜の 01:00');
+  assert.strictEqual(ymd(P.nightAnchor(r.date)), '2026-8-12', '極大 8/13 11時頃は 8/12 の夜');
+  assert.strictEqual(ymd(r.maxTime), '2026-8-13', '極大の時刻そのものも返す');
   assert.ok(r.goldenMinutes >= 0);
   assert.ok(r.illumination >= 0 && r.illumination <= 1);
   assert.ok(r.moonAge >= 0 && r.moonAge < 30);
@@ -160,21 +163,34 @@ test('calendarVerdict の score は条件のよい年どうしを比べるのに
   assert.strictEqual(a.score, b.score, '5時間を超えると差が出ない（どちらも 1.0）');
 });
 
-test('peakNightsOfMonth: 極大日の印は前夜のマスに付く', () => {
+test('peakNightsOfMonth: 極大の印は極大の時刻を含む夜のマスに付く', () => {
   const aug = P.peakNightsOfMonth(2026, 7);        // 8月
   const ids = (day) => (aug[day] || []).map((s) => s.id);
-  assert.ok(ids(12).includes('per'), 'ペルセウス（極大 8/13 未明）は 8/12 のマス');
+  assert.ok(ids(12).includes('per'), 'ペルセウス（極大 8/13 11時頃）は 8/12 のマス');
   assert.ok(!ids(13).includes('per'), '8/13 のマスには付かない');
-  assert.ok(ids(16).includes('kcg'), 'はくちょう座κ（極大 8/17 未明）は 8/16 のマス');
+  assert.ok(ids(18).includes('kcg'), 'はくちょう座κ（極大 8/18 16時頃）は 8/18 のマス');
+});
+
+test('[回帰 v1.10.2] peakNightsOfMonth: 極大が夕方以降の群を1晩早く出さない', () => {
+  /* 以前は日付を固定で持ち「極大日の未明＝前夜」と決め打ちしていたので、
+     極大が日本時間の夕方〜夜に来る群が1晩早く出ていた。
+     オリオン座は国立天文台も「21日夜〜22日未明」としている */
+  const oct = P.peakNightsOfMonth(2026, 9);        // 10月
+  const ids = (day) => (oct[day] || []).map((s) => s.id);
+  assert.ok(ids(21).includes('ori'), 'オリオン座（極大 10/22 3時頃）は 10/21 のマス');
+  assert.ok(!ids(20).includes('ori'), '10/20 のマスには付かない');
+  assert.ok(ids(8).includes('dra'), 'りゅう座（極大 10/9 10時頃）は 10/8 のマス');
+  const dec = P.peakNightsOfMonth(2026, 11);
+  assert.ok((dec[14] || []).some((s) => s.id === 'gem'), 'ふたご座（極大 12/14 23時頃）は 12/14 のマス');
 });
 
 test('peakNightsOfMonth: 年をまたぐ極大も拾う', () => {
-  // しぶんぎ座の極大は 1/4 未明 → 1/3 の夜
-  const jan = P.peakNightsOfMonth(2027, 0);
+  // しぶんぎ座の極大は 2026年 1/4 6時頃 → 1/3 の夜（前の年の12月のマスからも辿れること）
+  const jan = P.peakNightsOfMonth(2026, 0);
   assert.ok((jan[3] || []).some((s) => s.id === 'qua'), 'しぶんぎ座は 1/3 のマス');
-  // こぐま座の極大は 12/22 未明 → 12/21 の夜
+  // こぐま座の極大は 2026年 12/23 7時頃 → 12/22 の夜
   const dec = P.peakNightsOfMonth(2026, 11);
-  assert.ok((dec[21] || []).some((s) => s.id === 'urs'), 'こぐま座は 12/21 のマス');
+  assert.ok((dec[22] || []).some((s) => s.id === 'urs'), 'こぐま座は 12/22 のマス');
 });
 
 test('upcomingPeaks: 今夜以降だけを近い順に返す', () => {
@@ -195,12 +211,21 @@ test('upcomingPeaks: 今夜以降だけを近い順に返す', () => {
 });
 
 test('[回帰 v1.9.1] upcomingPeaks: 朝に開いても前の夜の群が残らない', () => {
-  /* 8/17 の朝。はくちょう座κ（8/16 の夜）はもう終わっているので消えているはず。
-     旧実装は基準が「8/16 の夜」のままだったので先頭に残っていた。 */
-  const morning = new Date(2026, 7, 17, 8, 0);
+  /* 8/13 の朝。ペルセウス（8/12 の夜）はもう終わっているので消えているはず。
+     旧実装は基準が「8/12 の夜」のままだったので先頭に残っていた。 */
+  const morning = new Date(2026, 7, 13, 8, 0);
   const rows = P.upcomingPeaks(8, morning, TOKYO.lat, TOKYO.lon);
-  assert.ok(!rows.some((r) => r.shower.id === 'kcg' && r.date.getFullYear() === 2026),
+  assert.ok(!rows.some((r) => r.shower.id === 'per' && r.date.getFullYear() === 2026),
     '終わった夜の群が残っている');
+});
+
+test('[回帰 v1.10.2] upcomingPeaks: 極大の当日に、その夜の群が消えない', () => {
+  /* 2026-10-08 の昼。りゅう座の極大は 10/9 10時頃で、狙うのは今夜（10/8）。
+     旧実装は「10/8 の未明＝10/7 の夜」と数えて、終わった扱いで一覧から消していた */
+  const noon = new Date(2026, 9, 8, 12, 0);
+  const rows = P.upcomingPeaks(3, noon, TOKYO.lat, TOKYO.lon);
+  assert.strictEqual(rows[0].shower.id, 'dra', 'りゅう座が先頭');
+  assert.strictEqual(ymd(P.nightAnchor(rows[0].date)), '2026-10-8', '今夜（10/8）');
 });
 
 test('outlookRows: その年から20年ぶんを年の順で返す', () => {

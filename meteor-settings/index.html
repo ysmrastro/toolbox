@@ -11,7 +11,7 @@
   <title>流星撮影セッティング</title>
 
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が突き合わせる） -->
-  <meta name="app-version" content="1.10.1">
+  <meta name="app-version" content="1.10.2">
 
   <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
   <meta property="og:type" content="website">
@@ -34,10 +34,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="../shared/css/variables.css?v=1.10.1">
-  <link rel="stylesheet" href="../shared/css/reset.css?v=1.10.1">
-  <link rel="stylesheet" href="../shared/css/components.css?v=1.10.1">
-  <link rel="stylesheet" href="style.css?v=1.10.1">
+  <link rel="stylesheet" href="../shared/css/variables.css?v=1.10.2">
+  <link rel="stylesheet" href="../shared/css/reset.css?v=1.10.2">
+  <link rel="stylesheet" href="../shared/css/components.css?v=1.10.2">
+  <link rel="stylesheet" href="style.css?v=1.10.2">
 
   <!-- テーマと文字サイズは最初の描画より先に当てる
        （あとから当てるとダークが一瞬見えたり、文字サイズが飛び跳ねて見える） -->
@@ -181,8 +181,8 @@
         <h2 class="card__title">カレンダー</h2>
         <p class="card__desc">
           1マスは「その日の夜」（日没から翌朝まで）です。タップするとその夜に切り替わります。
-          丸い印は月の形、<span class="mcell__peak mcell__peak--legend"></span> は流星群の極大がある夜で、
-          極大は未明なので前夜のマスに付きます。
+          丸い印は月の形、<span class="mcell__peak mcell__peak--legend"></span> は流星群の極大がある夜です
+          （極大の時刻を含む夜に付くので、未明の極大は前日のマスになります）。
         </p>
         <div class="cal-nav">
           <button type="button" class="cal-nav__btn" id="btnMonthPrev" aria-label="前の月">‹</button>
@@ -617,7 +617,7 @@
           月の満ち欠けは約19年で同じ日付に戻るため、20年ぶん並べれば次の当たりは必ず入ります。
           バーはこの20年で最長の「狙える時間」を100%とした長さ、色は4段階の判定です。
           「週末」は金・土の夜（翌朝が休みになりやすい夜）。
-          実際の極大は年によって数時間ずれますが、ここでは代表的な日付で計算しています。
+          極大の時刻は年ごとに計算しているので、年によって狙う夜が1日ずれることがあります。
         </p>
       </div>
     </div>
@@ -855,13 +855,13 @@
   </div>
 </div>
 
-<script src="data.js?v=1.10.1"></script>
-<script src="astro.js?v=1.10.1"></script>
-<script src="engine.js?v=1.10.1"></script>
-<script src="stars.js?v=1.10.1"></script>
-<script src="lightpollution.js?v=1.10.1"></script>
-<script src="plan.js?v=1.10.1"></script>
-<script src="app.js?v=1.10.1"></script>
+<script src="data.js?v=1.10.2"></script>
+<script src="astro.js?v=1.10.2"></script>
+<script src="engine.js?v=1.10.2"></script>
+<script src="stars.js?v=1.10.2"></script>
+<script src="lightpollution.js?v=1.10.2"></script>
+<script src="plan.js?v=1.10.2"></script>
+<script src="app.js?v=1.10.2"></script>
 
 <!-- 起動できなかったときの保険。
      app.js 自体が読み込めなかった場合（キャッシュ更新中に取り損なう等）は

@@ -131,3 +131,24 @@ test('狙える時間は月が出ている夜のほうが短い', () => {
   assert.ok(y2026.goldenMinutes > y2027.goldenMinutes,
     `新月期のほうが長く狙える（2026: ${y2026.goldenMinutes}分 / 2027: ${y2027.goldenMinutes}分）`);
 });
+
+/* ===================== 流星群の極大の時刻 =====================
+ * 期待値はアプリの外の公表値。
+ *   ペルセウス座 2026: 国立天文台「8月13日11時頃」
+ *   しぶんぎ座 2026  : IMO 2026年カレンダー「1月3日 21:28 UT」
+ *   オリオン座 2026  : IMO 2026年カレンダー「10月21日 20:27 CEST（18:27 UT）」
+ * 太陽の位置の近似と黄経の丸めがあるので、±1時間までを許す。
+ * 極大を日付で持っていたころは、この時刻を持てずに夜を1晩取り違えていた（v1.10.2）。
+ */
+test('peakInstant: 極大の時刻が公表値と1時間以内で合う', () => {
+  const sh = (id) => D.showers.find((s) => s.id === id);
+  const near = (id, year, expectedMs, label) => {
+    const t = A.peakInstant(sh(id), year).getTime();
+    const diffMin = (t - expectedMs) / 60000;
+    assert.ok(Math.abs(diffMin) <= 60, `${label}: ${diffMin.toFixed(0)}分ずれている`);
+  };
+  near('per', 2026, new Date(2026, 7, 13, 11, 0).getTime(), 'ペルセウス座 2026');
+  near('qua', 2026, Date.UTC(2026, 0, 3, 21, 28), 'しぶんぎ座 2026');
+  near('ori', 2026, Date.UTC(2026, 9, 21, 18, 27), 'オリオン座 2026');
+  assert.strictEqual(A.peakInstant(sh('spo'), 2026), null, '極大を持たない群は null');
+});
