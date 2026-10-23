@@ -914,3 +914,47 @@ test('filterUnseen: すべて解いた問題集は外す', () => {
   const r = Q.filterUnseen(sets, { 's1::1': { attempts: 1, corrects: 1, wrongs: 0, rate: 1, last: 'correct' } });
   assert.deepStrictEqual(r, []);
 });
+
+/* ===================== 模擬試験 ===================== */
+
+test('remainingSeconds: 経過した分だけ減り、0未満にはならない', () => {
+  assert.strictEqual(Q.remainingSeconds(0, 3000, 0), 3000);
+  assert.strictEqual(Q.remainingSeconds(0, 3000, 61000), 2939);
+  assert.strictEqual(Q.remainingSeconds(0, 3000, 3000000), 0);
+  assert.strictEqual(Q.remainingSeconds(0, 3000, 9999999), 0);
+});
+
+test('remainingSeconds: 端数の秒は切り上げる（残り0.4秒は1秒と見せる）', () => {
+  assert.strictEqual(Q.remainingSeconds(0, 60, 59600), 1);
+});
+
+test('formatClock: 分と秒を2桁にそろえる', () => {
+  assert.strictEqual(Q.formatClock(3000), '50:00');
+  assert.strictEqual(Q.formatClock(65), '01:05');
+  assert.strictEqual(Q.formatClock(0), '00:00');
+  assert.strictEqual(Q.formatClock(-3), '00:00');
+});
+
+test('mockStatus: 未解答と見直しを出題順に挙げる', () => {
+  const order = ['a', 'b', 'c', 'd'];
+  const r = Q.mockStatus(order, { a: 0, c: 3 }, { d: true, a: true });
+  assert.deepStrictEqual(r.unanswered, ['b', 'd']);
+  assert.deepStrictEqual(r.flagged, ['a', 'd']);
+  assert.strictEqual(r.answered, 2);
+});
+
+test('mockStatus: 選択肢0番（先頭）を選んだ答えも解答済みとして数える', () => {
+  const r = Q.mockStatus(['a'], { a: 0 }, {});
+  assert.strictEqual(r.answered, 1);
+  assert.deepStrictEqual(r.unanswered, []);
+});
+
+test('passResult: 100点満点で70点が合格ライン', () => {
+  assert.deepStrictEqual(Q.passResult({ hasPoints: true, maxPoints: 100, points: 70 }), { line: 70, ok: true, short: 0 });
+  assert.deepStrictEqual(Q.passResult({ hasPoints: true, maxPoints: 100, points: 64 }), { line: 70, ok: false, short: 6 });
+});
+
+test('passResult: 満点が100でない・配点が無いときは判定しない', () => {
+  assert.strictEqual(Q.passResult({ hasPoints: true, maxPoints: 60, points: 50 }), null);
+  assert.strictEqual(Q.passResult({ hasPoints: false, maxPoints: 60, points: 50 }), null);
+});

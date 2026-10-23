@@ -479,6 +479,124 @@ body {
   color: var(--tb-bg-primary);
 }
 
+/* ===================== 模擬試験 ===================== */
+
+.qd-prewrap { white-space: pre-line; }
+
+/* 残り時間はスクロールしても見えるように上に貼り付ける */
+.qd-mock-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--tb-space-sm) 0;
+  margin-bottom: var(--tb-space-sm);
+  background: var(--tb-bg-primary);
+  border-bottom: 1px solid var(--tb-border);
+}
+.qd-clock {
+  font-size: var(--tb-font-size-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--tb-text-primary);
+}
+.qd-clock.is-low { color: var(--qd-wrong); }
+
+.qd-mock-head {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+  margin-bottom: var(--tb-space-md);
+}
+.qd-qno {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 var(--tb-space-sm);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-accent);
+  color: var(--tb-bg-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.qd-unanswered {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 var(--tb-space-sm);
+  border-radius: var(--tb-radius-md);
+  background: var(--qd-wrong);
+  color: #fff;
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+}
+.qd-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tb-space-xs);
+  min-height: var(--qd-tap);
+  padding: 0 var(--tb-space-sm);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-secondary);
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-primary);
+  cursor: pointer;
+}
+.qd-flag input { width: 1.1rem; height: 1.1rem; }
+
+/* 選んだ答え（正誤は出さない） */
+.qd-choice.is-selected {
+  border-color: var(--tb-accent);
+  background: rgba(88, 166, 255, 0.14);
+}
+.qd-choice.is-selected .qd-choice-num { background: var(--tb-accent); color: var(--tb-bg-primary); }
+
+.qd-mock-actions { margin-top: var(--tb-space-lg); }
+.qd-mq { scroll-margin-top: 4rem; }
+.qd-mock-count {
+  font-size: var(--tb-font-size-base);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--tb-text-primary);
+}
+
+/* 見直し一覧：問題番号の格子 */
+.qd-mrlist {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--tb-space-sm);
+  margin-bottom: var(--tb-space-sm);
+}
+.qd-mr-cell {
+  position: relative;
+  width: 100%;
+  min-height: var(--qd-tap);
+  border: 2px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  background: var(--tb-bg-secondary);
+  color: var(--tb-text-primary);
+  font: inherit;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.qd-mr-cell.is-answered { background: var(--tb-bg-tertiary); }
+.qd-mr-cell.is-unanswered { border-color: var(--qd-wrong); color: var(--qd-wrong); }
+.qd-mr-cell.is-flagged::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--tb-accent);
+}
+
 /* ===================== 自作テキスト ===================== */
 
 /* テキストごとのサブタブ。多いときは横にスクロールする */

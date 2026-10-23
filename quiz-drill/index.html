@@ -48,6 +48,11 @@
     </div>
 
     <div id="panel-drill" role="tabpanel" aria-labelledby="tab-drill">
+      <div id="mock-resume-card" class="qd-card qd-resume" hidden>
+        <button type="button" id="btn-mock-resume" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">模擬試験の続きから</button>
+        <p id="mock-resume-desc" class="qd-note"></p>
+      </div>
+
       <div id="resume-card" class="qd-card qd-resume" hidden>
         <button type="button" id="btn-resume" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">続きから</button>
         <p id="resume-desc" class="qd-note"></p>
@@ -74,6 +79,7 @@
           <label class="qd-mode"><input type="radio" name="mode" value="wrong"><span>前に間違えた問題</span></label>
           <label class="qd-mode"><input type="radio" name="mode" value="unseen"><span>まだ解いていない問題</span></label>
           <label class="qd-mode"><input type="radio" name="mode" value="weak"><span>苦手な問題</span></label>
+          <label class="qd-mode"><input type="radio" name="mode" value="mock"><span>模擬試験（本番形式・50分）</span></label>
         </div>
 
         <!-- タグが1つも無ければ出さない。選択肢はデータのタグから作る -->
@@ -240,6 +246,39 @@
     </section>
   </section>
 
+  <!-- ===================== 模擬試験 ===================== -->
+  <!-- 公式のオンライン受験の練習画面に合わせる。全問を1ページに縦に並べ、上に「解答数」と「残り時間」を貼り付け、
+       各問に「未解答」の札と「あとで見直す」の印を付ける。最後に「確認する」→ 見直し一覧 →「提出する」 -->
+  <section id="screen-mock" class="qd-screen" hidden>
+    <div class="qd-mock-bar">
+      <span id="mk-progress" class="qd-mock-count"></span>
+      <span id="mk-clock" class="qd-clock"></span>
+    </div>
+
+    <!-- 全問を1ページに縦に並べる（公式の練習画面と同じ）。答えても正誤は出さず、選び直せる -->
+    <div id="mk-list"></div>
+
+    <div class="qd-actions qd-mock-actions">
+      <button type="button" id="btn-mk-review" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">確認する</button>
+    </div>
+  </section>
+
+  <section id="screen-mockreview" class="qd-screen" hidden>
+    <div class="qd-mock-bar">
+      <span id="mr-clock" class="qd-clock"></span>
+    </div>
+    <h1 class="qd-qlabel">見直し一覧</h1>
+    <p id="mr-summary" class="qd-note"></p>
+    <div class="qd-card">
+      <ul id="mr-list" class="qd-mrlist"></ul>
+      <p class="qd-note">赤い枠は未解答、右上の印は「あとで見直す」です。番号をタップするとその問題へ移ります。</p>
+    </div>
+    <div class="qd-actions">
+      <button type="button" id="btn-mr-back" class="tb-btn tb-btn--secondary tb-btn--block qd-big-btn">解答画面に戻る</button>
+      <button type="button" id="btn-mr-submit" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">提出する</button>
+    </div>
+  </section>
+
   <!-- ===================== 結果 ===================== -->
   <section id="screen-result" class="qd-screen" hidden>
     <div class="qd-card qd-result">
@@ -248,6 +287,7 @@
       <p id="r-rate" class="qd-result-sub"></p>
       <p id="r-lucky" class="qd-note" hidden></p>
       <p id="r-points" class="qd-result-sub" hidden></p>
+      <p id="r-extra" class="qd-note qd-prewrap" hidden></p>
     </div>
 
     <section class="qd-card">

@@ -171,6 +171,39 @@ var QD_QUIZ = (function () {
     return { sets: sets, added: added, replaced: replaced };
   }
 
+  /* ===================== 模擬試験 ===================== */
+
+  var MOCK_LIMIT_SEC = 50 * 60;   // 本番と同じ50分
+  var MOCK_PASS_POINTS = 70;      // 100点満点のときの合格ライン
+
+  /** 残り秒数。開始時刻（ms）から制限時間を引いて、0 未満にはしない */
+  function remainingSeconds(startedAt, limitSec, nowMs) {
+    return Math.max(0, Math.ceil(limitSec - (nowMs - startedAt) / 1000));
+  }
+
+  /** 秒を「49:05」の形にする */
+  function formatClock(sec) {
+    var s = Math.max(0, Math.round(sec));
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
+  }
+
+  /**
+   * 模擬試験の途中経過。order は問題の鍵の並び、answers は 鍵 → 選んだ選択肢（元の番号・0始まり）、
+   * flags は 鍵 → true（あとで見直す）。返り値は、未解答・見直しの鍵を出題順に並べたもの
+   */
+  function mockStatus(order, answers, flags) {
+    var unanswered = order.filter(function (k) { return answers[k] === undefined; });
+    var flagged = order.filter(function (k) { return !!flags[k]; });
+    return { answered: order.length - unanswered.length, unanswered: unanswered, flagged: flagged };
+  }
+
+  /** 100点満点のときだけ、合格ライン（70点）に対する結果を返す。それ以外は null */
+  function passResult(sc) {
+    if (!sc.hasPoints || sc.maxPoints !== 100) return null;
+    return { line: MOCK_PASS_POINTS, ok: sc.points >= MOCK_PASS_POINTS, short: Math.max(0, MOCK_PASS_POINTS - sc.points) };
+  }
+
   /* ===================== 自作テキスト ===================== */
 
   var TEXT_FORMAT = 'yontaku-text/1';
@@ -887,6 +920,11 @@ var QD_QUIZ = (function () {
     weakOrder: weakOrder,
     statsReport: statsReport,
     validateFile: validateFile,
+    MOCK_LIMIT_SEC: MOCK_LIMIT_SEC,
+    remainingSeconds: remainingSeconds,
+    formatClock: formatClock,
+    mockStatus: mockStatus,
+    passResult: passResult,
     TEXT_FORMAT: TEXT_FORMAT,
     validateTextFile: validateTextFile,
     countTextItems: countTextItems,
