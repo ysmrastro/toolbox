@@ -26,6 +26,7 @@
     'all-random': '全問題からランダム',
     'wrong': '前に間違えた問題',
     'unseen': 'まだ解いていない問題',
+    'mock': '模擬試験',
     'weak': '苦手な問題',
     'retry': '間違えた問題だけもう一度',
   };
@@ -36,6 +37,7 @@
   var state = {
     sets: [],          // 読み込み済みの問題集（保存順）
     texts: [],         // 読み込み済みの自作テキスト（保存順）
+    mock: S.loadMock(), // 進行中の模擬試験（無ければ null）
     tab: S.loadTab() === 'book' ? 'book' : 'drill',   // ホームで開いているタブ
     bookId: S.loadBookTab(),   // 自作テキストのサブタブで選んでいるテキストの id
     index: {},         // 鍵 → { set, question, index }
@@ -55,9 +57,12 @@
   /* ===================== 画面の切り替え ===================== */
 
   function showScreen(name) {
-    ['home', 'quiz', 'result', 'stats'].forEach(function (n) {
+    ['home', 'quiz', 'result', 'stats', 'mock', 'mockreview'].forEach(function (n) {
       $('screen-' + n).hidden = n !== name;
     });
+    // 残り時間は模擬試験の2つの画面にいる間だけ数える
+    if (name === 'mock' || name === 'mockreview') startMockTimer();
+    else stopMockTimer();
     window.scrollTo(0, 0);
   }
 
@@ -122,6 +127,7 @@
       $('resume-desc').textContent = describeSession(s);
     }
 
+    renderMockResume();
     renderModeFields();
   }
 
@@ -142,6 +148,10 @@
     $('set-field').hidden = mode === 'all-random';
     $('count-field').hidden = mode !== 'all-random' && mode !== 'wrong' && mode !== 'unseen' && mode !== 'weak';
     $('threshold-field').hidden = mode !== 'weak';
+    $('mockmode-field').hidden = mode !== 'mock';
+    renderMockModeNote();
+    // 模擬試験は本番どおり1回分の全問を出すので、絞り込みは使わない
+    $('filter-field').hidden = mode === 'mock' || Q.collectTags(state.sets).length === 0;
     fillSetSelect(mode);
     renderStartCount();
   }
@@ -199,6 +209,18 @@
     }
   }
 
+  /** 模擬試験のモード。'rehearsal'（本番どおり）か 'practice'（時間を過ぎても続けられる） */
+  function selectedMockMode() {
+    var el = document.querySelector('input[name="mockmode"]:checked');
+    return el && el.value === 'practice' ? 'practice' : 'rehearsal';
+  }
+
+  function renderMockModeNote() {
+    $('mockmode-note').textContent = selectedMockMode() === 'practice'
+      ? '練習：時間を過ぎても自動で提出しません。超えた時間は結果に出ます。'
+      : 'リハーサル：本番どおり。50分で自動的に提出します。';
+  }
+
   function selectedCount() {
     var v = document.querySelector('input[name="count"]:checked').value;
     return v === 'all' ? null : Number(v);
@@ -211,6 +233,10 @@
 
   /** いまの出題方法・問題集・絞り込みで対象になる問題集（問題を絞った写し） */
   function candidateSets(mode) {
+    if (mode === 'mock') {
+      var mockId = $('set-select').value;
+      return state.sets.filter(function (set) { return set.id === mockId; });
+    }
     var sets = Q.filterSets(state.sets, currentFilter());
     if (mode === 'wrong') sets = Q.filterWrong(sets, state.summary);
     if (mode === 'unseen') sets = Q.filterUnseen(sets, state.summary);
@@ -229,6 +255,7 @@
     var text;
     if (mode === 'wrong') text = n > 0 ? '前に間違えた問題: ' + n + '問' : '前に間違えた問題はありません';
     else if (mode === 'unseen') text = n > 0 ? 'まだ解いていない問題: ' + n + '問' : 'まだ解いていない問題はありません';
+    else if (mode === 'mock') text = n > 0 ? '模擬試験: ' + n + '問・' + Math.round(Q.MOCK_LIMIT_SEC / 60) + '分（提出するまで正誤は出ません）' : '問題集を選んでください';
     else if (mode === 'weak') text = n > 0 ? '苦手な問題: ' + n + '問' : '苦手な問題はありません';
     else text = n > 0 ? '対象: ' + n + '問' : '条件に合う問題がないため、開始できません';
     var el = $('start-count');
@@ -655,8 +682,18 @@
   }
 
   function onStart() {
-    if (state.session && !confirm('途中の問題があります。新しく始めると、途中の分は消えます。よろしいですか？')) return;
     var mode = selectedMode();
+    if (mode === 'mock') {
+      var mockSets = candidateSets(mode);
+      if (Q.countQuestions(mockSets) === 0) {
+        renderStartCount();
+        return;
+      }
+      if (state.mock && !confirm('途中の模擬試験があります。新しく始めると、途中の分は消えます。よろしいですか？')) return;
+      startMock(mockSets[0], selectedMockMode() === 'practice');
+      return;
+    }
+    if (state.session && !confirm('途中の問題があります。新しく始めると、途中の分は消えます。よろしいですか？')) return;
     var sets = candidateSets(mode);
     if (Q.countQuestions(sets) === 0) {
       renderStartCount();
@@ -909,6 +946,306 @@
     showScreen('home');
   }
 
+  /* ===================== 模擬試験 ===================== */
+
+  var mockTimer = null;
+
+  /** 途中の模擬試験の問題がすべて手元にあるか（問題集を消した・置き換えたときに崩れる） */
+  function mockUsable(m) {
+    return !!m && Array.isArray(m.order) && m.order.length > 0 && typeof m.startedAt === 'number' &&
+      m.answers && m.flags && m.order.every(function (k) { return !!state.index[k]; });
+  }
+
+  function mockLeft() {
+    return Q.remainingSeconds(state.mock.startedAt, state.mock.limitSec, Date.now());
+  }
+
+  function startMock(set, practice) {
+    state.mock = {
+      setId: set.id, title: set.title, practice: !!practice,
+      order: Q.sequentialOrder(set),   // 本番と同じ問番号の順
+      answers: {},                     // 鍵 → 選んだ選択肢（元の番号・0始まり）
+      inTime: {},                      // 鍵 → 制限時間内に選んでいた答え（時間外に選び直しても変わらない）
+      flags: {},                       // 鍵 → true（あとで見直す）
+      pos: 0, startedAt: Date.now(), limitSec: Q.MOCK_LIMIT_SEC,
+    };
+    state.finished = null;
+    S.saveMock(state.mock);
+    renderMock();
+  }
+
+  function renderMockResume() {
+    var m = mockUsable(state.mock) ? state.mock : null;
+    if (state.loaded && state.mock && !m) {
+      state.mock = null;
+      S.clearMock();
+    }
+    $('mock-resume-card').hidden = !m;
+    if (!m) return;
+    var st = Q.mockStatus(m.order, m.answers, m.flags);
+    $('mock-resume-desc').textContent = m.title + '（' + (m.practice ? '練習' : 'リハーサル') + '）：回答 ' + st.answered + ' / ' + m.order.length +
+      (mockLeft() > 0 ? '・残り ' + Q.formatClock(mockLeft()) : (m.practice ? '・時間を過ぎています' : '・時間切れです'));
+  }
+
+  var mockBuilt = null;    // いま画面に組んである模擬試験の開始時刻（別の試験になったら組み直す）
+  var mockScroll = 0;      // 見直し一覧へ行く前のスクロール位置
+
+  /** 解答画面を出す。jumpIdx があればその問題へ、scrollY があればその位置へ移る */
+  function renderMock(jumpIdx, scrollY) {
+    if (mockBuilt !== state.mock.startedAt) buildMockPage();
+    showScreen('mock');
+    if (typeof jumpIdx === 'number') {
+      var card = $('mq-' + jumpIdx);
+      if (card) card.scrollIntoView();
+    } else if (typeof scrollY === 'number') {
+      window.scrollTo(0, scrollY);
+    }
+  }
+
+  function updateMockHeader() {
+    var m = state.mock;
+    var st = Q.mockStatus(m.order, m.answers, m.flags);
+    $('mk-progress').textContent = '解答数 ' + st.answered + '/' + m.order.length + '問';
+  }
+
+  /** 全問を縦に並べて組む。選択肢は本番と同じ並びのまま。答えても正誤は出さず、選び直せる */
+  function buildMockPage() {
+    var m = state.mock;
+    var list = $('mk-list');
+    list.textContent = '';
+    m.order.forEach(function (key, idx) {
+      var q = state.index[key].question;
+      var card = document.createElement('section');
+      card.className = 'qd-card qd-mq';
+      card.id = 'mq-' + idx;
+
+      var head = document.createElement('div');
+      head.className = 'qd-mock-head';
+      var no = document.createElement('span');
+      no.className = 'qd-qno';
+      no.textContent = 'Q' + (q.no !== undefined ? q.no : idx + 1);
+      var blank = document.createElement('span');
+      blank.className = 'qd-unanswered';
+      blank.textContent = '未解答';
+      var spacer = document.createElement('span');
+      spacer.className = 'qd-spacer';
+      var flag = document.createElement('label');
+      flag.className = 'qd-flag';
+      var box = document.createElement('input');
+      box.type = 'checkbox';
+      var flagText = document.createElement('span');
+      flagText.textContent = 'あとで見直す';
+      flag.appendChild(box);
+      flag.appendChild(flagText);
+      head.appendChild(no);
+      head.appendChild(blank);
+      head.appendChild(spacer);
+      head.appendChild(flag);
+      card.appendChild(head);
+
+      var text = document.createElement('p');
+      text.className = 'qd-qtext';
+      text.textContent = q.question;
+      card.appendChild(text);
+
+      if (q.image) {
+        var fig = document.createElement('figure');
+        fig.className = 'qd-figure';
+        var img = document.createElement('img');
+        img.src = q.image;
+        img.alt = q.imageAlt || '問題の図';
+        img.addEventListener('click', openLightbox);
+        fig.appendChild(img);
+        card.appendChild(fig);
+      }
+
+      var choices = document.createElement('ol');
+      choices.className = 'qd-choices';
+      var buttons = q.choices.map(function (choice, i) {
+        var li = document.createElement('li');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'qd-choice';
+        var num = document.createElement('span');
+        num.className = 'qd-choice-num';
+        num.textContent = String(i + 1);
+        var label = document.createElement('span');
+        label.className = 'qd-choice-text';
+        label.textContent = choice;
+        btn.appendChild(num);
+        btn.appendChild(label);
+        btn.addEventListener('click', function () {
+          m.answers[key] = i;
+          // 制限時間を過ぎたあとの答えは、時間内の得点には数えない（練習モードで続けたとき）
+          if (Date.now() - m.startedAt <= m.limitSec * 1000) {
+            if (!m.inTime) m.inTime = {};
+            m.inTime[key] = i;
+          }
+          S.saveMock(m);
+          refresh();
+          updateMockHeader();
+        });
+        li.appendChild(btn);
+        choices.appendChild(li);
+        return btn;
+      });
+      card.appendChild(choices);
+
+      box.addEventListener('change', function () {
+        if (box.checked) m.flags[key] = true;
+        else delete m.flags[key];
+        S.saveMock(m);
+      });
+
+      function refresh() {
+        var picked = m.answers[key];
+        blank.hidden = picked !== undefined;
+        buttons.forEach(function (btn, i) { btn.classList.toggle('is-selected', picked === i); });
+      }
+      box.checked = !!m.flags[key];
+      refresh();
+      list.appendChild(card);
+    });
+    mockBuilt = m.startedAt;
+    updateMockHeader();
+  }
+
+  function renderMockReview() {
+    var m = state.mock;
+    mockScroll = window.scrollY;
+    // 見直し一覧に見える「あとで見直す」の印や答えは、いまの画面の状態に合わせる
+    var st = Q.mockStatus(m.order, m.answers, m.flags);
+    $('mr-summary').textContent = '回答 ' + st.answered + ' / ' + m.order.length +
+      '・未解答 ' + st.unanswered.length + '・あとで見直す ' + st.flagged.length;
+    var list = $('mr-list');
+    list.textContent = '';
+    m.order.forEach(function (key, idx) {
+      var q = state.index[key].question;
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      var answered = m.answers[key] !== undefined;
+      btn.className = 'qd-mr-cell ' + (answered ? 'is-answered' : 'is-unanswered') + (m.flags[key] ? ' is-flagged' : '');
+      btn.textContent = String(q.no !== undefined ? q.no : idx + 1);
+      btn.setAttribute('aria-label', '問' + btn.textContent + (answered ? '' : '（未解答）') + (m.flags[key] ? '（あとで見直す）' : ''));
+      btn.addEventListener('click', function () { renderMock(idx); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    showScreen('mockreview');
+  }
+
+  /** 残り時間を出す。リハーサルは0になったら自動で提出する（本番の時間切れの扱いは手引きに書かれていない）。練習は提出しない */
+  function tickMock() {
+    if (!state.mock) {
+      stopMockTimer();
+      return;
+    }
+    var m = state.mock;
+    var left = mockLeft();
+    var text = '残り ' + Q.formatClock(left);
+    // 練習モードは時間を過ぎても続けられる。超えた分を数える
+    if (left <= 0 && m.practice) text = '超過 ' + Q.formatClock(Q.overSeconds(m.startedAt, m.limitSec, Date.now()));
+    ['mk-clock', 'mr-clock'].forEach(function (id) {
+      var el = $(id);
+      el.textContent = text;
+      el.classList.toggle('is-low', left <= 300);
+    });
+    if (left <= 0 && !m.practice) {
+      stopMockTimer();
+      submitMock(true);
+    }
+  }
+
+  function startMockTimer() {
+    stopMockTimer();
+    if (!state.mock) return;
+    tickMock();
+    mockTimer = setInterval(tickMock, 1000);
+  }
+
+  function stopMockTimer() {
+    if (mockTimer) clearInterval(mockTimer);
+    mockTimer = null;
+  }
+
+  /** 提出する。未解答の問題も不正解として学習の記録に残す（あとで「前に間違えた問題」で解き直せる） */
+  function submitMock(auto) {
+    var m = state.mock;
+    if (!m) return;
+    var st = Q.mockStatus(m.order, m.answers, m.flags);
+    if (!auto) {
+      var msg = (st.unanswered.length ? '未解答が ' + st.unanswered.length + '問あります。' : '') +
+        '提出すると、続きは解けません。提出しますか？';
+      if (!confirm(msg)) return;
+    }
+    var now = new Date();
+    var answers = {};
+    var entries = [];
+    var inTime = {};
+    m.order.forEach(function (key) {
+      var q = state.index[key].question;
+      var picked = m.answers[key];
+      var within = (m.inTime || m.answers)[key];
+      inTime[key] = within === undefined ? null : within;
+      var has = picked !== undefined;
+      var correct = has && Q.isCorrectOriginal(q, picked);
+      var id = S.newLogId(now);
+      entries.push({ id: id, key: key, at: now.toISOString(), ok: correct });
+      answers[key] = {
+        order: q.choices.map(function (_, i) { return i; }),
+        picked: has ? picked : null, correct: correct, logId: id, lucky: false,
+      };
+    });
+    state.finished = {
+      mode: 'mock', order: m.order.slice(), pos: 0, answers: answers, desc: '模擬試験（' + (m.practice ? '練習' : 'リハーサル') + '）：' + m.title,
+      elapsedSec: m.practice ? Math.round((Date.now() - m.startedAt) / 1000) : Math.min(m.limitSec, Math.round((Date.now() - m.startedAt) / 1000)),
+      limitSec: m.limitSec, auto: !!auto, practice: !!m.practice, inTime: inTime,
+    };
+    state.mock = null;
+    mockBuilt = null;
+    S.clearMock();
+    setLog(state.log.concat(entries));
+    S.addLog(entries).catch(function (e) {
+      showMessage(['回答の記録を保存できませんでした: ' + e], true, 'history-msg');
+    });
+    renderResult();
+    showScreen('result');
+  }
+
+  /**
+   * 結果画面の補足（模擬試験のときだけ）：制限時間内の得点・合格ライン・所要時間・未解答。
+   * 練習モードは時間を過ぎても続けられるので、時間内に選んでいた答えだけの得点と、時間外を含めた得点を並べる
+   * （差が「もっと速く解けていれば届いた点数」）。合格ラインは時間内の得点で判定する（本番は時間内のものだけ）
+   */
+  function renderResultExtra(f, sc) {
+    var lines = [];
+    if (f.mode === 'mock') {
+      var within = Q.score(f.order.map(function (k) {
+        var q = state.index[k].question;
+        var picked = f.inTime ? f.inTime[k] : f.answers[k].picked;
+        return { key: k, question: q, correct: picked !== null && picked !== undefined && Q.isCorrectOriginal(q, picked) };
+      }));
+      if (f.practice) {
+        var gain = sc.points - within.points;
+        lines.push('制限時間内の得点 ' + within.points + '点。時間外の答えを含めると ' + sc.points + '点（' +
+          (gain > 0 ? '時間外で ' + gain + '点増えました' : gain < 0 ? '時間外の選び直しで ' + (-gain) + '点減りました' : '時間外で変わった点数はありません') + '）');
+      }
+      var pass = Q.passResult(within);
+      if (pass) {
+        lines.push('合格ライン ' + pass.line + '点（' + within.maxPoints + '点満点、' + (f.practice ? '制限時間内の得点' : '得点') + 'で判定）：' +
+          (pass.ok ? '超えました' : 'あと ' + pass.short + '点'));
+      }
+      lines.push((f.practice ? '練習モード。' : 'リハーサル。') + '所要時間 ' + Q.formatClock(f.elapsedSec) + '（制限 ' + Q.formatClock(f.limitSec) + '）' +
+        (f.auto ? '。時間切れで自動的に提出しました' : (f.elapsedSec > f.limitSec ? '。制限を ' + Q.formatClock(f.elapsedSec - f.limitSec) + ' 超えました' : '')));
+      var blank = f.order.filter(function (k) { return f.answers[k].picked === null; }).length;
+      if (blank) lines.push('未解答 ' + blank + '問（不正解として数えています）');
+      $('r-points').textContent = '得点 ' + sc.points + ' / ' + sc.maxPoints + ' 点' + (f.practice ? '（時間外を含む）' : '');
+    }
+    $('r-extra').hidden = lines.length === 0;
+    $('r-extra').textContent = lines.join('\n');
+  }
+
   /* ===================== 結果 ===================== */
 
   function finishSession() {
@@ -932,6 +1269,7 @@
     $('r-lucky').textContent = 'うち まぐれ ' + lucky + '問（不正解として数えています）';
     $('r-points').hidden = !sc.hasPoints;
     $('r-points').textContent = '得点 ' + sc.points + ' / ' + sc.maxPoints + ' 点';
+    renderResultExtra(f, sc);
 
     var wrong = results.filter(function (r) { return !r.correct; });
     var list = $('r-wrong');
@@ -1086,8 +1424,8 @@
 
   /* ===================== 画像の拡大 ===================== */
 
-  function openLightbox() {
-    var img = $('q-image');
+  function openLightbox(ev) {
+    var img = (ev && ev.currentTarget) || $('q-image');   // 押した画像を拡大する（問題画面・模擬試験の両方で使う）
     $('lightbox-img').src = img.src;
     $('lightbox-img').alt = img.alt;
     $('lightbox').hidden = false;
@@ -1116,6 +1454,10 @@
   $('btn-quit').addEventListener('click', onQuit);
   $('btn-retry').addEventListener('click', onRetry);
   $('btn-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
+  $('btn-mock-resume').addEventListener('click', function () { renderMock(); });
+  $('btn-mk-review').addEventListener('click', renderMockReview);
+  $('btn-mr-back').addEventListener('click', function () { renderMock(null, mockScroll); });
+  $('btn-mr-submit').addEventListener('click', function () { submitMock(false); });
   $('q-image').addEventListener('click', openLightbox);
   $('lightbox').addEventListener('click', closeLightbox);
   Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function (el) {
@@ -1128,6 +1470,9 @@
     el.addEventListener('change', renderStartCount);
   });
   $('set-select').addEventListener('change', renderStartCount);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="mockmode"]'), function (el) {
+    el.addEventListener('change', renderMockModeNote);
+  });
   $('filter-select').addEventListener('change', renderStartCount);
 
   state.session = S.loadSession();

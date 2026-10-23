@@ -13,7 +13,7 @@
  * 自作テキスト（公式や単位の換算など）も IndexedDB に置く（store 'texts'、keyPath はテキストの id）。
  * 扱いは問題集と同じで、同じ id を put すれば置き換え、違う id なら追加。
  *
- * 進行中のセッション・前回の正解の表示位置・端末ID と連番は小さいので localStorage に置く。
+ * 進行中のセッション・進行中の模擬試験・前回の正解の表示位置・端末ID と連番は小さいので localStorage に置く。
  * 以前の成績の記録（問題ごとの集計）も localStorage に残っている。ログに移したあとも消さず、
  * 移行済みの印だけを付ける。
  * localStorage はプライベートブラウズなどで例外を投げることがあるので、読み書きは握りつぶす
@@ -30,6 +30,7 @@ var QD_STORAGE = (function () {
   var SESSION_KEY = 'quiz-drill.session';
   var STATS_KEY = 'quiz-drill.stats';           // 以前の成績の記録（問題ごとの集計）。読むだけ
   var MIGRATED_KEY = 'quiz-drill.stats-migrated'; // 以前の成績の記録をログに移した印
+  var MOCK_KEY = 'quiz-drill.mock';               // 進行中の模擬試験（答え・印・開始時刻）
   var DEVICE_KEY = 'quiz-drill.device';           // 端末ごとに固定のランダムな ID
   var SEQ_KEY = 'quiz-drill.seq';                 // 回答の id に付ける連番
   var TAB_KEY = 'quiz-drill.tab';                 // ホームで最後に開いていたタブ（'drill' | 'book'）
@@ -172,6 +173,9 @@ var QD_STORAGE = (function () {
     loadSession: function () { return readJson(SESSION_KEY); },
     saveSession: function (s) { writeJson(SESSION_KEY, s); },
     clearSession: function () { writeJson(SESSION_KEY, null); },
+    loadMock: function () { return readJson(MOCK_KEY); },
+    saveMock: function (m) { writeJson(MOCK_KEY, m); },
+    clearMock: function () { writeJson(MOCK_KEY, null); },
     getAllLog: getAllLog,
     addLog: addLog,
     newLogId: newLogId,
