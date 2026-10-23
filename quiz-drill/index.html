@@ -103,7 +103,17 @@
           </div>
         </div>
 
-        <!-- 苦手な問題だけで使う。正答率がこれ未満か、最後に不正解の問題を出す -->
+        <!-- 模擬試験だけで使う。リハーサルは本番どおり、練習は時間を過ぎても自動で提出しない -->
+      <div id="mockmode-field" class="tb-form-group" hidden>
+        <span class="tb-label">モード</span>
+        <div class="qd-counts qd-counts--3" role="radiogroup" aria-label="模擬試験のモード">
+          <label class="qd-count"><input type="radio" name="mockmode" value="rehearsal" checked><span>リハーサル</span></label>
+          <label class="qd-count"><input type="radio" name="mockmode" value="practice"><span>練習</span></label>
+        </div>
+        <p id="mockmode-note" class="qd-note"></p>
+      </div>
+
+      <!-- 苦手な問題だけで使う。正答率がこれ未満か、最後に不正解の問題を出す -->
         <div id="threshold-field" class="tb-form-group" hidden>
           <span class="tb-label">苦手とみなす正答率</span>
           <div class="qd-counts qd-counts--3" role="radiogroup" aria-label="苦手とみなす正答率">

@@ -928,6 +928,13 @@ test('remainingSeconds: 端数の秒は切り上げる（残り0.4秒は1秒と�
   assert.strictEqual(Q.remainingSeconds(0, 60, 59600), 1);
 });
 
+test('overSeconds: 制限を過ぎた分だけ数え、過ぎるまでは0', () => {
+  assert.strictEqual(Q.overSeconds(0, 3000, 2999000), 0);
+  assert.strictEqual(Q.overSeconds(0, 3000, 3000000), 0);
+  assert.strictEqual(Q.overSeconds(0, 3000, 3125000), 125);
+  assert.strictEqual(Q.overSeconds(0, 3000, 3125900), 125);
+});
+
 test('formatClock: 分と秒を2桁にそろえる', () => {
   assert.strictEqual(Q.formatClock(3000), '50:00');
   assert.strictEqual(Q.formatClock(65), '01:05');

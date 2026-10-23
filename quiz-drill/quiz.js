@@ -181,6 +181,11 @@ var QD_QUIZ = (function () {
     return Math.max(0, Math.ceil(limitSec - (nowMs - startedAt) / 1000));
   }
 
+  /** 制限時間を超えた秒数。超えていなければ 0（練習モードで、0 を過ぎても続けたときの表示に使う） */
+  function overSeconds(startedAt, limitSec, nowMs) {
+    return Math.max(0, Math.floor((nowMs - startedAt) / 1000 - limitSec));
+  }
+
   /** 秒を「49:05」の形にする */
   function formatClock(sec) {
     var s = Math.max(0, Math.round(sec));
@@ -922,6 +927,7 @@ var QD_QUIZ = (function () {
     validateFile: validateFile,
     MOCK_LIMIT_SEC: MOCK_LIMIT_SEC,
     remainingSeconds: remainingSeconds,
+    overSeconds: overSeconds,
     formatClock: formatClock,
     mockStatus: mockStatus,
     passResult: passResult,
