@@ -1158,16 +1158,52 @@
   }
 
   function startMockTimer() {
-    stopMockTimer();
-    if (!state.mock) return;
+    if (mockTimer) clearInterval(mockTimer);   // 解答画面と見直し一覧の行き来では、画面点灯を外さない
+    mockTimer = null;
+    if (!state.mock) { releaseWakeLock(); return; }
     tickMock();
     mockTimer = setInterval(tickMock, 1000);
+    acquireWakeLock();
   }
 
   function stopMockTimer() {
     if (mockTimer) clearInterval(mockTimer);
     mockTimer = null;
+    releaseWakeLock();
   }
+
+  /* 模擬試験の間は画面を点けたままにする（Screen Wake Lock。使えない端末では何もしない）。
+     別のタブやアプリへ移ると自動で外れるので、戻ってきたとき（visibilitychange）に取り直す */
+  var wakeLock = null;
+
+  function showWakeNote(on) {
+    var el = $('mk-wake');
+    if (el) el.hidden = !on;
+  }
+
+  function acquireWakeLock() {
+    if (!navigator.wakeLock || wakeLock || document.visibilityState !== 'visible') return;
+    navigator.wakeLock.request('screen').then(function (lock) {
+      if (!mockTimer) { lock.release(); return; }   // 取れる前に画面を離れていた
+      wakeLock = lock;
+      showWakeNote(true);
+      lock.addEventListener('release', function () {
+        if (wakeLock === lock) wakeLock = null;
+        showWakeNote(false);
+      });
+    }).catch(function () { showWakeNote(false); });
+  }
+
+  function releaseWakeLock() {
+    var lock = wakeLock;
+    wakeLock = null;
+    showWakeNote(false);
+    if (lock) lock.release().catch(function () {});
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && mockTimer) acquireWakeLock();
+  });
 
   /** 提出する。未解答の問題も不正解として学習の記録に残す（あとで「前に間違えた問題」で解き直せる） */
   function submitMock(auto) {
