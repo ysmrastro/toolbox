@@ -503,6 +503,10 @@ body {
   color: var(--tb-text-primary);
 }
 .qd-clock.is-low { color: var(--qd-wrong); }
+.qd-mock-wake {
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+}
 
 .qd-mock-head {
   display: flex;
