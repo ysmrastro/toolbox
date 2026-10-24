@@ -34,6 +34,7 @@ var QD_STORAGE = (function () {
   var DEVICE_KEY = 'quiz-drill.device';           // 端末ごとに固定のランダムな ID
   var SEQ_KEY = 'quiz-drill.seq';                 // 回答の id に付ける連番
   var TAB_KEY = 'quiz-drill.tab';                 // ホームで最後に開いていたタブ（'drill' | 'book'）
+  var START_KEY = 'quiz-drill.start';             // 最後に「はじめる」を押したときの出題方法・問題集・絞り込みなど
   var BOOK_KEY = 'quiz-drill.book';               // 自作テキストで最後に開いていたテキストの id
   var POSITIONS_KEY = 'quiz-drill.positions';   // 鍵 → 前回表示したときの代表の正解の表示位置
 
@@ -184,6 +185,8 @@ var QD_STORAGE = (function () {
     markMigrated: function () { writeJson(MIGRATED_KEY, true); },
     loadPositions: function () { return readJson(POSITIONS_KEY) || {}; },
     savePositions: function (p) { writeJson(POSITIONS_KEY, p); },
+    loadStart: function () { return readJson(START_KEY); },
+    saveStart: function (v) { writeJson(START_KEY, v); },
     loadTab: function () { return readJson(TAB_KEY); },
     saveTab: function (t) { writeJson(TAB_KEY, t); },
     loadBookTab: function () { return readJson(BOOK_KEY); },

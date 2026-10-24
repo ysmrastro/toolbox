@@ -113,6 +113,7 @@
     });
 
     fillFilterSelect();
+    restoreStartChoices();
     renderHistory();
     renderBooks();
     renderTab();
@@ -210,6 +211,46 @@
     } catch (e) {
       return { type: 'all' };
     }
+  }
+
+  /** 「はじめる」を押したときの選択を覚えておく。次に開いたときに同じ選択から始められる */
+  function saveStartChoices() {
+    var checked = function (name) {
+      var el = document.querySelector('input[name="' + name + '"]:checked');
+      return el ? el.value : null;
+    };
+    S.saveStart({
+      mode: checked('mode'), set: $('set-select').value, filter: $('filter-select').value,
+      count: checked('count'), threshold: checked('threshold'), mockmode: checked('mockmode'),
+    });
+  }
+
+  /** 覚えておいた選択を戻す（最初の1回だけ）。いまの問題集に無い値は、そのまま既定にしておく */
+  var startRestored = false;
+  function restoreStartChoices() {
+    if (startRestored || !state.sets.length) return;
+    startRestored = true;
+    var v = S.loadStart();
+    if (!v || typeof v !== 'object') return;
+    var pick = function (name, value) {
+      if (typeof value !== 'string') return;
+      var el = document.querySelector('input[name="' + name + '"][value="' + value + '"]');
+      if (el) el.checked = true;
+    };
+    var setSelect = function (id, value) {
+      var select = $(id);
+      if (typeof value !== 'string') return;
+      if (Array.prototype.some.call(select.options, function (o) { return o.value === value; })) select.value = value;
+    };
+    pick('mode', v.mode);
+    pick('count', v.count);
+    pick('threshold', v.threshold);
+    pick('mockmode', v.mockmode);
+    renderModeFields();            // 出題方法に合わせて問題集の選択肢を作り直す
+    setSelect('set-select', v.set);
+    setSelect('filter-select', v.filter);
+    renderMockModeNote();
+    renderStartCount();
   }
 
   /** 模擬試験のモード。'rehearsal'（本番どおり）か 'practice'（時間を過ぎても続けられる） */
@@ -686,6 +727,7 @@
 
   function onStart() {
     var mode = selectedMode();
+    saveStartChoices();
     if (mode === 'mock') {
       var mockSets = candidateSets(mode);
       if (Q.countQuestions(mockSets) === 0) {
