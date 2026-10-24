@@ -811,6 +811,20 @@ var QD_QUIZ = (function () {
     };
   }
 
+  /**
+   * 最後に解いた日時を、この端末で解いたものとほかの端末から取り込んだものに分けて返す（ISO 文字列。無ければ null）。
+   * 端末は回答の id の先頭（端末ID）で分かる。目印や消去の印（kind あり）は数えない。
+   */
+  function latestAnswers(log, deviceId) {
+    var res = { own: null, other: null };
+    (log || []).forEach(function (e) {
+      if (!e || e.kind || typeof e.at !== 'string' || typeof e.id !== 'string') return;
+      var field = e.id.split(':')[0] === deviceId ? 'own' : 'other';
+      if (res[field] === null || e.at > res[field]) res[field] = e.at;
+    });
+    return res;
+  }
+
   /* ===================== 苦手な問題 ===================== */
 
   /** 苦手: 1回以上解いていて、正答率がしきい値未満か、最後に不正解 */
@@ -920,6 +934,7 @@ var QD_QUIZ = (function () {
     validateHistory: validateHistory,
     historyToLog: historyToLog,
     historySummary: historySummary,
+    latestAnswers: latestAnswers,
     isWeak: isWeak,
     filterWeak: filterWeak,
     weakOrder: weakOrder,
