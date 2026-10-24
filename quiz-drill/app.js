@@ -221,7 +221,7 @@
     };
     S.saveStart({
       mode: checked('mode'), set: $('set-select').value, filter: $('filter-select').value,
-      count: checked('count'), threshold: checked('threshold'), mockmode: checked('mockmode'),
+      count: checked('count'), threshold: checked('threshold'), rest: checked('rest'), mockmode: checked('mockmode'),
     });
   }
 
@@ -245,6 +245,7 @@
     pick('mode', v.mode);
     pick('count', v.count);
     pick('threshold', v.threshold);
+    pick('rest', v.rest);
     pick('mockmode', v.mockmode);
     renderModeFields();            // 出題方法に合わせて問題集の選択肢を作り直す
     setSelect('set-select', v.set);
@@ -275,6 +276,12 @@
     return Number(document.querySelector('input[name="threshold"]:checked').value) / 100;
   }
 
+  /** 苦手な問題で、最近正解した問題を外す時間（時間）。0 なら外さない */
+  function selectedRest() {
+    var el = document.querySelector('input[name="rest"]:checked');
+    return el ? Number(el.value) : 0;
+  }
+
   /** いまの出題方法・問題集・絞り込みで対象になる問題集（問題を絞った写し） */
   function candidateSets(mode) {
     if (mode === 'mock') {
@@ -284,7 +291,10 @@
     var sets = Q.filterSets(state.sets, currentFilter());
     if (mode === 'wrong') sets = Q.filterWrong(sets, state.summary);
     if (mode === 'unseen') sets = Q.filterUnseen(sets, state.summary);
-    if (mode === 'weak') sets = Q.filterWeak(sets, state.summary, selectedThreshold());
+    if (mode === 'weak') {
+      sets = Q.filterWeak(sets, state.summary, selectedThreshold());
+      sets = Q.filterRecentCorrect(sets, state.summary, selectedRest(), Date.now());
+    }
     if (mode === 'all-random') return sets;
     var id = $('set-select').value;
     if ((mode === 'wrong' || mode === 'unseen' || mode === 'weak') && id === ALL_SETS) return sets;
@@ -300,12 +310,27 @@
     if (mode === 'wrong') text = n > 0 ? '前に間違えた問題: ' + n + '問' : '前に間違えた問題はありません';
     else if (mode === 'unseen') text = n > 0 ? 'まだ解いていない問題: ' + n + '問' : 'まだ解いていない問題はありません';
     else if (mode === 'mock') text = n > 0 ? '模擬試験: ' + n + '問・' + Math.round(Q.MOCK_LIMIT_SEC / 60) + '分（提出するまで正誤は出ません）' : '問題集を選んでください';
-    else if (mode === 'weak') text = n > 0 ? '苦手な問題: ' + n + '問' : '苦手な問題はありません';
+    else if (mode === 'weak') text = weakCountText(n);
     else text = n > 0 ? '対象: ' + n + '問' : '条件に合う問題がないため、開始できません';
     var el = $('start-count');
     el.textContent = text;
     el.classList.toggle('is-empty', n === 0);
     $('btn-start').disabled = n === 0;
+  }
+
+  /** 苦手な問題の件数の文。最近正解して外した分も添える（外した結果0問のときは、そう分かるように） */
+  function weakCountText(n) {
+    var all = Q.countQuestions(Q.filterWeak(candidateSetsBeforeRest(), state.summary, selectedThreshold()));
+    var skipped = all - n;
+    if (n > 0) return '苦手な問題: ' + n + '問' + (skipped > 0 ? '（最近正解した ' + skipped + '問を除く）' : '');
+    return skipped > 0 ? '苦手な問題はすべて最近正解したので、いまは出せません（' + skipped + '問）' : '苦手な問題はありません';
+  }
+
+  /** 苦手の絞り込みの前の、問題集と絞り込みだけを当てた問題集 */
+  function candidateSetsBeforeRest() {
+    var sets = Q.filterSets(state.sets, currentFilter());
+    var id = $('set-select').value;
+    return id === ALL_SETS ? sets : sets.filter(function (set) { return set.id === id; });
   }
 
   function removeSet(set) {
@@ -775,7 +800,10 @@
       var set = state.sets.filter(function (s) { return s.id === id; })[0];
       parts.push(set ? set.title : (opt ? opt.textContent : ''));
     }
-    if (mode === 'weak') parts.push('正答率' + Math.round(selectedThreshold() * 100) + '%未満か最後に不正解');
+    if (mode === 'weak') {
+      parts.push('正答率' + Math.round(selectedThreshold() * 100) + '%未満か最後に不正解');
+      if (selectedRest() > 0) parts.push('最近正解した問題を除く');
+    }
     if (!$('filter-field').hidden && currentFilter().type !== 'all') {
       parts.push($('filter-select').selectedOptions[0].textContent);
     }
@@ -1559,6 +1587,9 @@
     el.addEventListener('change', renderStartCount);
   });
   Array.prototype.forEach.call(document.querySelectorAll('input[name="threshold"]'), function (el) {
+    el.addEventListener('change', renderStartCount);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="rest"]'), function (el) {
     el.addEventListener('change', renderStartCount);
   });
   $('set-select').addEventListener('change', renderStartCount);

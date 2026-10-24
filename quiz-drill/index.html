@@ -122,6 +122,14 @@
             <label class="qd-count"><input type="radio" name="threshold" value="80"><span>80%未満</span></label>
           </div>
           <p class="qd-note">最後に不正解だった問題も含めます。</p>
+          <span class="tb-label">最近正解した問題</span>
+          <div class="qd-counts" role="radiogroup" aria-label="最近正解した問題の扱い">
+            <label class="qd-count"><input type="radio" name="rest" value="0"><span>出す</span></label>
+            <label class="qd-count"><input type="radio" name="rest" value="12"><span>12時間は除く</span></label>
+            <label class="qd-count"><input type="radio" name="rest" value="24" checked><span>24時間は除く</span></label>
+            <label class="qd-count"><input type="radio" name="rest" value="72"><span>3日は除く</span></label>
+          </div>
+          <p class="qd-note">間隔をあけて復習したほうが残りやすいので、最後の回答が正解の問題は、この時間が過ぎるまで出しません。</p>
         </div>
 
         <p id="start-count" class="qd-start-count"></p>
