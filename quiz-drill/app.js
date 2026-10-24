@@ -69,7 +69,10 @@
   /* ===================== ホーム ===================== */
 
   function setSets(sets) {
-    state.sets = sets;
+    // 読み込んだ順ではなく名前順（「第9回」「第11回」のように数字は大きさで）に並べる
+    state.sets = sets.slice().sort(function (a, b) {
+      return a.title.localeCompare(b.title, 'ja', { numeric: true });
+    });
     state.index = Q.indexSets(sets);
   }
 
