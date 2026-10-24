@@ -838,6 +838,19 @@ var QD_QUIZ = (function () {
     });
   }
 
+  /**
+   * 最後の回答が正解で、その日時から hours 時間が経っていない問題を外す（間隔をあけて復習するため）。
+   * 最後が不正解の問題は残す（すぐ解き直せるように）。hours が 0 以下なら何も外さない。
+   */
+  function filterRecentCorrect(sets, summary, hours, nowMs) {
+    if (!(hours > 0)) return sets;
+    return selectQuestions(sets, function (set, q) {
+      var s = summary[questionKey(set.id, q.id)];
+      if (!s || s.last !== 'correct' || !s.lastAt) return true;
+      return nowMs - Date.parse(s.lastAt) >= hours * 3600 * 1000;
+    });
+  }
+
   /** 苦手の並べ方: 正答率の低い順、同じなら不正解の回数が多い順 */
   function compareWeak(a, b) {
     return a.rate - b.rate || b.wrongs - a.wrongs;
@@ -937,6 +950,7 @@ var QD_QUIZ = (function () {
     latestAnswers: latestAnswers,
     isWeak: isWeak,
     filterWeak: filterWeak,
+    filterRecentCorrect: filterRecentCorrect,
     weakOrder: weakOrder,
     statsReport: statsReport,
     validateFile: validateFile,

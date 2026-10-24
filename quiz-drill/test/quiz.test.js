@@ -977,3 +977,19 @@ test('latestAnswers: 端末ごとに最後に解いた日時を返し、目印�
   assert.deepStrictEqual(Q.latestAnswers(log, 'zzz'), { own: null, other: '2026-10-24T03:00:00.000Z' });
   assert.deepStrictEqual(Q.latestAnswers([], 'aaa'), { own: null, other: null });
 });
+
+test('filterRecentCorrect: 最後が正解で時間が経っていない問題だけを外す。最後が不正解なら残す', () => {
+  const now = Date.parse('2026-10-25T12:00:00.000Z');
+  const hoursAgo = (h) => new Date(now - h * 3600 * 1000).toISOString();
+  const log = [
+    { id: 'd:1:1', key: 's::a', at: hoursAgo(2), ok: true },    // 2時間前に正解 → 外す
+    { id: 'd:1:2', key: 's::b', at: hoursAgo(30), ok: true },   // 30時間前に正解 → 残す
+    { id: 'd:1:3', key: 's::c', at: hoursAgo(1), ok: false },   // 1時間前に不正解 → 残す
+    { id: 'd:1:4', key: 's::d', at: hoursAgo(24), ok: true },   // ちょうど24時間前 → 残す
+  ];
+  const sum = Q.summarizeLog(log);
+  const keys = (hours) => keysOf(Q.filterRecentCorrect(weakSets, sum, hours, now));
+  assert.deepStrictEqual(keys(24), ['s::b', 's::c', 's::d', 's::e', 's::f']);   // 解いていない e・f は残す
+  assert.deepStrictEqual(keys(72), ['s::c', 's::e', 's::f']);
+  assert.deepStrictEqual(keys(0), ['s::a', 's::b', 's::c', 's::d', 's::e', 's::f']);
+});
