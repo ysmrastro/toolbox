@@ -965,3 +965,15 @@ test('passResult: 満点が100でない・配点が無いときは判定しな�
   assert.strictEqual(Q.passResult({ hasPoints: true, maxPoints: 60, points: 50 }), null);
   assert.strictEqual(Q.passResult({ hasPoints: false, maxPoints: 60, points: 50 }), null);
 });
+
+test('latestAnswers: 端末ごとに最後に解いた日時を返し、目印や消去の印は数えない', () => {
+  const log = [
+    { id: 'aaa:1:1', key: 'k1', at: '2026-10-24T01:00:00.000Z', ok: true },
+    { id: 'aaa:2:2', key: 'k2', at: '2026-10-24T03:00:00.000Z', ok: false },
+    { id: 'bbb:3:1', key: 'k3', at: '2026-10-24T02:00:00.000Z', ok: true },
+    { id: 'bbb:4:2', kind: 'clear', setId: 's', at: '2026-10-25T00:00:00.000Z' },
+  ];
+  assert.deepStrictEqual(Q.latestAnswers(log, 'aaa'), { own: '2026-10-24T03:00:00.000Z', other: '2026-10-24T02:00:00.000Z' });
+  assert.deepStrictEqual(Q.latestAnswers(log, 'zzz'), { own: null, other: '2026-10-24T03:00:00.000Z' });
+  assert.deepStrictEqual(Q.latestAnswers([], 'aaa'), { own: null, other: null });
+});

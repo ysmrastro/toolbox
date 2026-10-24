@@ -179,6 +179,7 @@ var QD_STORAGE = (function () {
     getAllLog: getAllLog,
     addLog: addLog,
     newLogId: newLogId,
+    getDeviceId: deviceId,
     loadLegacyStats: function () { return readJson(STATS_KEY); },
     isMigrated: function () { return readJson(MIGRATED_KEY) === true; },
     markMigrated: function () { writeJson(MIGRATED_KEY, true); },

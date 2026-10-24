@@ -592,6 +592,17 @@
       ? '解いた問題 ' + sum.answered + '問・回答 ' + sum.answers + '件・前に間違えた問題 ' + sum.wrong + '問'
       : 'まだ記録がありません。';
     $('btn-export').disabled = sum.answered === 0;
+
+    // どちらの端末が新しいかを見分けられるよう、最後に解いた日時を端末ごとに出す
+    var last = Q.latestAnswers(state.log, S.getDeviceId());
+    var when = function (iso) {
+      if (!iso) return 'なし';
+      var d = new Date(iso);
+      return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+    };
+    $('history-latest').textContent = sum.answered > 0
+      ? '最後に解いた日時 — この端末: ' + when(last.own) + '／ほかの端末から取り込んだ分: ' + when(last.other)
+      : '';
   }
 
   /**
