@@ -416,8 +416,39 @@ var LA_FLUID = (function () {
       draw(null);
     }
 
+    /* 診断用。流れと泡を GPU から読み戻して、最大値と NaN の数を返す（重いので常用しない） */
+    function stats(t, channels) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+      var buf = new Float32Array(t.res * t.res * 4);
+      gl.readPixels(0, 0, t.res, t.res, gl.RGBA, gl.FLOAT, buf);
+      var max = 0, nan = 0;
+      for (var i = 0; i < buf.length; i += 4) {
+        var v = channels === 2 ? Math.hypot(buf[i], buf[i + 1]) : buf[i];
+        if (v !== v) nan++;
+        else if (v > max) max = v;
+      }
+      return { max: max, nan: nan };
+    }
+    function probe() {
+      try {
+        var v = stats(vel.read, 2), d = stats(dye.read, 1);
+        var err = gl.getError();
+        return { vmax: v.max, vnan: v.nan, rmax: d.max, rnan: d.nan, error: err ? 'glError ' + err : '' };
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+    function info() {
+      return [
+        gl.getExtension('EXT_color_buffer_float') ? 'cbf' : '-',
+        gl.getExtension('EXT_color_buffer_half_float') ? 'cbhf' : '-',
+        gl.isContextLost() ? 'LOST' : 'ok',
+        gl.drawingBufferWidth + 'px',
+      ].join(' ');
+    }
+
     reset();
-    return { step: step, render: render, reset: reset, CUP_R: CUP_R };
+    return { step: step, render: render, reset: reset, probe: probe, info: info, CUP_R: CUP_R };
   }
 
   return { create: create, CUP_R: CUP_R };
