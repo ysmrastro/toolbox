@@ -88,7 +88,10 @@
   margin-top: var(--tb-space-xs);
   font-size: var(--tb-font-size-base);
 }
-.la-phase[data-phase="sink"] { color: var(--la-crema); }
+.la-phase[data-phase="high"],
+.la-phase[data-phase="shallow"],
+.la-phase[data-phase="weak"],
+.la-phase[data-phase="strong"] { color: var(--la-crema); }
 .la-phase[data-phase="float"] { color: var(--la-milk); font-weight: bold; }
 .la-phase[data-phase="idle"],
 .la-phase[data-phase="full"] { color: var(--tb-text-secondary); }
@@ -131,6 +134,15 @@ body:not(.is-sensor) .la-only-sensor { display: none !important; }
 .la-slider {
   display: grid;
   gap: var(--tb-space-xs);
+  margin-top: var(--tb-space-sm);
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+}
+
+.la-check {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
   margin-top: var(--tb-space-sm);
   font-size: var(--tb-font-size-sm);
   color: var(--tb-text-secondary);
