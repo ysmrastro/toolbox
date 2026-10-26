@@ -44,6 +44,20 @@
   -webkit-touch-callout: none;
 }
 
+.la-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 18%;
+  text-align: center;
+  font-size: var(--tb-font-size-sm);
+  line-height: 1.5;
+  color: rgba(255, 250, 240, 0.85);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  /* 下のカップに指が届くように、案内はタッチを受けない */
+  pointer-events: none;
+}
+
 .la-unsupported {
   position: absolute;
   inset: 0;
