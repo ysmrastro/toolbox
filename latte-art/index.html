@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>ラテアート練習（試作） | ysmrastro toolbox</title>
+  <meta name="description" content="iPhone をミルクピッチャーに見立てて傾けると、カップにミルクが注がれてラテアートが描かれます。">
+
+  <!-- SNS でリンクを共有したときのカード表示（og:image は絶対URLでないと反映されない） -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ysmrastro toolbox">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:url" content="https://ysmrastro.github.io/toolbox/latte-art/">
+  <meta property="og:title" content="ラテアート練習（試作）">
+  <meta property="og:description" content="iPhone をミルクピッチャーに見立てて傾けると、カップにミルクが注がれてラテアートが描かれます。最初は沈み、カップが満ちると白が浮かぶ、本物と同じ順番で。">
+  <meta property="og:image" content="https://ysmrastro.github.io/toolbox/latte-art/ogp.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ラテアート練習（試作）">
+  <meta name="twitter:description" content="iPhone をミルクピッチャーに見立てて傾けると、カップにミルクが注がれてラテアートが描かれます。最初は沈み、カップが満ちると白が浮かぶ、本物と同じ順番で。">
+  <meta name="twitter:image" content="https://ysmrastro.github.io/toolbox/latte-art/ogp.png">
+
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link rel="apple-touch-icon" href="../favicon.png">
+  <link rel="stylesheet" href="../shared/css/variables.css">
+  <link rel="stylesheet" href="../shared/css/reset.css">
+  <link rel="stylesheet" href="../shared/css/components.css">
+  <link rel="stylesheet" href="../shared/css/layout.css">
+  <link rel="stylesheet" href="style.css?v=0.1.0">
+</head>
+<body>
+
+<header class="tb-header">
+  <a href="../" class="tb-header__logo">ysmrastro toolbox</a>
+  <nav class="tb-header__nav">
+    <a href="../">ツール一覧</a>
+  </nav>
+</header>
+
+<main class="la-app">
+  <h1 class="la-title">ラテアート練習 <span class="la-badge">試作</span></h1>
+
+  <div class="la-stage">
+    <canvas id="cup" class="la-cup" aria-label="上から見たカップ"></canvas>
+    <p id="unsupported" class="la-unsupported" hidden>
+      この端末のブラウザでは描画に必要な機能（WebGL2）が使えません。
+    </p>
+  </div>
+
+  <div class="la-hud">
+    <div class="la-meter">
+      <span class="la-meter__label">カップ</span>
+      <span class="la-meter__track"><span id="fillBar" class="la-meter__bar la-meter__bar--fill"></span></span>
+    </div>
+    <div class="la-meter">
+      <span class="la-meter__label">注ぐ量</span>
+      <span class="la-meter__track"><span id="flowBar" class="la-meter__bar la-meter__bar--flow"></span></span>
+    </div>
+    <p id="phase" class="la-phase" data-phase="idle">注いでいません</p>
+    <p id="tilt" class="la-tilt"></p>
+  </div>
+
+  <div class="la-actions">
+    <button type="button" id="btnSensor" class="tb-btn tb-btn--primary la-only-pointer">傾けて注ぐ（iPhone）</button>
+    <button type="button" id="btnCalibrate" class="tb-btn la-only-sensor">いまの構えを基準にする</button>
+    <button type="button" id="btnReset" class="tb-btn">作り直す</button>
+  </div>
+  <p id="message" class="la-message" role="status"></p>
+
+  <label class="la-slider la-only-pointer">
+    押して注ぐときの量
+    <input type="range" id="flowSlider" min="20" max="100" value="70">
+  </label>
+
+  <section class="la-guide">
+    <h2>注ぎ方</h2>
+    <ol>
+      <li><b>傾けて注ぐ</b>を押し、iPhone を画面が見える角度で構える。その角度が「注いでいない」状態になる</li>
+      <li>手前に倒す（画面の上の辺を下げる）と注げる。倒すほど量が増える</li>
+      <li>最初はミルクがクレマの下に沈み、白は出ない。カップが半分を過ぎると白が浮かんでくる</li>
+      <li>左右に傾けると注ぐ点が横に動く（ロゼッタのウィグル。試作のため、まだ葉には分かれない）。注ぐ点の起点は指でカップを触って動かせる</li>
+      <li>最後に細く注ぎながら起点を奥へ滑らせると、模様を切り抜ける</li>
+    </ol>
+    <p class="la-note">
+      傾けると画面が横向きに回ってしまうときは、コントロールセンターで画面の向きを縦に固定してください
+      （Web ページからは向きを固定できません）。
+      PC では、カップを押しているあいだマウスの位置に注げます。
+    </p>
+  </section>
+</main>
+
+<script src="pour.js?v=0.1.0"></script>
+<script src="fluid.js?v=0.1.0"></script>
+<script src="app.js?v=0.1.0"></script>
+</body>
+</html>

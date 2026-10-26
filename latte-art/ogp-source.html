@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>OGP 生成元 — ラテアート練習</title>
+  <!--
+    1200×630 でスクリーンショットを撮り、ogp.png として保存する（CLAUDE.md「SNS共有用のOGP」）。
+    カップは本物の app.js にハートの注ぎ方を流して描く。app.js が触る要素は下に隠して置いてある。
+  -->
+  <style>
+    html, body { margin: 0; }
+    body {
+      width: 1200px; height: 630px; overflow: hidden;
+      background: #1f1a17;
+      font-family: "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
+      display: flex; align-items: center; gap: 56px; padding: 0 72px; box-sizing: border-box;
+    }
+    #cup { width: 540px; height: 540px; flex: none; }
+    .text { color: #f5efe4; }
+    .site { font-size: 24px; color: #b89a7a; margin-bottom: 16px; }
+    h1 { font-size: 60px; margin: 0 0 24px; line-height: 1.25; }
+    p { font-size: 28px; line-height: 1.6; margin: 0; color: #e6d8c6; }
+    .stub { display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="cup"></canvas>
+  <div class="text">
+    <div class="site">ysmrastro toolbox</div>
+    <h1>ラテアート練習</h1>
+    <p>iPhone を傾けて注ぐと、<br>カップにラテアートが描かれる。<br>白が浮く順番も本物どおりに。</p>
+  </div>
+
+  <div class="stub">
+    <p id="unsupported" hidden></p>
+    <span id="fillBar"></span><span id="flowBar"></span>
+    <p id="phase"></p><p id="tilt"></p><p id="message"></p>
+    <button id="btnSensor"></button><button id="btnCalibrate"></button><button id="btnReset"></button>
+    <input type="range" id="flowSlider" min="20" max="100" value="70">
+  </div>
+
+  <script src="pour.js"></script>
+  <script src="fluid.js"></script>
+  <script src="app.js"></script>
+  <script>
+    // テストと同じハートの注ぎ方（沈める → 中央で白を広げる → 細く切り抜く）
+    LATTE.reset(1.7);
+    LATTE.drive(600, function (i) {
+      if (i < 230) return { x: 0.5, y: 0.5, flow: 0.8 };
+      if (i < 420) return { x: 0.5, y: 0.5, flow: 0.95 };
+      if (i < 455) { var t = (i - 420) / 35; return { x: 0.5, y: 0.2 + 0.6 * t, flow: 0.22 }; }
+      return { x: 0.5, y: 0.8, flow: 0 };
+    });
+    document.body.dataset.ready = '1';
+  </script>
+</body>
+</html>
