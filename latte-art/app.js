@@ -179,7 +179,8 @@
       state.move.x += ((input.x - state.last.x) / dt - state.move.x) * k;
       state.move.y += ((input.y - state.last.y) / dt - state.move.y) * k;
       var sp = Math.hypot(state.move.x, state.move.y);
-      if (sp > T.MOVE_MAX) { state.move.x *= T.MOVE_MAX / sp; state.move.y *= T.MOVE_MAX / sp; }
+      if (!isFinite(sp)) { state.move.x = 0; state.move.y = 0; }   // 念のため（NaN を流れに入れない）
+      else if (sp > T.MOVE_MAX) { state.move.x *= T.MOVE_MAX / sp; state.move.y *= T.MOVE_MAX / sp; }
     } else {
       state.move.x = 0; state.move.y = 0;
     }
@@ -205,6 +206,36 @@
     }
     sim.step(dt, pour);
     state.fill = POUR.nextFill(state.fill, flow, dt);
+    if (debug) debugNote(dt, pour);
+  }
+
+  /* ===================== 診断表示（URL に ?debug） =====================
+   * 実機でだけ起きる不具合を、画面のスクリーンショットから追えるようにする。
+   * 流れと泡の値は GPU から読み戻すので重い。0.5秒ごとにだけ読む */
+  var debug = /[?&]debug/.test(location.search);
+  var dbg = { minDt: Infinity, maxDt: 0, frames: 0, probe: null, at: 0, pour: null };
+
+  function debugNote(dt, pour) {
+    dbg.frames++;
+    dbg.minDt = Math.min(dbg.minDt, dt);
+    dbg.maxDt = Math.max(dbg.maxDt, dt);
+    dbg.pour = pour;
+    var now = performance.now();
+    if (now - dbg.at > 500) { dbg.at = now; dbg.probe = sim.probe(); }
+  }
+
+  function debugText() {
+    var f = function (x, n) { return x == null ? '—' : Number(x).toFixed(n == null ? 3 : n); };
+    var p = dbg.pour, q = dbg.probe || {};
+    return [
+      'frames ' + dbg.frames + ' / dt ' + f(dbg.minDt * 1000, 1) + '〜' + f(dbg.maxDt * 1000, 1) + 'ms',
+      'pour ' + (p ? 'x ' + f(p.x) + ' y ' + f(p.y) + ' src ' + f(p.source, 2) + ' white ' + f(p.white, 2) +
+        ' rate ' + f(p.rate) + ' m ' + f(p.mx, 2) + ',' + f(p.my, 2) : 'なし'),
+      '流れ 最大 ' + f(q.vmax) + ' NaN ' + (q.vnan == null ? '—' : q.vnan) +
+        '／泡 最大 ' + f(q.rmax, 2) + ' NaN ' + (q.rnan == null ? '—' : q.rnan) +
+        (q.error ? '／' + q.error : ''),
+      'gl ' + sim.info(),
+    ].join('\n');
   }
 
   var PHASE_TEXT = {
@@ -226,6 +257,7 @@
     } else {
       $('tilt').textContent = '';
     }
+    if (debug) $('debug').textContent = debugText();
   }
 
   var prevT = null;
@@ -233,9 +265,13 @@
   function frame(t) {
     if (!paused) {
       var dt = prevT == null ? 1 / 60 : Math.min((t - prevT) / 1000, 1 / 30);
-      advance(dt, readInput());
-      sim.render();
-      updateHud();
+      /* iOS では前のフレームと同じ時刻が来ることがある。dt が 0 だと注ぐ点の速さが
+         0÷0 になり、NaN が流れに入ってそれ以降の計算がすべて止まる */
+      if (dt > 0) {
+        advance(dt, readInput());
+        sim.render();
+        updateHud();
+      }
     }
     prevT = t;
     requestAnimationFrame(frame);

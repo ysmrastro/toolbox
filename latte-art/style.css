@@ -99,6 +99,15 @@
   min-height: 1.2em;
 }
 
+.la-debug {
+  font-family: var(--tb-font-mono);
+  font-size: 0.75rem;
+  color: var(--tb-text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.la-debug:empty { display: none; }
+
 .la-actions {
   display: flex;
   flex-wrap: wrap;
