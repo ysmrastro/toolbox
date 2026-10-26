@@ -48,23 +48,44 @@ test('nextFill: 最大の量で注ぎ続けると約10秒で満杯になる', ()
   assert.strictEqual(POUR.nextFill(0.5, 0, 1), 0.5, '注がなければ増えない');
 });
 
-/* ===================== 白が浮くか沈むか ===================== */
+/* ===================== 白が浮くか沈むか =====================
+ * 期待値は解説に書かれている振る舞い（README の出典）。
+ *   - 高い位置から注ぐと潜る
+ *   - 液面ぎりぎりから注ぐと泡が乗る。ただしカップが半分〜3/4 入ってから
+ *   - 勢いは弱すぎても強すぎても模様にならない（強すぎると沈む）
+ */
 
-test('floatFactor: 注ぎ始めは沈み、カップが満ちると白が浮く', () => {
-  assert.strictEqual(POUR.floatFactor(POUR.FILL_START, 1), 0, 'エスプレッソだけのうちは沈む');
-  assert.strictEqual(POUR.floatFactor(0.5, 1), 0, '半分までは沈む');
-  assert.strictEqual(POUR.floatFactor(0.8, 1), 1, '8割入っていれば浮く');
-  assert.ok(POUR.floatFactor(0.65, 1) > 0 && POUR.floatFactor(0.65, 1) < 1, 'そのあいだは少しずつ');
+const FULL_ENOUGH = 0.7;   // 半分〜3/4 の範囲
+const GENTLE = 0.5;        // ほどほどの勢い
+
+test('floatFactor: 高い位置から注ぐと、満ちていても勢いが程よくても沈む', () => {
+  assert.strictEqual(POUR.floatFactor(FULL_ENOUGH, GENTLE, false), 0);
+  assert.strictEqual(POUR.floatFactor(0.95, GENTLE, false), 0);
 });
 
-test('floatFactor: 細い注ぎは満ちていても沈む（切り抜きの線になる）', () => {
-  assert.strictEqual(POUR.floatFactor(0.9, 0.15), 0, '細い注ぎは潜る');
-  assert.strictEqual(POUR.floatFactor(0.9, 0.6), 1, 'しっかり注げば浮く');
+test('floatFactor: 液面ぎりぎりから、ほどほどの勢いで注ぐと白が浮く', () => {
+  assert.strictEqual(POUR.floatFactor(FULL_ENOUGH, GENTLE, true), 1);
 });
 
-test('phase: 画面に出す状態', () => {
-  assert.strictEqual(POUR.phase(0.4, 0), 'idle');
-  assert.strictEqual(POUR.phase(0.4, 0.8), 'sink');
-  assert.strictEqual(POUR.phase(0.85, 0.8), 'float');
-  assert.strictEqual(POUR.phase(1, 0.8), 'full', '満杯なら注いでいても満杯');
+test('floatFactor: カップがまだ浅いうちは、低く注いでも白が乗らない', () => {
+  assert.strictEqual(POUR.floatFactor(POUR.FILL_START, GENTLE, true), 0, 'エスプレッソだけ');
+  assert.strictEqual(POUR.floatFactor(0.4, GENTLE, true), 0, '半分に満たない');
+});
+
+test('floatFactor: 低くても一気に注ぐと沈む。弱すぎても泡を押し広げられない', () => {
+  assert.strictEqual(POUR.floatFactor(FULL_ENOUGH, 1, true), 0, '一気に');
+  assert.strictEqual(POUR.floatFactor(FULL_ENOUGH, 0.05, true), 0, 'ちょろちょろ');
+  const mid = POUR.floatFactor(FULL_ENOUGH, 0.8, true);
+  assert.ok(mid > 0 && mid < 1, '強めの勢いでは少しずつ沈み始める');
+});
+
+test('phase: 沈んでいるときは理由を返す', () => {
+  assert.strictEqual(POUR.phase(0.5, 0, true), 'idle');
+  assert.strictEqual(POUR.phase(FULL_ENOUGH, GENTLE, true), 'float');
+  assert.strictEqual(POUR.phase(FULL_ENOUGH, GENTLE, false), 'high', '高い位置');
+  assert.strictEqual(POUR.phase(0.4, GENTLE, true), 'shallow', 'カップが浅い');
+  assert.strictEqual(POUR.phase(FULL_ENOUGH, 1, true), 'strong', '勢いが強すぎる');
+  assert.strictEqual(POUR.phase(FULL_ENOUGH, 0.05, true), 'weak', '勢いが弱い');
+  assert.strictEqual(POUR.phase(0.4, GENTLE, false), 'high', '高くて浅いときは、まず高さを言う');
+  assert.strictEqual(POUR.phase(1, GENTLE, true), 'full', '満杯なら注いでいても満杯');
 });

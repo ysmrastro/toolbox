@@ -36,21 +36,17 @@
     <span id="fillBar"></span><span id="flowBar"></span>
     <p id="phase"></p><p id="tilt"></p><p id="message"></p>
     <button id="btnSensor"></button><button id="btnCalibrate"></button><button id="btnReset"></button>
-    <input type="range" id="flowSlider" min="20" max="100" value="70">
+    <input type="range" id="flowSlider" min="10" max="100" value="50">
+    <input type="checkbox" id="lowToggle" checked>
   </div>
 
   <script src="pour.js"></script>
   <script src="fluid.js"></script>
   <script src="app.js"></script>
+  <script src="recipes.js"></script>
   <script>
-    // テストと同じハートの注ぎ方（沈める → 中央で白を広げる → 細く切り抜く）
     LATTE.reset(1.7);
-    LATTE.drive(600, function (i) {
-      if (i < 230) return { x: 0.5, y: 0.5, flow: 0.8 };
-      if (i < 420) return { x: 0.5, y: 0.5, flow: 0.95 };
-      if (i < 455) { var t = (i - 420) / 35; return { x: 0.5, y: 0.2 + 0.6 * t, flow: 0.22 }; }
-      return { x: 0.5, y: 0.8, flow: 0 };
-    });
+    LATTE.drive(HEART.frames, HEART.input);
     document.body.dataset.ready = '1';
   </script>
 </body>

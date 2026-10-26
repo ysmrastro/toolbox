@@ -3,8 +3,12 @@
  *
  * 操作は2通り。
  *   傾けて注ぐ（iPhone）: 構えた角度から手前に倒すと注げる。左右に傾けると注ぐ点が横に動く
- *                         （ウィグル）。注ぐ点の起点は指でカップを触って動かす
- *   押して注ぐ（PC・確認用）: 押しているあいだ、指やマウスの位置に注ぐ
+ *                         （ウィグル）。親指をカップに置いているあいだは注ぎ口が
+ *                         液面ぎりぎり（低い）、離すと高い位置。置いた指の位置が注ぐ点になる
+ *   押して注ぐ（PC・確認用）: 押しているあいだ、マウスの位置に注ぐ。高さはチェックボックス
+ *
+ * 高さはセンサーで測れないので指で表す。白が浮くかどうかの第一の条件が高さだから
+ * （pour.js の冒頭と README の出典）。
  */
 (function () {
   'use strict';
@@ -15,7 +19,7 @@
   /* 流れの強さの調整値。画面で見ながら決めたもの（物理量ではない）。
      window.LATTE.tune から書き換えて見比べられる */
   var T = {
-    SOURCE: 14,         // 湧き出しの強さ [1/秒]（注ぐ量 1・白が浮いているとき）
+    SOURCE: 22,         // 湧き出しの強さ [1/秒]（注ぐ量 1・白が浮いているとき）
     SOURCE_SUNK: 0.35,  // 沈んでいるあいだの湧き出しの割合（潜ったぶん表面は動きにくい）
     DRAG: 0.1,          // 注ぐ点の動きに液面が引きずられる割合
     /* 引きずる速さの上限 [uv/秒]。強く引きずると液面全体が渦を巻いて、描いた白がまるごと
@@ -49,13 +53,16 @@
     mode: 'pointer',        // 'pointer' | 'sensor'
     fill: POUR.FILL_START,
     flow: 0,
+    low: false,             // このフレームで注ぎ口が液面ぎりぎりだったか
     pressing: false,        // 押して注ぐ: 押しているか
+    touching: false,        // 傾けて注ぐ: 指をカップに置いているか（＝注ぎ口が液面ぎりぎり）
     pointer: { x: 0.5, y: 0.5 },
     base: { x: 0.5, y: 0.5 },   // 傾けて注ぐ: 注ぐ点の起点
     beta: null, gamma: null,
     beta0: null, gamma0: null,
     last: null,             // 前のフレームの注ぐ点（動いた速さを出すため）
     move: { x: 0, y: 0 },
+    hand: { x: 0, y: 0 },   // 指・マウスで動かした速さ（左右の傾きの分は含めない）
   };
 
   /* ===================== キャンバスの大きさ ===================== */
@@ -78,19 +85,19 @@
   canvas.addEventListener('pointerdown', function (e) {
     canvas.setPointerCapture(e.pointerId);
     var p = toUv(e);
-    if (state.mode === 'sensor') { state.base = p; return; }
+    if (state.mode === 'sensor') { state.touching = true; state.base = p; return; }
     state.pressing = true;
     state.pointer = p;
   });
   canvas.addEventListener('pointermove', function (e) {
     var p = toUv(e);
     if (state.mode === 'sensor') {
-      if (e.buttons || e.pointerType === 'touch') state.base = p;
+      if (state.touching) state.base = p;
       return;
     }
     state.pointer = p;
   });
-  function release() { state.pressing = false; }
+  function release() { state.pressing = false; state.touching = false; }
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
 
@@ -128,7 +135,7 @@
     state.mode = 'sensor';
     state.beta0 = null;
     document.body.classList.add('is-sensor');
-    showMessage('構えた角度を基準にしました。手前に倒すと注げます。');
+    showMessage('構えた角度を基準にしました。手前に倒すと注げます。親指をカップに置くと液面ぎりぎりから注げます。');
     // しばらく値が来なければ、センサーの無い端末と判断する
     setTimeout(function () {
       if (state.mode === 'sensor' && state.beta == null) {
@@ -150,46 +157,67 @@
 
   /**
    * 入力から、このフレームの注ぐ点と量を決める。
-   * 返り値は { x, y, flow }。注いでいなければ flow は 0
+   * 返り値は { x, y, flow, low, hx, hy }。
+   *   x, y   : 注ぐ点（左右の傾きによる横ずれを含む）
+   *   flow   : 注ぐ量（注いでいなければ 0）
+   *   low    : 注ぎ口が液面ぎりぎりか
+   *   hx, hy : 指・マウスで決めた位置（横ずれを含まない。速く滑らせたかを見るため）
    */
   function readInput() {
     if (state.mode === 'sensor') {
-      if (state.beta == null || state.beta0 == null) return { x: state.base.x, y: state.base.y, flow: 0 };
+      var b = state.base;
+      if (state.beta == null || state.beta0 == null) {
+        return { x: b.x, y: b.y, flow: 0, low: state.touching, hx: b.x, hy: b.y };
+      }
       var dx = POUR.offsetFromRoll(state.gamma, state.gamma0) * 2 * LA_FLUID.CUP_R;
       return {
-        x: state.base.x + dx,
-        y: state.base.y,
+        x: b.x + dx, y: b.y,
         flow: POUR.flowFromTilt(state.beta, state.beta0),
+        low: state.touching,
+        hx: b.x, hy: b.y,
       };
     }
+    var q = state.pointer;
     return {
-      x: state.pointer.x,
-      y: state.pointer.y,
+      x: q.x, y: q.y,
       flow: state.pressing ? Number($('flowSlider').value) / 100 : 0,
+      low: $('lowToggle').checked,
+      hx: q.x, hy: q.y,
     };
+  }
+
+  /** 前の位置からの速さを、指の飛びで暴れないよう少しならして v に積む */
+  function smoothVelocity(v, from, to, dt) {
+    var k = Math.min(1, dt * 20);
+    v.x += ((to.x - from.x) / dt - v.x) * k;
+    v.y += ((to.y - from.y) / dt - v.y) * k;
+    var sp = Math.hypot(v.x, v.y);
+    if (!isFinite(sp)) { v.x = 0; v.y = 0; }   // 念のため（NaN を流れに入れない）
+    else if (sp > T.MOVE_MAX) { v.x *= T.MOVE_MAX / sp; v.y *= T.MOVE_MAX / sp; }
   }
 
   function advance(dt, input) {
     var flow = state.fill >= 1 ? 0 : input.flow;
     state.flow = flow;
 
-    // 注ぐ点の動き。指の飛びで暴れないよう、少しならしてから使う
+    var hx = input.hx == null ? input.x : input.hx;
+    var hy = input.hy == null ? input.y : input.hy;
     if (state.last && flow > 0) {
-      var k = Math.min(1, dt * 20);
-      state.move.x += ((input.x - state.last.x) / dt - state.move.x) * k;
-      state.move.y += ((input.y - state.last.y) / dt - state.move.y) * k;
-      var sp = Math.hypot(state.move.x, state.move.y);
-      if (!isFinite(sp)) { state.move.x = 0; state.move.y = 0; }   // 念のため（NaN を流れに入れない）
-      else if (sp > T.MOVE_MAX) { state.move.x *= T.MOVE_MAX / sp; state.move.y *= T.MOVE_MAX / sp; }
+      smoothVelocity(state.move, state.last, input, dt);
+      smoothVelocity(state.hand, state.last.hand, { x: hx, y: hy }, dt);
     } else {
       state.move.x = 0; state.move.y = 0;
+      state.hand.x = 0; state.hand.y = 0;
     }
-    state.last = { x: input.x, y: input.y };
+    state.last = { x: input.x, y: input.y, hand: { x: hx, y: hy } };
+    state.low = !!input.low;
 
     var pour = null;
     if (flow > 0) {
-      var speed = Math.hypot(state.move.x, state.move.y);
-      var floatF = POUR.floatFactor(state.fill, flow);
+      /* 指を素早く滑らせたときは流れが潜る（切り抜き）。左右の傾きによるウィグルは
+         液面ぎりぎりで泡を乗せながら揺らす動きなので、ここには数えない */
+      var speed = Math.hypot(state.hand.x, state.hand.y);
+      var floatF = POUR.floatFactor(state.fill, flow, state.low);
       var fl = floatF / (1 + Math.pow(speed / T.DIVE_SPEED, 2));
       // 液面を押す強さは潜りに左右されない（注いだ量はどのみち液面を押し上げる）
       var source = T.SOURCE * flow * (T.SOURCE_SUNK + (1 - T.SOURCE_SUNK) * floatF);
@@ -200,7 +228,9 @@
         // 注ぐ点に湧き上がるものの泡の厚み。入れ替わる速さは湧き出しに比例させる
         white: fl * T.FOAM,
         rate: source * dt,
-        sunk: Math.min(1, (1 - fl) * flow * 4 * dt),
+        /* 沈んだミルクでクレマが明るくなる。低く注いで沈んだとき（浅いうち・勢いが
+           強すぎるとき）は泡がコーヒーと混ざるので、高く注いだときより濁りが強い */
+        sunk: Math.min(1, (1 - fl) * flow * (state.low ? 8 : 4) * dt),
         mx: state.move.x * T.DRAG, my: state.move.y * T.DRAG + T.JET * flow * fl,
       };
     }
@@ -238,17 +268,21 @@
     ].join('\n');
   }
 
+  /* 沈んでいるときは理由を出す。どれも解説に書かれている失敗の形（README の出典） */
   var PHASE_TEXT = {
     idle: '注いでいません',
-    sink: '沈んでいる（クレマの下に潜っている）',
-    float: '浮いている（白が表に出る）',
+    high: '高い位置から注いでいる → 沈んで土台になる',
+    shallow: 'カップがまだ浅い → 低く注いでも混ざって濁る。最初は高く',
+    weak: '勢いが弱い → 泡を押し広げられない',
+    strong: '勢いが強すぎる → 沈んでしまう',
+    float: '液面ぎりぎりから、そろりと → 白が浮く',
     full: '満杯です。「作り直す」でもう一杯',
   };
 
   function updateHud() {
     $('fillBar').style.width = (state.fill * 100).toFixed(1) + '%';
     $('flowBar').style.width = (state.flow * 100).toFixed(1) + '%';
-    var ph = POUR.phase(state.fill, state.flow);
+    var ph = POUR.phase(state.fill, state.flow, state.low);
     $('phase').textContent = PHASE_TEXT[ph];
     $('phase').dataset.phase = ph;
     if (state.mode === 'sensor' && state.beta != null && state.beta0 != null) {

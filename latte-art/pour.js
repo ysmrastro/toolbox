@@ -1,9 +1,18 @@
 /*
- * pour.js — 注ぐ動作の規則（傾き→注ぐ量、カップの量→白が浮くか沈むか）
+ * pour.js — 注ぐ動作の規則（傾き→注ぐ量、高さ・カップの量・勢い→白が浮くか沈むか）
  *
  * 引数だけで答えが決まる純粋な関数だけを置く。センサーの値や時刻は app.js が渡す。
  * 流体の計算（fluid.js）は WebGL に結び付いていてテストできないので、
  * 「どういうときに白が出るか」という肝の規則はこちらに分けてある。
+ *
+ * 【白が浮くか沈むかの根拠】作者の感覚ではなく、ラテアートの解説に書かれていることに従う
+ * （出典は README の「出典」）。
+ *   - 高い位置から注ぐと、勢いがついてクレマを突き抜け、潜る。白は出ない
+ *   - 注ぎ口を液面ぎりぎりまで下げると、横に流れて泡が表面に乗る。白が出るのはここだけ
+ *   - 下げるのはカップが半分〜3/4 入ってから。最初に高く注いで沈めておかないと、
+ *     泡がコーヒーと混ざって全体が濁る
+ *   - 流量は弱すぎると泡を押し広げられず、強すぎると模様が崩れて沈む
+ * 高さはセンサーで測れないので、画面に指を置いているかどうかで表す（app.js）。
  */
 var LA_POUR = (function () {
   'use strict';
@@ -21,14 +30,16 @@ var LA_POUR = (function () {
   var FILL_START = 0.35;
   var FILL_PER_SEC = 0.065;
 
-  /* 白が浮き始めるカップの量。実際の注ぎ方では、液面が注ぎ口に近づくと
-     泡がクレマの上に乗る。高さはセンサーで測れないので、カップの量で代わりにする */
-  var FLOAT_FROM = 0.55;
-  var FLOAT_FULL = 0.72;
+  /* 液面ぎりぎりで注いで白が乗るのは、カップが半分を過ぎてから
+     （解説では「半分〜3/4 入ったら注ぎ口を液面に近づける」） */
+  var SHALLOW_TO = 0.45;
+  var SHALLOW_OK = 0.6;
 
-  /* 細い注ぎは泡を運べず、クレマの下に潜る（最後の「切り抜き」がこれ） */
-  var STREAM_FROM = 0.2;
-  var STREAM_FULL = 0.5;
+  /* 勢いの窓。弱すぎると泡を押し広げられず、強すぎると模様を崩して沈める */
+  var WEAK_TO = 0.1;
+  var WEAK_OK = 0.25;
+  var STRONG_FROM = 0.7;
+  var STRONG_TO = 0.92;
 
   function clamp(x, lo, hi) { return Math.min(hi, Math.max(lo, x)); }
 
@@ -56,19 +67,36 @@ var LA_POUR = (function () {
     return clamp(fill + flow * FILL_PER_SEC * dt, 0, 1);
   }
 
-  /**
-   * 注いだミルクのうち、表面に浮いて白くなる割合（0〜1）。
-   * カップが満ちていて、かつ注ぐ勢いがあるときだけ浮く。
-   */
-  function floatFactor(fill, flow) {
-    return smoothstep(FLOAT_FROM, FLOAT_FULL, fill) * smoothstep(STREAM_FROM, STREAM_FULL, flow);
+  /** カップの深さの条件（0〜1）。浅いうちは低く注いでも白が乗らない */
+  function depthFactor(fill) { return smoothstep(SHALLOW_TO, SHALLOW_OK, fill); }
+
+  /** 勢いの条件（0〜1）。弱すぎても強すぎても白が乗らない */
+  function flowFactor(flow) {
+    return smoothstep(WEAK_TO, WEAK_OK, flow) * (1 - smoothstep(STRONG_FROM, STRONG_TO, flow));
   }
 
-  /** 画面に出す状態 */
-  function phase(fill, flow) {
+  /**
+   * 注いだミルクのうち、表面に浮いて白くなる割合（0〜1）。
+   * low は注ぎ口が液面ぎりぎりにあるか。高い位置からは必ず潜る。
+   */
+  function floatFactor(fill, flow, low) {
+    if (!low) return 0;
+    return depthFactor(fill) * flowFactor(flow);
+  }
+
+  /**
+   * 画面に出す状態。沈んでいるときは、なぜ沈むのかを返す（初心者が直せるように）。
+   *   idle: 注いでいない／full: 満杯／float: 白が浮いている
+   *   high: 高い位置から注いでいる／shallow: カップがまだ浅い
+   *   weak: 勢いが弱い／strong: 勢いが強すぎる
+   */
+  function phase(fill, flow, low) {
     if (fill >= 1) return 'full';
     if (flow <= 0) return 'idle';
-    return floatFactor(fill, flow) >= 0.5 ? 'float' : 'sink';
+    if (floatFactor(fill, flow, low) >= 0.5) return 'float';
+    if (!low) return 'high';
+    if (depthFactor(fill) < 0.5) return 'shallow';
+    return flow < WEAK_OK ? 'weak' : 'strong';
   }
 
   return {
