@@ -1,0 +1,147 @@
+/* ラテアート練習 — 文字サイズは rem で偶数 px の梯子（12/14/16/18/20/24）に乗せる */
+:root {
+  --tb-font-size-sm: 0.875rem;   /* 14px（共通の 13.6px を上書き） */
+  --tb-font-size-lg: 1.125rem;   /* 18px（共通の 18.4px を上書き） */
+  --la-milk: #f5efe4;
+  --la-crema: #a86b35;
+}
+
+[hidden] { display: none !important; }
+
+.la-app {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: var(--tb-space-md) var(--tb-space-md) var(--tb-space-2xl);
+}
+
+.la-title {
+  font-size: 1.25rem;
+  margin-bottom: var(--tb-space-md);
+}
+
+.la-badge {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: var(--tb-text-secondary);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-sm);
+  padding: 0 var(--tb-space-xs);
+  vertical-align: middle;
+}
+
+.la-stage { position: relative; }
+
+.la-cup {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--tb-radius-xl);
+  background: #1f1a17;
+  /* 触って起点を動かすときに、ページがスクロールしたり拡大したりしないように */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.la-unsupported {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--tb-space-lg);
+  text-align: center;
+}
+
+.la-hud {
+  margin-top: var(--tb-space-md);
+  display: grid;
+  gap: var(--tb-space-xs);
+}
+
+.la-meter {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  align-items: center;
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+}
+
+.la-meter__track {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--tb-bg-tertiary);
+  border: 1px solid var(--tb-border);
+  overflow: hidden;
+}
+
+.la-meter__bar {
+  display: block;
+  height: 100%;
+  width: 0;
+}
+.la-meter__bar--fill { background: var(--la-crema); }
+.la-meter__bar--flow { background: var(--la-milk); }
+
+.la-phase {
+  margin-top: var(--tb-space-xs);
+  font-size: var(--tb-font-size-base);
+}
+.la-phase[data-phase="sink"] { color: var(--la-crema); }
+.la-phase[data-phase="float"] { color: var(--la-milk); font-weight: bold; }
+.la-phase[data-phase="idle"],
+.la-phase[data-phase="full"] { color: var(--tb-text-secondary); }
+
+.la-tilt {
+  font-size: 0.75rem;
+  color: var(--tb-text-muted);
+  min-height: 1.2em;
+}
+
+.la-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tb-space-sm);
+  margin-top: var(--tb-space-md);
+}
+
+.la-actions .tb-btn { min-height: 2.75rem; }
+
+/* 操作の種類で出し分ける（傾けて注いでいるあいだは body に is-sensor が付く） */
+body.is-sensor .la-only-pointer { display: none !important; }
+body:not(.is-sensor) .la-only-sensor { display: none !important; }
+
+.la-message {
+  margin-top: var(--tb-space-sm);
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-accent);
+  min-height: 1.4em;
+}
+
+.la-slider {
+  display: grid;
+  gap: var(--tb-space-xs);
+  margin-top: var(--tb-space-sm);
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+}
+
+.la-guide {
+  margin-top: var(--tb-space-xl);
+  font-size: var(--tb-font-size-sm);
+  line-height: 1.7;
+}
+
+.la-guide h2 {
+  font-size: var(--tb-font-size-base);
+  margin-bottom: var(--tb-space-sm);
+}
+
+.la-guide ol { padding-left: 1.5em; }
+.la-guide li + li { margin-top: var(--tb-space-xs); }
+
+.la-note {
+  margin-top: var(--tb-space-md);
+  color: var(--tb-text-secondary);
+}

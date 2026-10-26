@@ -1,0 +1,51 @@
+# ラテアート練習のチェック。注ぐ規則（pour.js）のテストと、JS の構文チェック。
+# 流体（fluid.js）は WebGL に結び付いているのでテストは無い。
+# このツールと、それが使うもの（共通CSS・package.json）が変わった PR でだけ走る。
+name: CI - latte-art
+
+on:
+  pull_request:
+    branches:
+      - main
+    # synchronize を含める: PR に追加コミットを積んだときも再実行する
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'latte-art/**'
+      - 'shared/**'
+      - 'package.json'
+      - '.github/workflows/ci-latte-art.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: 構文チェック
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: node --check
+        run: for f in latte-art/*.js; do echo "$f"; node --check "$f"; done
+
+  unit:
+    name: Small テスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 依存パッケージなしで動く（Node 標準の node:test）ので npm ci は要らない
+      - name: npm run test:latte-art
+        run: npm run test:latte-art

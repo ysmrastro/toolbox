@@ -51,16 +51,25 @@ toolbox/
 │   ├── app.js              # 位置・見え方の計算とSVG描画・ドラッグ操作（外部ライブラリなし）
 │   ├── ogp-source.html     # OGP画像の生成元（実物の描画をそのまま使う）
 │   └── README.md           # 見え方のモデル（離角と明暗・北半球での見え方・反時計回り）
-└── quiz-drill/             # 4択ドリル（問題は同梱しない。利用者が JSON を読み込む）
+├── quiz-drill/             # 4択ドリル（問題は同梱しない。利用者が JSON を読み込む）
+│   ├── index.html
+│   ├── style.css
+│   ├── quiz.js             # 検証・統合・絞り込み・出題順・並べ替え・正誤・採点・記録の集計（純粋関数。乱数は引数）
+│   ├── storage.js          # 問題集と学習の記録（回答のログ）は IndexedDB、セッションなどは localStorage
+│   ├── app.js              # DOM・イベント・描画。計算は持たない
+│   ├── sample.json         # 見本の問題（架空の一般常識の問題5問）
+│   ├── test/               # 自動テスト（配信されない）
+│   ├── ogp-source.html     # OGP画像の生成元
+│   └── README.md           # 使い方と問題ファイルの形式
+└── latte-art/              # ラテアート練習（試作。iPhone を傾けて注ぐ）
     ├── index.html
     ├── style.css
-    ├── quiz.js             # 検証・統合・絞り込み・出題順・並べ替え・正誤・採点・記録の集計（純粋関数。乱数は引数）
-    ├── storage.js          # 問題集と学習の記録（回答のログ）は IndexedDB、セッションなどは localStorage
-    ├── app.js              # DOM・イベント・描画。計算は持たない
-    ├── sample.json         # 見本の問題（架空の一般常識の問題5問）
-    ├── test/               # 自動テスト（配信されない）
-    ├── ogp-source.html     # OGP画像の生成元
-    └── README.md           # 使い方と問題ファイルの形式
+    ├── pour.js             # 傾き→注ぐ量、カップの量→白が浮くか沈むか（純粋関数）
+    ├── fluid.js            # 液面の2次元流体（Stable Fluids・WebGL2。外部ライブラリなし）
+    ├── app.js              # センサー・指・マウスの入力と画面。調整値 T もここ
+    ├── test/               # 自動テスト（pour.js だけ。配信されない）
+    ├── ogp-source.html     # OGP画像の生成元（実物の app.js でハートを注いで描く）
+    └── README.md           # 操作・モデル・調整値・ロゼッタが描けない理由
 ```
 
 **タブは 計画 / 機材 / 条件 / 結果 の4枚**。最初に開くのは**計画**で、極大が遠い時期に
@@ -179,6 +188,21 @@ astro.js が返す実際の値から作っている（idealized な近似式は�
 モデルの詳細（離角・時角・地平線ビューの投影・空の色のしきい値など）は
 `moon-phase/README.md` に集約してある。
 
+## ラテアート練習について
+
+**試作。** 傾けて注ぐ操作が手の感触として成り立つかを確かめるためのもの。
+描けるのはハートまでで、**ロゼッタはまだ描けない**（試したことと結果は `latte-art/README.md`）。
+
+**注ぐ点を湧き出し口にしてある。** 非圧縮の射影をそのままかけると外へ広がる流れが消え、
+注いでも白が広がらない。発散の目標値を注ぐ点で正にし、同じ量をカップ全体から吸い込ませている。
+fluid.js の射影を触るときはここを崩さない。
+
+**白が浮くか沈むかは、高さではなくカップの量で決める。** 高さはセンサーで測れない。
+同じく、注ぐ点の前後の移動も取れない（加速度の2回積分は誤差が膨らむ）ので指で動かす。
+
+**調整値は `app.js` の `T`。** 見た目は `window.LATTE.drive()` で決まった入力を流して
+Playwright で撮って比べる。流体（fluid.js）は WebGL に結び付いていて単体テストは無い。
+
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 
 `euphoria-design` スキルの基準に従う。meteor-settings は準拠済み。
@@ -248,7 +272,7 @@ npm test
 
 ```bash
 npm test                       # Small テスト全ツールぶん（依存なし・1秒台）
-npm run test:meteor-settings   # 1つのツールだけ（ほかに test:quiz-drill / test:astro）
+npm run test:meteor-settings   # 1つのツールだけ（ほかに test:quiz-drill / test:latte-art / test:astro）
 npm run test:e2e               # ブラウザで起動して表示だけ見る（Playwright）
 npx serve .                    # ローカルサーバー
 python3 -m http.server         # 代替
@@ -283,6 +307,7 @@ state を注入するのは app.js の役目で、`P.` の薄いラッパにま�
 | `CI - moon-phase` | `moon-phase/`・`meteor-settings/astro.js` とそのテスト・`shared/`・`package.json` | `構文チェック`・`astro.js のテスト`（`npm run test:astro`） |
 | `CI - collimation` | `collimation/`・`shared/` | `構文チェック` |
 | `CI - qr-generator` | `qr-generator/`・`shared/` | `構文チェック` |
+| `CI - latte-art` | `latte-art/`・`shared/`・`package.json` | `構文チェック`・`Small テスト`（`npm run test:latte-art`） |
 
 どのワークフローも、自分自身の yml が変わったときにも走る。
 
