@@ -3,8 +3,9 @@
  *
  * 操作は2通り。
  *   傾けて注ぐ（iPhone）: 構えた角度から手前に倒すと注げる。左右に傾けると注ぐ点が横に動く
- *                         （ウィグル）。親指をカップに置いているあいだは注ぎ口が
- *                         液面ぎりぎり（低い）、離すと高い位置。置いた指の位置が注ぐ点になる
+ *                         （ウィグル）。親指をカップに置くと注ぎ口が液面ぎりぎりに下りる。
+ *                         下ろしたら上げることはないので、指を離しても下りたまま
+ *                         （高い位置に戻るのは「作り直す」だけ）。置いている指の位置が注ぐ点になる
  *   押して注ぐ（PC・確認用）: 押しているあいだ、マウスの位置に注ぐ。高さはチェックボックス
  *
  * 高さはセンサーで測れないので指で表す。白が浮くかどうかの第一の条件が高さだから
@@ -20,7 +21,13 @@
      window.LATTE.tune から書き換えて見比べられる */
   var T = {
     SOURCE: 22,         // 湧き出しの強さ [1/秒]（注ぐ量 1・白が浮いているとき）
-    SOURCE_SUNK: 0.35,  // 沈んでいるあいだの湧き出しの割合（潜ったぶん表面は動きにくい）
+    SOURCE_SUNK: 0.35,  // 低く注いで沈んでいるあいだの湧き出しの割合（潜ったぶん表面は動きにくい）
+    /* 高い位置から注いでいるとき。ミルクは細い流れのまま潜るだけで、表面の泡は残る。
+       表面を押し広げる力と、注ぐ点で茶色に入れ替わる範囲・速さを絞る。
+       絞らないと、高い位置から注いだときに乗せた白が押しのけられて消えた */
+    HIGH_SOURCE: 0.1,   // 湧き出しの割合
+    HIGH_CORE: 0.5,     // 茶色に入れ替わる範囲（流れの太さに対する倍率）
+    HIGH_REPLACE: 0.15, // 入れ替わる速さの倍率
     DRAG: 0.1,          // 注ぐ点の動きに液面が引きずられる割合
     /* 引きずる速さの上限 [uv/秒]。強く引きずると液面全体が渦を巻いて、描いた白がまるごと
        押し流される（細い流れが一本の筋を引く、という本物の切り抜きにならない） */
@@ -55,7 +62,11 @@
     flow: 0,
     low: false,             // このフレームで注ぎ口が液面ぎりぎりだったか
     pressing: false,        // 押して注ぐ: 押しているか
-    touching: false,        // 傾けて注ぐ: 指をカップに置いているか（＝注ぎ口が液面ぎりぎり）
+    touching: false,        // 傾けて注ぐ: 指をカップに置いているか（注ぐ点を動かす）
+    /* 傾けて注ぐ: 注ぎ口を液面ぎりぎりに下ろしたか。一度指を置いたら、離しても下りたまま。
+       実際の注ぎでは、下ろしたあとに上げ直すことはない（離した途端に高い位置の判定に
+       なるのは違和感がある、という指摘で直した） */
+    lowered: false,
     pointer: { x: 0.5, y: 0.5 },
     base: { x: 0.5, y: 0.5 },   // 傾けて注ぐ: 注ぐ点の起点
     beta: null, gamma: null,
@@ -85,7 +96,7 @@
   canvas.addEventListener('pointerdown', function (e) {
     canvas.setPointerCapture(e.pointerId);
     var p = toUv(e);
-    if (state.mode === 'sensor') { state.touching = true; state.base = p; return; }
+    if (state.mode === 'sensor') { state.touching = true; state.lowered = true; state.base = p; return; }
     state.pressing = true;
     state.pointer = p;
   });
@@ -167,13 +178,13 @@
     if (state.mode === 'sensor') {
       var b = state.base;
       if (state.beta == null || state.beta0 == null) {
-        return { x: b.x, y: b.y, flow: 0, low: state.touching, hx: b.x, hy: b.y };
+        return { x: b.x, y: b.y, flow: 0, low: state.lowered, hx: b.x, hy: b.y };
       }
       var dx = POUR.offsetFromRoll(state.gamma, state.gamma0) * 2 * LA_FLUID.CUP_R;
       return {
         x: b.x + dx, y: b.y,
         flow: POUR.flowFromTilt(state.beta, state.beta0),
-        low: state.touching,
+        low: state.lowered,
         hx: b.x, hy: b.y,
       };
     }
@@ -220,14 +231,16 @@
       var floatF = POUR.floatFactor(state.fill, flow, state.low);
       var fl = floatF / (1 + Math.pow(speed / T.DIVE_SPEED, 2));
       // 液面を押す強さは潜りに左右されない（注いだ量はどのみち液面を押し上げる）
-      var source = T.SOURCE * flow * (T.SOURCE_SUNK + (1 - T.SOURCE_SUNK) * floatF);
+      var source = T.SOURCE * flow *
+        (state.low ? T.SOURCE_SUNK + (1 - T.SOURCE_SUNK) * floatF : T.HIGH_SOURCE);
       pour = {
         x: input.x, y: input.y,
         radius: T.RADIUS_MIN + (T.RADIUS_MAX - T.RADIUS_MIN) * flow,
         source: source,
         // 注ぐ点に湧き上がるものの泡の厚み。入れ替わる速さは湧き出しに比例させる
         white: fl * T.FOAM,
-        rate: source * dt,
+        rate: source * dt * (state.low ? 1 : T.HIGH_REPLACE),
+        core: state.low ? 1 : T.HIGH_CORE,
         /* 沈んだミルクでクレマが明るくなる。低く注いで沈んだとき（浅いうち・勢いが
            強すぎるとき）は泡がコーヒーと混ざるので、高く注いだときより濁りが強い */
         sunk: Math.min(1, (1 - fl) * flow * (state.low ? 8 : 4) * dt),
@@ -292,6 +305,7 @@
       $('tilt').textContent = '';
     }
     if (debug) $('debug').textContent = debugText();
+    updateHint();
   }
 
   var prevT = null;
@@ -303,7 +317,7 @@
          0÷0 になり、NaN が流れに入ってそれ以降の計算がすべて止まる */
       if (dt > 0) {
         advance(dt, readInput());
-        sim.render();
+        sim.render(markOf(readInput()));
         updateHud();
       }
     }
@@ -311,9 +325,22 @@
     requestAnimationFrame(frame);
   }
 
+  /* 注ぐ点の印。傾けて注いでいるあいだは常に出す（どこに・どの高さで注ぐかを見せる）。
+     押して注ぐときは押しているあいだだけ */
+  function markOf(input) {
+    if (state.mode === 'sensor') return { x: input.x, y: input.y, low: input.low };
+    return state.pressing ? { x: input.x, y: input.y, low: input.low } : null;
+  }
+
+  /* カップの上の案内。傾けて注いでいて、まだ注ぎ口を下ろしていないときだけ */
+  function updateHint() {
+    $('hint').hidden = !(state.mode === 'sensor' && !state.lowered);
+  }
+
   function reset() {
     state.fill = POUR.FILL_START;
     state.flow = 0;
+    state.lowered = false;
     state.last = null;
     sim.reset();
   }
@@ -331,7 +358,7 @@
     drive: function (frames, fn) {
       paused = true;
       for (var i = 0; i < frames; i++) advance(1 / 60, fn(i));
-      sim.render();
+      sim.render(null);
       updateHud();
     },
     reset: function (seed) { reset(); sim.reset(seed); },

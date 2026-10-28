@@ -181,7 +181,7 @@ var LA_FLUID = (function () {
     /* 画面への描画。カップの縁・クレマ・ミルクの色をここで決める */
     display: HEAD + [
       'uniform sampler2D uDye;',
-      'uniform float uAspect;',
+      'uniform vec3 uMark;',   // 注ぐ点の印。x, y と種類（0: なし／1: 高い位置／2: 液面ぎりぎり）
       'void main() {',
       '  vec2 p = vUv - 0.5;',
       '  float r = length(p);',
@@ -197,6 +197,19 @@ var LA_FLUID = (function () {
       '  vec3 edge = vec3(0.86, 0.74, 0.58);',
       '  vec3 col = mix(crema, edge, smoothstep(0.06, 0.30, d.r) * 0.55);',
       '  col = mix(col, vec3(0.98, 0.96, 0.91), w);',
+      // 注ぐ点の印。高い位置はピッチャーの大きくぼやけた影、液面ぎりぎりは小さくはっきりした輪
+      '  if (uMark.z > 0.5) {',
+      '    float m = distance(vUv, uMark.xy);',
+      '    if (uMark.z < 1.5) {',
+      '      col *= 1.0 - 0.30 * exp(-m * m / (0.07 * 0.07));',
+      '      col = mix(col, vec3(1.0), 0.35 * (1.0 - smoothstep(0.0, 0.006, abs(m - 0.075))));',
+      '    } else {',
+      '      float ring = 1.0 - smoothstep(0.0, 0.004, abs(m - 0.032));',
+      '      float halo = 1.0 - smoothstep(0.0, 0.012, abs(m - 0.032));',
+      '      col = mix(col, vec3(0.15, 0.08, 0.03), 0.7 * halo);',
+      '      col = mix(col, vec3(1.0, 0.98, 0.94), ring);',
+      '    }',
+      '  }',
       // 縁の内側の影
       '  col *= 1.0 - 0.28 * smoothstep(CUP_R - 0.035, CUP_R, r);',
       // カップの縁（陶器）とソーサー
@@ -340,6 +353,7 @@ var LA_FLUID = (function () {
      *   radius   : 注ぐ流れの太さ（uv）
      *   white    : 注ぐ点に湧き上がる泡の厚み（潜っていれば0）
      *   rate     : このステップで注ぐ点の中身が入れ替わる割合
+     *   core     : 中身が入れ替わる範囲（流れの太さに掛ける倍率。省略すると1）
      *   sunk     : 沈んだミルクでクレマを明るくする強さ（0〜1／ステップ）
      *   mx, my   : 注ぐ点のまわりの液面に足す速さ（uv/秒）。注ぐ点の動きと注ぎ口の向き
      */
@@ -402,7 +416,7 @@ var LA_FLUID = (function () {
         p = P.splatDye; use(p, DYE_RES);
         tex(p, 'uSrc', dye.read);
         gl.uniform2f(p.u.uPoint, pour.x, pour.y);
-        gl.uniform1f(p.u.uRadius, pour.radius);
+        gl.uniform1f(p.u.uRadius, pour.radius * (pour.core || 1));
         gl.uniform1f(p.u.uWhite, pour.white);
         gl.uniform1f(p.u.uRate, pour.rate);
         gl.uniform1f(p.u.uSunk, pour.sunk);
@@ -410,9 +424,11 @@ var LA_FLUID = (function () {
       }
     }
 
-    function render() {
+    /** mark は注ぐ点の印 { x, y, low }。出さなければ null */
+    function render(mark) {
       var p = P.display; use(p, DYE_RES);
       tex(p, 'uDye', dye.read);
+      gl.uniform3f(p.u.uMark, mark ? mark.x : 0, mark ? mark.y : 0, mark ? (mark.low ? 2 : 1) : 0);
       draw(null);
     }
 

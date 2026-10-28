@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=0.2.0">
+  <link rel="stylesheet" href="style.css?v=0.2.1">
 </head>
 <body>
 
@@ -44,6 +44,7 @@
 
   <div class="la-stage">
     <canvas id="cup" class="la-cup" aria-label="上から見たカップ"></canvas>
+    <p id="hint" class="la-hint" hidden>カップが半分を過ぎたら<br>親指を置いて注ぎ口を下ろす</p>
     <p id="unsupported" class="la-unsupported" hidden>
       この端末のブラウザでは描画に必要な機能（WebGL2）が使えません。
     </p>
@@ -87,9 +88,9 @@
       <li><b>傾けて注ぐ</b>を押し、iPhone を画面が見える角度で構える。その角度が「注いでいない」状態になる</li>
       <li>手前に倒す（画面の上の辺を下げる）と注げる。倒すほど量が増える</li>
       <li><b>カップが半分になるまでは、指を置かずに注ぐ</b>（高い位置から）。ミルクがクレマの下に潜り、茶色の土台ができる</li>
-      <li><b>半分を過ぎたら、親指をカップに置く</b>（注ぎ口を液面ぎりぎりに下げる）。<b>倒しすぎず、そろりと</b>注ぐと白が浮く。一気に注ぐと沈む</li>
-      <li>左右に傾けると注ぐ点が横に揺れる（ロゼッタのウィグル。試作のため、まだ葉には分かれない）。置いた指を手前へ動かすと注ぐ点も動く</li>
-      <li>最後に、置いた指を奥へ素早く滑らせると模様を切り抜ける。指を離すと高い位置に戻り、沈む</li>
+      <li><b>半分を過ぎたら、親指をカップに置く</b>（注ぎ口を液面ぎりぎりに下ろす）。下ろしたら指を離しても下りたまま。<b>倒しすぎず、そろりと</b>注ぐと白が浮く。一気に注ぐと沈む</li>
+      <li>左右に傾けると注ぐ点が横に揺れる（ロゼッタのウィグル。試作のため、まだ葉には分かれない）。指を置いて動かすと注ぐ点も動く</li>
+      <li>最後に、置いた指を奥へ素早く滑らせると模様を切り抜ける。もう一杯は「作り直す」</li>
     </ol>
     <p class="la-note">沈んでいるときは、カップの下に理由（高い・まだ浅い・勢いが強い・弱い）が出ます。</p>
     <p class="la-note">
@@ -100,8 +101,8 @@
   </section>
 </main>
 
-<script src="pour.js?v=0.2.0"></script>
-<script src="fluid.js?v=0.2.0"></script>
-<script src="app.js?v=0.2.0"></script>
+<script src="pour.js?v=0.2.1"></script>
+<script src="fluid.js?v=0.2.1"></script>
+<script src="app.js?v=0.2.1"></script>
 </body>
 </html>
