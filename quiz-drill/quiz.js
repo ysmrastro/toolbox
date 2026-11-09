@@ -381,13 +381,38 @@ var QD_QUIZ = (function () {
 
   /**
    * 前に間違えた問題: 記録で「最後に解いたとき不正解」だった問題だけに絞る。
-   * summary は summarizeLog() の返り値（鍵 → { last: 'correct' | 'wrong', ... }）。
+   * summary は summarizeLog() の返り値（鍵 → { last: 'correct' | 'wrong', lastAt, ... }）。
+   * sinceMs（省略可）は、その時刻以降に間違えた問題だけに絞る（wrongSinceMs() で決める）。
    */
-  function filterWrong(sets, summary) {
+  function filterWrong(sets, summary, sinceMs) {
     return selectQuestions(sets, function (set, q) {
       var st = summary[questionKey(set.id, q.id)];
-      return !!st && st.last === 'wrong';
+      if (!st || st.last !== 'wrong') return false;
+      // sinceMs があれば、最後の不正解がその時刻以降のものだけ
+      return sinceMs == null || Date.parse(st.lastAt) >= sinceMs;
     });
+  }
+
+  /**
+   * 「いつ間違えたか」の選択から、絞り込みの下限の時刻（ミリ秒）を決める。null なら時期では絞らない。
+   * choice: { type: 'all' }（いつでも）／ { type: 'within', days }（いまから days×24 時間以内）／
+   *         { type: 'since', date: 'YYYY-MM-DD' }（その日の 0 時（端末の時刻）以降）。
+   * 日付が空か不正なら null（絞らない）。
+   */
+  function wrongSinceMs(choice, nowMs) {
+    if (!choice) return null;
+    if (choice.type === 'within') {
+      return choice.days > 0 ? nowMs - choice.days * 24 * 3600 * 1000 : null;
+    }
+    if (choice.type === 'since') {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(choice.date || '');
+      if (!m) return null;
+      var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      // 2月30日のような日付は、繰り上がるので不正として扱う
+      if (d.getMonth() !== Number(m[2]) - 1 || d.getDate() !== Number(m[3])) return null;
+      return d.getTime();
+    }
+    return null;
   }
 
   /**
@@ -974,6 +999,7 @@ var QD_QUIZ = (function () {
     matchesFilter: matchesFilter,
     filterSets: filterSets,
     filterWrong: filterWrong,
+    wrongSinceMs: wrongSinceMs,
     filterUnseen: filterUnseen,
     countQuestions: countQuestions,
     choiceOrder: choiceOrder,

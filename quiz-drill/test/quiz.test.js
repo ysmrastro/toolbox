@@ -303,6 +303,33 @@ test('filterWrong: 間違えたあと最後に正解したら外れる（ログ�
   assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum)), ['s1::b']);
 });
 
+test('wrongSinceMs: いつでも・日数・日付から、絞り込みの下限の時刻を決める', () => {
+  const now = Date.parse('2026-11-10T12:00:00.000Z');
+  assert.strictEqual(Q.wrongSinceMs({ type: 'all' }, now), null);
+  assert.strictEqual(Q.wrongSinceMs(null, now), null);
+  assert.strictEqual(Q.wrongSinceMs({ type: 'within', days: 3 }, now), now - 3 * 24 * 3600 * 1000);
+  assert.strictEqual(Q.wrongSinceMs({ type: 'within', days: 0 }, now), null);
+  // 日付は端末の時刻でその日の0時
+  assert.strictEqual(Q.wrongSinceMs({ type: 'since', date: '2026-11-01' }, now), new Date(2026, 10, 1).getTime());
+  // 日付が空・形が違う・存在しない日付なら絞らない
+  for (const date of ['', undefined, '2026-2-3', '2026-02-30', 'あ']) {
+    assert.strictEqual(Q.wrongSinceMs({ type: 'since', date }, now), null, String(date));
+  }
+});
+
+test('filterWrong: sinceMs 以降に間違えた問題だけ（最後の不正解の時刻で決める）', () => {
+  const sum = Q.summarizeLog(logOf(
+    ['s1::a', false, T(1)],                        // 古い不正解
+    ['s1::b', false, T(1)], ['s1::b', false, T(5)], // 古い不正解のあと、新しい不正解
+    ['s2::a', false, T(3)],                        // ちょうど境界は含む
+    ['s1::c', false, T(1)], ['s1::c', true, T(6)],  // 最後が正解なら対象外
+  ));
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum, Date.parse(T(3)))), ['s1::b', 's2::a']);
+  // 省略か null なら、時期では絞らない
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum)), ['s1::a', 's1::b', 's2::a']);
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum, null)), ['s1::a', 's1::b', 's2::a']);
+});
+
 test('filterWrong: 範囲は渡した問題集の中だけ（問題 id が同じでも別の問題集は別扱い）', () => {
   const sum = Q.summarizeLog(logOf(['s2::a', false, T(1)]));
   const onlyS1 = tagged.filter((s) => s.id === 's1');

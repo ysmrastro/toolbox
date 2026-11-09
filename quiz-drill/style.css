@@ -732,3 +732,6 @@ body {
   max-height: 100%;
   object-fit: contain;
 }
+
+/* 前に間違えた問題の「日付を指定」: 選択欄との間をあける */
+.qd-date { margin-top: var(--tb-space-sm); }
