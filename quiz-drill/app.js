@@ -152,6 +152,8 @@
     $('set-field').hidden = mode === 'all-random';
     $('count-field').hidden = mode !== 'all-random' && mode !== 'wrong' && mode !== 'unseen' && mode !== 'weak';
     $('threshold-field').hidden = mode !== 'weak';
+    $('wrongsince-field').hidden = mode !== 'wrong';
+    renderWrongDate();
     $('mockmode-field').hidden = mode !== 'mock';
     renderMockModeNote();
     // 模擬試験は本番どおり1回分の全問を出すので、絞り込みは使わない
@@ -222,6 +224,7 @@
     S.saveStart({
       mode: checked('mode'), set: $('set-select').value, filter: $('filter-select').value,
       count: checked('count'), threshold: checked('threshold'), rest: checked('rest'), mockmode: checked('mockmode'),
+      wrongsince: $('wrongsince-select').value, wrongdate: $('wrongdate-input').value,
     });
   }
 
@@ -250,6 +253,9 @@
     renderModeFields();            // 出題方法に合わせて問題集の選択肢を作り直す
     setSelect('set-select', v.set);
     setSelect('filter-select', v.filter);
+    setSelect('wrongsince-select', v.wrongsince);
+    if (typeof v.wrongdate === 'string') $('wrongdate-input').value = v.wrongdate;
+    renderWrongDate();
     renderMockModeNote();
     renderStartCount();
   }
@@ -282,6 +288,28 @@
     return el ? Number(el.value) : 0;
   }
 
+  /** 前に間違えた問題で、いつ間違えたかの選択（quiz.js の wrongSinceMs に渡す形） */
+  function selectedWrongSince() {
+    var v = $('wrongsince-select').value;
+    if (v === 'date') return { type: 'since', date: $('wrongdate-input').value };
+    if (v === 'all') return { type: 'all' };
+    return { type: 'within', days: Number(v) };
+  }
+
+  /** 「日付を指定」のときだけ日付の入力欄を出す */
+  function renderWrongDate() {
+    $('wrongdate-input').hidden = $('wrongsince-select').value !== 'date';
+  }
+
+  /** 選んだ期間の説明（件数の文・続きからの説明に使う）。絞らないときは空 */
+  function wrongSinceText() {
+    var c = selectedWrongSince();
+    if (Q.wrongSinceMs(c, Date.now()) == null) return '';
+    if (c.type === 'within') return c.days === 1 ? '24時間以内' : c.days + '日以内';
+    var p = c.date.split('-');
+    return Number(p[0]) + '年' + Number(p[1]) + '月' + Number(p[2]) + '日以降';
+  }
+
   /** いまの出題方法・問題集・絞り込みで対象になる問題集（問題を絞った写し） */
   function candidateSets(mode) {
     if (mode === 'mock') {
@@ -289,7 +317,7 @@
       return state.sets.filter(function (set) { return set.id === mockId; });
     }
     var sets = Q.filterSets(state.sets, currentFilter());
-    if (mode === 'wrong') sets = Q.filterWrong(sets, state.summary);
+    if (mode === 'wrong') sets = Q.filterWrong(sets, state.summary, Q.wrongSinceMs(selectedWrongSince(), Date.now()));
     if (mode === 'unseen') sets = Q.filterUnseen(sets, state.summary);
     if (mode === 'weak') {
       sets = Q.filterWeak(sets, state.summary, selectedThreshold());
@@ -307,7 +335,12 @@
     var mode = selectedMode();
     var n = Q.countQuestions(candidateSets(mode));
     var text;
-    if (mode === 'wrong') text = n > 0 ? '前に間違えた問題: ' + n + '問' : '前に間違えた問題はありません';
+    if (mode === 'wrong') {
+      var since = wrongSinceText();
+      var label = since ? '前に間違えた問題（' + since + '）' : '前に間違えた問題';
+      text = n > 0 ? label + ': ' + n + '問' : label + 'はありません';
+      if ($('wrongsince-select').value === 'date' && !$('wrongdate-input').value) text += '（日付を選ぶまでは、いつでも間違えた問題を出します）';
+    }
     else if (mode === 'unseen') text = n > 0 ? 'まだ解いていない問題: ' + n + '問' : 'まだ解いていない問題はありません';
     else if (mode === 'mock') text = n > 0 ? '模擬試験: ' + n + '問・' + Math.round(Q.MOCK_LIMIT_SEC / 60) + '分（提出するまで正誤は出ません）' : '問題集を選んでください';
     else if (mode === 'weak') text = weakCountText(n);
@@ -800,6 +833,7 @@
       var set = state.sets.filter(function (s) { return s.id === id; })[0];
       parts.push(set ? set.title : (opt ? opt.textContent : ''));
     }
+    if (mode === 'wrong' && wrongSinceText()) parts.push(wrongSinceText() + 'に間違えた');
     if (mode === 'weak') {
       parts.push('正答率' + Math.round(selectedThreshold() * 100) + '%未満か最後に不正解');
       if (selectedRest() > 0) parts.push('最近正解した問題を除く');
@@ -1593,6 +1627,8 @@
     el.addEventListener('change', renderStartCount);
   });
   $('set-select').addEventListener('change', renderStartCount);
+  $('wrongsince-select').addEventListener('change', function () { renderWrongDate(); renderStartCount(); });
+  $('wrongdate-input').addEventListener('change', renderStartCount);
   Array.prototype.forEach.call(document.querySelectorAll('input[name="mockmode"]'), function (el) {
     el.addEventListener('change', renderMockModeNote);
   });
