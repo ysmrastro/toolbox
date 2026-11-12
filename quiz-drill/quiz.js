@@ -394,6 +394,25 @@ var QD_QUIZ = (function () {
   }
 
   /**
+   * 記録の中で、sinceMs 以降に一度でも不正解だった問題の鍵（鍵 → true）。sinceMs が null なら全期間。
+   * 間違えたあとに正解し直した問題も入る。消去の印とまぐれ（不正解として数える）は、集計と同じ扱い。
+   */
+  function wrongKeysSince(log, sinceMs) {
+    var map = {};
+    effectiveLog(log).forEach(function (e) {
+      if (e.ok) return;
+      if (sinceMs != null && Date.parse(e.at) < sinceMs) return;
+      map[e.key] = true;
+    });
+    return map;
+  }
+
+  /** wrongKeysSince() で選んだ鍵の問題だけに絞る（正解し直した問題も含めて、前に間違えた問題を出すとき） */
+  function filterWrongKeys(sets, wrongKeys) {
+    return selectQuestions(sets, function (set, q) { return !!wrongKeys[questionKey(set.id, q.id)]; });
+  }
+
+  /**
    * 「いつ間違えたか」の選択から、絞り込みの下限の時刻（ミリ秒）を決める。null なら時期では絞らない。
    * choice: { type: 'all' }（いつでも）／ { type: 'within', days }（いまから days×24 時間以内）／
    *         { type: 'since', date: 'YYYY-MM-DD' }（その日の 0 時（端末の時刻）以降）。
@@ -1000,6 +1019,8 @@ var QD_QUIZ = (function () {
     filterSets: filterSets,
     filterWrong: filterWrong,
     wrongSinceMs: wrongSinceMs,
+    wrongKeysSince: wrongKeysSince,
+    filterWrongKeys: filterWrongKeys,
     filterUnseen: filterUnseen,
     countQuestions: countQuestions,
     choiceOrder: choiceOrder,

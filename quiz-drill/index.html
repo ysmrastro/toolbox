@@ -114,7 +114,12 @@
             <option value="date">日付を指定（その日以降）</option>
           </select>
           <input type="date" id="wrongdate-input" class="tb-input qd-date" aria-label="この日以降に間違えた問題" hidden>
-          <p class="qd-note">最後に解いたときの不正解が、この期間にあった問題だけを出します。</p>
+          <span class="tb-label qd-subfield">正解し直した問題</span>
+          <div class="qd-counts qd-counts--3" role="radiogroup" aria-label="正解し直した問題の扱い">
+            <label class="qd-count"><input type="radio" name="wrongfixed" value="0" checked><span>除く</span></label>
+            <label class="qd-count"><input type="radio" name="wrongfixed" value="1"><span>含める</span></label>
+          </div>
+          <p id="wrongsince-note" class="qd-note"></p>
         </div>
 
         <!-- 模擬試験だけで使う。リハーサルは本番どおり、練習は時間を過ぎても自動で提出しない -->

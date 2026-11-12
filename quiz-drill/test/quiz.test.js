@@ -1020,3 +1020,37 @@ test('filterRecentCorrect: 最後が正解で時間が経っていない問題�
   assert.deepStrictEqual(keys(72), ['s::c', 's::e', 's::f']);
   assert.deepStrictEqual(keys(0), ['s::a', 's::b', 's::c', 's::d', 's::e', 's::f']);
 });
+
+/* ===================== 前に間違えた問題: 正解し直した問題も含める ===================== */
+
+test('wrongKeysSince: 期間内に一度でも不正解だった問題（正解し直した問題も含む）', () => {
+  const log = logOf(
+    ['s1::a', false, T(1)], ['s1::a', true, T(5)],   // 間違えたあと正解し直した
+    ['s1::b', false, T(2)], ['s1::b', true, T(3)],   // 同上（間違えたのは期間より前）
+    ['s2::a', false, T(6)],                          // 最後も不正解
+    ['s1::c', true, T(4)],                           // ずっと正解
+  );
+  assert.deepStrictEqual(Object.keys(Q.wrongKeysSince(log, null)).sort(), ['s1::a', 's1::b', 's2::a']);
+  // T(2) 以降: s1::a は T(1) の不正解だけなので外れ、s1::b の T(2) と s2::a の T(6) が残る
+  assert.deepStrictEqual(Object.keys(Q.wrongKeysSince(log, Date.parse(T(2)))).sort(), ['s1::b', 's2::a']);
+  assert.deepStrictEqual(Object.keys(Q.wrongKeysSince(log, Date.parse(T(7)))), []);
+});
+
+test('wrongKeysSince: 消去の印より前の不正解は数えず、まぐれの正解は不正解として数える', () => {
+  const log = [
+    e('a1', 's1::a', T(1), false),
+    clr('c1', 's1', T(2)),                 // 問題集 s1 の記録を消した
+    e('a2', 's1::a', T(3), true),
+    e('b1', 's1::b', T(3), true),
+    luck('m1', 'b1', true, T(4)),          // まぐれ → 不正解として数える
+  ];
+  assert.deepStrictEqual(Object.keys(Q.wrongKeysSince(log, null)), ['s1::b']);
+});
+
+test('filterWrongKeys: 選んだ鍵の問題だけに絞る（filterWrong と違い、いまの結果は見ない）', () => {
+  const log = logOf(['s1::a', false, T(1)], ['s1::a', true, T(5)], ['s1::b', true, T(1)]);
+  const sum = Q.summarizeLog(log);
+  assert.deepStrictEqual(keysOf(Q.filterWrong(tagged, sum)), []);                          // 最後は正解なので、これまでの動きでは出ない
+  assert.deepStrictEqual(keysOf(Q.filterWrongKeys(tagged, Q.wrongKeysSince(log, null))), ['s1::a']);
+});
+

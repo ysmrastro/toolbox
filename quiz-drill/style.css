@@ -735,3 +735,4 @@ body {
 
 /* 前に間違えた問題の「日付を指定」: 選択欄との間をあける */
 .qd-date { margin-top: var(--tb-space-sm); }
+.qd-subfield { margin-top: var(--tb-space-md); }
