@@ -224,7 +224,7 @@
     S.saveStart({
       mode: checked('mode'), set: $('set-select').value, filter: $('filter-select').value,
       count: checked('count'), threshold: checked('threshold'), rest: checked('rest'), mockmode: checked('mockmode'),
-      wrongsince: $('wrongsince-select').value, wrongdate: $('wrongdate-input').value,
+      wrongsince: $('wrongsince-select').value, wrongdate: $('wrongdate-input').value, wrongfixed: checked('wrongfixed'),
     });
   }
 
@@ -250,6 +250,7 @@
     pick('threshold', v.threshold);
     pick('rest', v.rest);
     pick('mockmode', v.mockmode);
+    pick('wrongfixed', v.wrongfixed);
     renderModeFields();            // 出題方法に合わせて問題集の選択肢を作り直す
     setSelect('set-select', v.set);
     setSelect('filter-select', v.filter);
@@ -296,9 +297,18 @@
     return { type: 'within', days: Number(v) };
   }
 
-  /** 「日付を指定」のときだけ日付の入力欄を出す */
+  /** 間違えたあとに正解し直した問題も含めるか */
+  function selectedWrongFixed() {
+    var el = document.querySelector('input[name="wrongfixed"]:checked');
+    return !!el && el.value === '1';
+  }
+
+  /** 「日付を指定」のときだけ日付の入力欄を出す。選択に合わせて、下の説明も直す */
   function renderWrongDate() {
     $('wrongdate-input').hidden = $('wrongsince-select').value !== 'date';
+    $('wrongsince-note').textContent = selectedWrongFixed()
+      ? 'この期間に一度でも不正解だった問題を出します。そのあと正解し直した問題も含みます。'
+      : '最後に解いたときの不正解が、この期間にある問題だけを出します。正解し直した問題は出しません。';
   }
 
   /** 選んだ期間の説明（件数の文・続きからの説明に使う）。絞らないときは空 */
@@ -317,7 +327,12 @@
       return state.sets.filter(function (set) { return set.id === mockId; });
     }
     var sets = Q.filterSets(state.sets, currentFilter());
-    if (mode === 'wrong') sets = Q.filterWrong(sets, state.summary, Q.wrongSinceMs(selectedWrongSince(), Date.now()));
+    if (mode === 'wrong') {
+      var sinceMs = Q.wrongSinceMs(selectedWrongSince(), Date.now());
+      sets = selectedWrongFixed()
+        ? Q.filterWrongKeys(sets, Q.wrongKeysSince(state.log, sinceMs))
+        : Q.filterWrong(sets, state.summary, sinceMs);
+    }
     if (mode === 'unseen') sets = Q.filterUnseen(sets, state.summary);
     if (mode === 'weak') {
       sets = Q.filterWeak(sets, state.summary, selectedThreshold());
@@ -337,7 +352,7 @@
     var text;
     if (mode === 'wrong') {
       var since = wrongSinceText();
-      var label = since ? '前に間違えた問題（' + since + '）' : '前に間違えた問題';
+      var label = '前に間違えた問題' + (since || selectedWrongFixed() ? '（' + [since, selectedWrongFixed() ? '正解し直した問題を含む' : ''].filter(Boolean).join('・') + '）' : '');
       text = n > 0 ? label + ': ' + n + '問' : label + 'はありません';
       if ($('wrongsince-select').value === 'date' && !$('wrongdate-input').value) text += '（日付を選ぶまでは、いつでも間違えた問題を出します）';
     }
@@ -834,6 +849,7 @@
       parts.push(set ? set.title : (opt ? opt.textContent : ''));
     }
     if (mode === 'wrong' && wrongSinceText()) parts.push(wrongSinceText() + 'に間違えた');
+    if (mode === 'wrong' && selectedWrongFixed()) parts.push('正解し直した問題を含む');
     if (mode === 'weak') {
       parts.push('正答率' + Math.round(selectedThreshold() * 100) + '%未満か最後に不正解');
       if (selectedRest() > 0) parts.push('最近正解した問題を除く');
@@ -1629,6 +1645,9 @@
   $('set-select').addEventListener('change', renderStartCount);
   $('wrongsince-select').addEventListener('change', function () { renderWrongDate(); renderStartCount(); });
   $('wrongdate-input').addEventListener('change', renderStartCount);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="wrongfixed"]'), function (el) {
+    el.addEventListener('change', function () { renderWrongDate(); renderStartCount(); });
+  });
   Array.prototype.forEach.call(document.querySelectorAll('input[name="mockmode"]'), function (el) {
     el.addEventListener('change', renderMockModeNote);
   });
