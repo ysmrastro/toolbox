@@ -87,30 +87,33 @@
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
     const img = new Image();
     img.onload = () => done(img, url);
-    img.onerror = () => URL.revokeObjectURL(url);
+    img.onerror = () => { URL.revokeObjectURL(url); done(null, null); };   // 読めなければ、呼び出し側がインライン SVG で代用する
     img.src = url;
   }
 
-  let lastBuild = null, lastW = 0;
+  let lastBuild = null, lastW = 0, shownUrl = null;
   function render() {
     const id = ++renderId;
     lastW = stage.clientWidth;
     const b = P.build(st.p, st.morph, st.pose, st.seed);
     const vb = `0 0 ${P.VW} ${P.VH}`;
     bodyImage(b.B, (img, url) => {
-      if (id !== renderId) { URL.revokeObjectURL(url); return; }
+      if (id !== renderId) { if (url) URL.revokeObjectURL(url); return; }
       const swap = () => {
-        if (id !== renderId) { URL.revokeObjectURL(url); return; }
+        if (id !== renderId) { if (url) URL.revokeObjectURL(url); return; }
         // 3層を同時に差し替える。前の絵は、新しい体の画像が読めるまで残す
         const box = document.createElement('div');   // template だと別文書への移し替えで画像が再読み込みされる
         box.innerHTML = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.A}</svg><div class="pm__body" aria-hidden="true"></div><svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.C}</svg>`;
-        box.children[1].appendChild(img);
+        if (img) box.children[1].appendChild(img);
+        else box.children[1].innerHTML = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg">${b.B}</svg>`;
         stage.replaceChildren(...box.children);
         handles = P.bind(stage, b.G);
         lastBuild = b;
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        // 表示中の画像の URL は、次の差し替えまで残す（画像が捨てられて読み直されても消えないように）
+        if (shownUrl) URL.revokeObjectURL(shownUrl);
+        shownUrl = url;
       };
-      (img.decode ? img.decode() : Promise.resolve()).then(swap, swap);
+      (img && img.decode ? img.decode() : Promise.resolve()).then(swap, swap);
     });
   }
   // 幅が変わったときだけ作り直す（iOS はツールバーの出し入れでも resize が来る）

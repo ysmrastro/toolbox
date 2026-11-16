@@ -90,6 +90,7 @@ test('parseSettings: 不正な設定は null、危険な値や未知のキーは
   assert.strictEqual(P.parseSettings('これはJSONではない'), null);
   assert.strictEqual(P.parseSettings('{"morph":"nothing","p":{}}'), null, '未知の羽色');
   assert.strictEqual(P.parseSettings('null'), null);
+  ['constructor', '__proto__', 'toString', 'hasOwnProperty'].forEach(m => assert.strictEqual(P.parseSettings(JSON.stringify({ morph: m, p: {} })), null, `羽色 ${m} は通さない`));
   const o = P.parseSettings('{"morph":"bar","seed":"<img src=x onerror=alert(1)>","p":{"size":"abc","leg":120,"zzz":1,"head":99999,"eye":null}}');
   assert.strictEqual(o.seed, 1, '数でない個体番号は 1');
   assert.strictEqual(o.p.size, 100, '数でない値は既定値');

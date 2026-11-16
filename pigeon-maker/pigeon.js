@@ -56,6 +56,7 @@ const PIGEON = (() => {
 
   // 体の大きさに対して、体重が文献の範囲（168–385g）に収まる胴まわりの範囲。
   // 体重は 大きさ³ × 胴まわり² なので、大きさを変えると胴まわりの上下限も動く。
+  // 大きさが実在の範囲（91〜107%）のときだけ意味がある。範囲の外では実在の範囲外の値を返すので、「ありえない個体」のときは使わない。
   function girthRange(size) {
     const g = PARAMS.find(x => x.key === 'girth'), w = REF.weight * Math.pow(size / 100, 3);
     const lo = Math.max(g.real[0], Math.ceil(100 * Math.sqrt(168 / w))), hi = Math.min(g.real[1], Math.floor(100 * Math.sqrt(385 / w)));
@@ -90,7 +91,7 @@ const PIGEON = (() => {
   function parseSettings(text) {
     let o;
     try { o = JSON.parse(text); } catch (_) { return null; }
-    if (!o || typeof o !== 'object' || !MORPHS[o.morph]) return null;
+    if (!o || typeof o !== 'object' || !Object.hasOwn(MORPHS, o.morph)) return null;
     const seed = Math.min(9999, Math.max(1, Math.floor(Number(o.seed)) || 1));
     const p = defaults();
     PARAMS.forEach(q => {
@@ -307,7 +308,7 @@ const PIGEON = (() => {
 
     const Cc = `
 <defs>
- <mask id="nm" maskContentUnits="objectBoundingBox"><linearGradient id="nmg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".2" stop-color="#fff" stop-opacity="1"/></linearGradient><rect width="1" height="1" fill="url(#nmg)"/></mask>
+ <mask id="nm" maskUnits="userSpaceOnUse" x="${f(-a * 2)}" y="${f(-b * 4)}" width="${f(a * 5)}" height="${f(b * 8)}"><linearGradient id="nmg" gradientUnits="userSpaceOnUse" x1="${f(a * .12)}" y1="0" x2="${f(a * .12 + r * .9)}" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="1"/></linearGradient><rect x="${f(-a * 2)}" y="${f(-b * 4)}" width="${f(a * 5)}" height="${f(b * 8)}" fill="url(#nmg)"/></mask>
  <clipPath id="ch"><ellipse rx="${f(r * 1.1)}" ry="${f(r * .96)}"/></clipPath>
  <clipPath id="nk"><path id="nkp" d="${neckPath(G, 0, 0)}"/></clipPath>
  <linearGradient id="gn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${M.dark}" stop-opacity=".5"/><stop offset=".45" stop-color="${M.dark}" stop-opacity=".98"/><stop offset="1" stop-color="${M.dark}"/></linearGradient>
