@@ -30,3 +30,7 @@ body { background: var(--pm-bg); color: var(--pm-text); }
 .pm__tag { font-size:.75rem; margin-left:.375rem; padding:.0625rem .375rem; border-radius:4px; background:#3a3f3d; opacity:.85; }
 .pm__tag--lit { background:#2f5d4e; }
 .pm__fun { display:flex; gap:.5rem; align-items:center; margin-top:1rem; font-size:.875rem; }
+
+/* 横向きのスマホでは絵が画面の高さを超えて操作パネルを隠すので、固定しない */
+@media (max-height: 500px) { .pm__view { position: static; } }
+.pm__poses button, .pm__morphs button { min-height: 2.75rem; }

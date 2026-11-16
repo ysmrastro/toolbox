@@ -32,9 +32,14 @@ test('「文献」の印がついた範囲の両端が、観測された範囲�
   // 跗蹠 27.2–36.3mm
   const t0 = at('leg', q('leg').real[0]).tarsusMm, t1 = at('leg', q('leg').real[1]).tarsusMm;
   assert.ok(t0 >= 27.2 && t1 <= 36.3, `跗蹠 ${t0}–${t1}`);
-  // 体重 168–385g（翼長が平均のとき、胴まわりだけで動かす）
-  const g0 = at('girth', q('girth').real[0]).weightG, g1 = at('girth', q('girth').real[1]).weightG;
-  assert.ok(g0 >= 165 && g1 <= 385, `体重 ${g0}–${g1}`);
+  // 体重 168–385g は、大きさごとの胴まわりの範囲（girthRange）で動かしたとき端でも収まる
+  for (const size of [q('size').real[0], 100, q('size').real[1]]) {
+    const [lo, hi] = P.girthRange(size);
+    [lo, hi].forEach(girth => {
+      const g = P.info(Object.assign({}, base, { size, girth }), 'bar', 'stand').weightG;
+      assert.ok(g >= 168 && g <= 385, `大きさ ${size}% 胴まわり ${girth}% → ${g}g`);
+    });
+  }
 });
 
 test('個体番号から同じ個体が決まり、「実在」の範囲に収まる', () => {
@@ -71,4 +76,26 @@ test('立っているときは足が地面につく', () => {
     const g = P.build(Object.assign({}, p, { leg }), 'bar', 'stand', 1).G;
     near(g.hw.y + g.ll, 382, 0.01, `脚 ${leg}%`);
   });
+});
+
+test('個体番号1〜9999の全部が、体重 168–385g・全長 29–37cm に収まる', () => {
+  for (let n = 1; n <= 9999; n++) {
+    const r = P.fromSeed(n), i = P.info(r.p, r.morph, 'stand');
+    assert.ok(i.weightG >= 168 && i.weightG <= 385, `${n}: ${i.weightG}g`);
+    assert.ok(i.lengthCm >= 29 && i.lengthCm <= 37, `${n}: ${i.lengthCm}cm`);
+  }
+});
+
+test('parseSettings: 不正な設定は null、危険な値や未知のキーは取り込まない', () => {
+  assert.strictEqual(P.parseSettings('これはJSONではない'), null);
+  assert.strictEqual(P.parseSettings('{"morph":"nothing","p":{}}'), null, '未知の羽色');
+  assert.strictEqual(P.parseSettings('null'), null);
+  const o = P.parseSettings('{"morph":"bar","seed":"<img src=x onerror=alert(1)>","p":{"size":"abc","leg":120,"zzz":1,"head":99999,"eye":null}}');
+  assert.strictEqual(o.seed, 1, '数でない個体番号は 1');
+  assert.strictEqual(o.p.size, 100, '数でない値は既定値');
+  assert.strictEqual(o.p.leg, 120);
+  assert.strictEqual(o.p.head, q('head').fun[1], '範囲外は端に収める');
+  assert.strictEqual(o.p.eye, 100, 'null は既定値');
+  assert.ok(!('zzz' in o.p), '未知のキーは捨てる');
+  assert.strictEqual(P.parseSettings('{"morph":"bar","seed":123456,"p":{}}').seed, 9999, '個体番号は 1〜9999 に収める');
 });
