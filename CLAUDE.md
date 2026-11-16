@@ -240,6 +240,10 @@ Blob の画像にして貼り、動かさない。足・首・頭だけを毎フ
 スライダーを動かすたびに体が消えて点滅する（レビューで見つかった）。設定の読み込みは
 `parseSettings` を通す（個体番号などを HTML として扱わない）。
 
+**`pigeon-maker/` の js・css を変えたら、`index.html` の `?v=` を上げる。** `app.js` は `pigeon.js` の関数
+（`parseSettings`・`girthRange` など）を呼ぶので、古い `pigeon.js` がキャッシュに残ると描画が止まる
+（meteor-settings の「版ずれで真っ白」と同じ仕組み。GitHub Pages のキャッシュは10分）。
+
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 
 `euphoria-design` スキルの基準に従う。meteor-settings は準拠済み。
