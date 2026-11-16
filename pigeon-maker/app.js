@@ -30,7 +30,7 @@
       slidersEl.appendChild(row);
       const el = row.querySelector('input');
       inputs[q.key] = { el, out: row.querySelector('output'), q };
-      el.addEventListener('input', () => { st.p[q.key] = +el.value; sync(false); });
+      el.addEventListener('input', () => { st.p[q.key] = +el.value; if (q.key === 'size') applyRanges(); sync(false); });
     });
     const fun = document.createElement('label');
     fun.className = 'pm__fun';
@@ -42,7 +42,7 @@
   function applyRanges() {
     P.PARAMS.forEach(q => {
       if (!q.key) return;
-      const [lo, hi] = rangeOf(q), i = inputs[q.key];
+      const [lo, hi] = (q.key === 'girth' && !st.fun) ? P.girthRange(st.p.size) : rangeOf(q), i = inputs[q.key];
       i.el.min = lo; i.el.max = hi;
       st.p[q.key] = Math.min(hi, Math.max(lo, st.p[q.key]));
     });
@@ -64,13 +64,15 @@
   }
 
   let raf = 0;
-  function sync(full) {
+  function sync() {
     P.PARAMS.forEach(q => { if (q.key) { inputs[q.key].el.value = st.p[q.key]; inputs[q.key].out.textContent = st.p[q.key] + '%'; } });
     morphsEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.k === st.morph)));
     posesEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.k === st.pose)));
     seedEl.value = st.seed;
     const i = P.info(st.p, st.morph, st.pose);
-    infoEl.innerHTML = `<b>ドバト・${i.morph}　No.${st.seed}</b><br>翼長 約${(i.wingMm / 10).toFixed(1)}cm ／ 跗蹠 約${(i.tarsusMm / 10).toFixed(1)}cm ／ 体重 約${Math.round(i.weightG)}g ／ 全長 約${Math.round(i.lengthCm)}cm`;
+    const title = document.createElement('b');
+    title.textContent = `ドバト・${i.morph}　No.${st.seed}`;
+    infoEl.replaceChildren(title, document.createElement('br'), document.createTextNode(`翼長 約${(i.wingMm / 10).toFixed(1)}cm ／ 跗蹠 約${(i.tarsusMm / 10).toFixed(1)}cm ／ 体重 約${Math.round(i.weightG)}g ／ 全長 約${Math.round(i.lengthCm)}cm`));
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => render());
   }
@@ -85,27 +87,38 @@
     const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
     const img = new Image();
     img.onload = () => done(img, url);
-    img.onerror = () => URL.revokeObjectURL(url);
+    img.onerror = () => { URL.revokeObjectURL(url); done(null, null); };   // 読めなければ、呼び出し側がインライン SVG で代用する
     img.src = url;
   }
 
-  let lastBuild = null;
+  let lastBuild = null, lastW = 0, shownUrl = null;
   function render() {
     const id = ++renderId;
+    lastW = stage.clientWidth;
     const b = P.build(st.p, st.morph, st.pose, st.seed);
     const vb = `0 0 ${P.VW} ${P.VH}`;
-    stage.innerHTML = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.A}</svg><div class="pm__body" aria-hidden="true"></div><svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.C}</svg>`;
-    handles = P.bind(stage, b.G);
-    const holder = stage.children[1];
     bodyImage(b.B, (img, url) => {
-      if (id !== renderId) { URL.revokeObjectURL(url); return; }
-      holder.appendChild(img);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      if (id !== renderId) { if (url) URL.revokeObjectURL(url); return; }
+      const swap = () => {
+        if (id !== renderId) { if (url) URL.revokeObjectURL(url); return; }
+        // 3層を同時に差し替える。前の絵は、新しい体の画像が読めるまで残す
+        const box = document.createElement('div');   // template だと別文書への移し替えで画像が再読み込みされる
+        box.innerHTML = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.A}</svg><div class="pm__body" aria-hidden="true"></div><svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.C}</svg>`;
+        if (img) box.children[1].appendChild(img);
+        else box.children[1].innerHTML = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg">${b.B}</svg>`;
+        stage.replaceChildren(...box.children);
+        handles = P.bind(stage, b.G);
+        lastBuild = b;
+        // 表示中の画像の URL は、次の差し替えまで残す（画像が捨てられて読み直されても消えないように）
+        if (shownUrl) URL.revokeObjectURL(shownUrl);
+        shownUrl = url;
+      };
+      (img && img.decode ? img.decode() : Promise.resolve()).then(swap, swap);
     });
-    lastBuild = b;
   }
+  // 幅が変わったときだけ作り直す（iOS はツールバーの出し入れでも resize が来る）
   let rz = 0;
-  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => render(), 250); });
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (stage.clientWidth !== lastW) render(); }, 250); });
 
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   let t0 = performance.now();
@@ -132,15 +145,14 @@
   document.getElementById('load').addEventListener('click', () => {
     const text = prompt('コピーした設定を貼り付けてください');
     if (!text) return;
-    try {
-      const o = JSON.parse(text);
-      if (!P.MORPHS[o.morph]) throw new Error('羽色が不明');
-      st.p = Object.assign(P.defaults(), o.p); st.morph = o.morph; st.seed = o.seed || 1;
-      st.fun = true; document.getElementById('fun').checked = true;
-      applyRanges(); sync(true);
-    } catch (_) { alert('設定を読み込めませんでした'); }
+    const o = P.parseSettings(text);
+    if (!o) { alert('設定を読み込めませんでした'); return; }
+    st.p = o.p; st.morph = o.morph; st.seed = o.seed;
+    st.fun = true; document.getElementById('fun').checked = true;
+    applyRanges(); sync(true);
   });
   document.getElementById('save').addEventListener('click', () => {
+    if (!lastBuild) return;
     const layers = lastBuild.A + lastBuild.B + lastBuild.C;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P.VW * 2}" height="${P.VH * 2}" viewBox="0 0 ${P.VW} ${P.VH}">${layers}</svg>`;
     const img = new Image();
@@ -153,7 +165,7 @@
   });
 
   buildSliders(); buildChoices();
-  // 初期は第1個体（No.1）の見本を出す。URL の ?no= で番号を指定できる
+  // 初期は乱数の個体。URL の ?no= で番号を指定できる
   const q = new URLSearchParams(location.search).get('no');
   applyRanges();
   setSeed(q ? +q : 1 + Math.floor(Math.random() * 9999));

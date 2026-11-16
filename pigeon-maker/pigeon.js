@@ -54,17 +54,51 @@ const PIGEON = (() => {
 
   function defaults() { const p = {}; PARAMS.forEach(q => { if (q.key) p[q.key] = q.def; }); return p; }
 
-  // 個体番号から、文献の範囲に収まる個体を決める
+  // 体の大きさに対して、体重が文献の範囲（168–385g）に収まる胴まわりの範囲。
+  // 体重は 大きさ³ × 胴まわり² なので、大きさを変えると胴まわりの上下限も動く。
+  // 大きさが実在の範囲（91〜107%）のときだけ意味がある。範囲の外では実在の範囲外の値を返すので、「ありえない個体」のときは使わない。
+  function girthRange(size) {
+    const g = PARAMS.find(x => x.key === 'girth'), w = REF.weight * Math.pow(size / 100, 3);
+    const lo = Math.max(g.real[0], Math.ceil(100 * Math.sqrt(168 / w))), hi = Math.min(g.real[1], Math.floor(100 * Math.sqrt(385 / w)));
+    return lo <= hi ? [lo, hi] : [Math.round((lo + hi) / 2), Math.round((lo + hi) / 2)];
+  }
+
+  // 個体番号から、文献の範囲に収まる個体を決める。
+  // 体重・全長が範囲を外れたら、同じ番号から決まる次の候補を引き直す（番号が同じなら結果も同じ）
   function fromSeed(seed) {
-    const r = mulberry32(seed * 7919 + 13);
-    const z = () => (r() + r() + r()) / 3;
+    let res;
+    for (let k = 0; k < 40; k++) {
+      const r = mulberry32(seed * 7919 + 13 + k * 104729);
+      const z = () => (r() + r() + r()) / 3;
+      const p = defaults();
+      PARAMS.forEach(q => {
+        if (!q.key || q.key === 'fluff' || q.key === 'sheen') return;
+        const [lo, hi] = q.key === 'girth' ? girthRange(p.size) : q.real;
+        p[q.key] = Math.round(lo + z() * (hi - lo));
+      });
+      p.fluff = Math.round(r() * 100);
+      p.sheen = Math.round(60 + r() * 70);
+      let w = r() * Object.values(MORPHS).reduce((t, m) => t + m.weight, 0), morph = 'bar';
+      for (const key in MORPHS) { w -= MORPHS[key].weight; if (w <= 0) { morph = key; break; } }
+      res = { p, morph };
+      const len = info(p, morph, 'stand').lengthCm;
+      if (len >= 29 && len <= 37) break;
+    }
+    return res;
+  }
+
+  // 貼り付けられた設定を検査して、安全な値だけを取り出す。不正なら null
+  function parseSettings(text) {
+    let o;
+    try { o = JSON.parse(text); } catch (_) { return null; }
+    if (!o || typeof o !== 'object' || !Object.hasOwn(MORPHS, o.morph)) return null;
+    const seed = Math.min(9999, Math.max(1, Math.floor(Number(o.seed)) || 1));
     const p = defaults();
-    PARAMS.forEach(q => { if (q.key && q.key !== 'fluff' && q.key !== 'sheen') p[q.key] = Math.round(q.real[0] + z() * (q.real[1] - q.real[0])); });
-    p.fluff = Math.round(r() * 100);
-    p.sheen = Math.round(60 + r() * 70);
-    let w = r() * Object.values(MORPHS).reduce((s, m) => s + m.weight, 0), morph = 'bar';
-    for (const k in MORPHS) { w -= MORPHS[k].weight; if (w <= 0) { morph = k; break; } }
-    return { p, morph };
+    PARAMS.forEach(q => {
+      if (!q.key || !o.p || typeof o.p[q.key] !== 'number' || !Number.isFinite(o.p[q.key])) return;
+      p[q.key] = Math.round(Math.min(q.fun[1], Math.max(q.fun[0], o.p[q.key])));
+    });
+    return { seed, morph: o.morph, p };
   }
 
   function geom(p, pose) {
@@ -114,7 +148,9 @@ const PIGEON = (() => {
       fill = `url(#${id})`;
     }
     const d = `M0,${f(-wid * .3)}C${f(len * .22)},${f(-wid)} ${f(len * .7)},${f(-wid * 1.05)} ${f(len * .97)},${f(-wid * .35)}Q${f(len * 1.03)},0 ${f(len * .97)},${f(wid * .35)}C${f(len * .7)},${f(wid * 1.05)} ${f(len * .22)},${f(wid)} 0,${f(wid * .3)}Z`;
-    return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(ang)})"><path d="${d}" fill="${fill}" stroke="${o.edge || '#000'}" stroke-opacity="${o.ea == null ? .32 : o.ea}" stroke-width=".6"/>` +
+    const head = `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(ang)})"><path d="${d}" fill="${fill}" stroke="${o.edge || '#000'}" stroke-opacity="${o.ea == null ? .32 : o.ea}" stroke-width=".6"/>`;
+    if (o.simple) return head + '</g>';
+    return head +
       `<path d="M0,0H${f(len * .94)}" stroke="#000" stroke-opacity=".16" stroke-width=".5"/>` +
       `<path d="M${f(len * .1)},${f(-wid * .25)}C${f(len * .3)},${f(-wid * .7)} ${f(len * .62)},${f(-wid * .75)} ${f(len * .88)},${f(-wid * .3)}" stroke="#fff" stroke-opacity="${o.hl == null ? .14 : o.hl}" stroke-width="${f(wid * .38)}" fill="none" stroke-linecap="round"/></g>`;
   }
@@ -216,7 +252,6 @@ const PIGEON = (() => {
 
     const B = `
 <defs>
- <filter id="fz" x="-10%" y="-20%" width="120%" height="140%"><feTurbulence type="fractalNoise" baseFrequency=".07 .1" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="${f(1.2 + fl * 5)}" xChannelSelector="R" yChannelSelector="G"/></filter>
  <clipPath id="cb"><path d="${bodyD}"/></clipPath>
  <linearGradient id="gs" gradientUnits="userSpaceOnUse" x1="0" y1="${f(-b * .1)}" x2="0" y2="${f(b)}"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient>
  <radialGradient id="gh" gradientUnits="userSpaceOnUse" cx="${f(a * .2)}" cy="${f(-b * .6)}" r="${f(a * .95)}"><stop offset="0" stop-color="#fff" stop-opacity=".26"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
@@ -225,7 +260,7 @@ const PIGEON = (() => {
 <g transform="translate(${f(G.CX)} ${f(G.CY)}) rotate(${TILT})">
  ${tailF}
  ${thigh}
- <g filter="url(#fz)">
+ <g>
   <path d="${bodyD}" fill="${M.body}"/>
   <g clip-path="url(#cb)">
    ${bodyF}
@@ -239,35 +274,41 @@ const PIGEON = (() => {
     // ---- 層C: 首と頭（動く。フィルタを使わず、拡大しても崩れない）----
     const F2 = { n: 0, defs: [], pre: 'fc' };
     const Pn = [{ x: a * .12, y: -b * .92 }, { x: H.x - r * .9, y: H.y + r * .55 }, { x: H.x + r * .62, y: H.y + r * .92 }, { x: a * .95, y: -b * .28 }, { x: a * .82, y: b * .32 }, { x: a * .12, y: -b * .22 }];
-    const inPoly = (x, y) => { let c = false; for (let i = 0, j = Pn.length - 1; i < Pn.length; j = i++) { if ((Pn[i].y > y) !== (Pn[j].y > y) && x < (Pn[j].x - Pn[i].x) * (y - Pn[i].y) / (Pn[j].y - Pn[i].y) + Pn[i].x) c = !c; } return c; };
+    // 羽を置く範囲は、歩くときの頭の後退（約17s）の分だけ前側を広げる。切り抜き（nk）が実際の首の形を決める
+    const PnW = Pn.map((q, i) => (i >= 2 && i <= 4 ? { x: q.x + 20 * s, y: q.y } : q));
+    const inPoly = (x, y) => { let c = false; for (let i = 0, j = PnW.length - 1; i < PnW.length; j = i++) { if ((PnW[i].y > y) !== (PnW[j].y > y) && x < (PnW[j].x - PnW[i].x) * (y - PnW[i].y) / (PnW[j].y - PnW[i].y) + PnW[i].x) c = !c; } return c; };
     const GRN = '#2fb27a', TEAL = '#2a9db0', PUR = '#9a52c9';
     let neckF = '';
-    const nw = 2.5 * s, nl = 6.6 * s;
+    const nw = 3 * s, nl = 7.6 * s;
     for (let y = H.y + r * 3.9; y > H.y - r * .2; y -= nl * .42) {
-      for (let x = Math.min(Pn[0].x, Pn[1].x) - 6; x < Math.max(Pn[2].x, Pn[3].x) + 6; x += nw * 1.15) {
+      for (let x = Math.min(Pn[0].x, Pn[1].x) - 6; x < Math.max(Pn[2].x, Pn[3].x) + 6 + 20 * s; x += nw * 1.15) {
         const X = x + (rnd() - .5) * nw * .6, Y = y + (rnd() - .5) * nl * .3;
         if (!inPoly(X, Y)) continue;
         const tt = Math.min(1, Math.max(0, (Y - (H.y + r * .4)) / (r * 2.6)));
         const w = sheen * Math.exp(-Math.pow((Y - (H.y + r * 1.7)) / (r * 1.25), 2)) * Math.min(1, Math.max(0, (X - Pn[0].x) / (r * 1.0)));
         const tone = tt + (rnd() - .5) * .5 < .38 ? GRN : (tt + (rnd() - .5) * .4 < .62 ? TEAL : PUR);
         const yb = Pn[5].y + (Pn[4].y - Pn[5].y) * Math.min(1, Math.max(0, (X - Pn[5].x) / (Pn[4].x - Pn[5].x)));
-        const fade = Math.min(1, Math.max(0, (yb - Y) / (r * 1.5)));   // 下端は体の色に溶かす
+        const fadeBottom = Math.min(1, Math.max(0, (yb - Y) / (r * 1.5)));   // 下端は体の色に溶かす
+        const tf = Math.min(1, Math.max(0, (Y - Pn[2].y) / (Pn[3].y - Pn[2].y)));
+        const xf = Pn[2].x + (Pn[3].x - Pn[2].x) * tf;                          // 首の前縁（のど〜胸）
+        const fadeFront = Y > H.y + r * 1.6 ? Math.min(1, Math.max(0, (xf - X) / (r * 1.1))) : 1;   // 胸のあたりは前縁も溶かす
+        const fade = Math.min(fadeBottom, fadeFront);
         const c = mix(mix(M.body, M.light, .25), mix(mix(M.dark, M.light, .12 + rnd() * .1), tone, w * (.55 + rnd() * .45) * .95), fade);
-        neckF += feather(F2, X, Y, nl, nw, 95 + (rnd() - .5) * 22 + Math.max(0, (X - H.x)) * .4, c, { edge: M.dark, hl: .2 });
+        neckF += feather(F2, X, Y, nl, nw, 95 + (rnd() - .5) * 22 + Math.max(0, (X - H.x)) * .4, c, { edge: M.dark, simple: true });
       }
     }
     let headF = '';
-    for (let y = r * 1.0; y > -r * 1.0; y -= r * .13) {
-      for (let x = -r * 1.2; x < r * 1.1; x += r * .12) {
+    for (let y = r * 1.0; y > -r * 1.0; y -= r * .16) {
+      for (let x = -r * 1.2; x < r * 1.1; x += r * .15) {
         const X = x + (rnd() - .5) * r * .08, Y = y + (rnd() - .5) * r * .06;
         const c = mix(M.dark, M.light, .22 * Math.max(0, .6 - (Y / r + 1) / 2) + rnd() * .12);
-        headF += feather(F2, X, Y, r * .34, r * .14, 178 + (rnd() - .5) * 20, c, { edge: M.dark, hl: .12 });
+        headF += feather(F2, X, Y, r * .34, r * .14, 178 + (rnd() - .5) * 20, c, { edge: M.dark, simple: true });
       }
     }
 
     const Cc = `
 <defs>
- <mask id="nm" maskContentUnits="objectBoundingBox"><linearGradient id="nmg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".2" stop-color="#fff" stop-opacity="1"/></linearGradient><rect width="1" height="1" fill="url(#nmg)"/></mask>
+ <mask id="nm" maskUnits="userSpaceOnUse" x="${f(-a * 2)}" y="${f(-b * 4)}" width="${f(a * 5)}" height="${f(b * 8)}"><linearGradient id="nmg" gradientUnits="userSpaceOnUse" x1="${f(a * .12)}" y1="0" x2="${f(a * .12 + r * .9)}" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="1"/></linearGradient><rect x="${f(-a * 2)}" y="${f(-b * 4)}" width="${f(a * 5)}" height="${f(b * 8)}" fill="url(#nmg)"/></mask>
  <clipPath id="ch"><ellipse rx="${f(r * 1.1)}" ry="${f(r * .96)}"/></clipPath>
  <clipPath id="nk"><path id="nkp" d="${neckPath(G, 0, 0)}"/></clipPath>
  <linearGradient id="gn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${M.dark}" stop-opacity=".5"/><stop offset=".45" stop-color="${M.dark}" stop-opacity=".98"/><stop offset="1" stop-color="${M.dark}"/></linearGradient>
@@ -315,7 +356,7 @@ ${G.pose === 'sit' ? '' : leg('legF', G.hw.x + 15 * s, G.hw.y, G, '#9a3249', '#a
   // ---- 動き ----
   function bind(stage, G) {
     const q = id => stage.querySelector('#' + id);
-    return { G, layers: [...stage.children], neck: q('neck'), nkp: q('nkp'), sheen: q('sheen'), tex: q('neckTex'), head: q('head'), legN: q('legN'), legF: q('legF') };
+    return { G, layers: [...stage.children], neck: q('neck'), nkp: q('nkp'), tex: q('neckTex'), head: q('head'), legN: q('legN'), legF: q('legF') };
   }
 
   function tick(h, t, pose) {
@@ -334,7 +375,6 @@ ${G.pose === 'sit' ? '' : leg('legF', G.hw.x + 15 * s, G.hw.y, G, '#9a3249', '#a
     }
     if (h.neck) h.neck.setAttribute('d', neckPath(G, dx, dy));
     if (h.nkp) h.nkp.setAttribute('d', neckPath(G, dx, dy));
-    if (h.sheen) h.sheen.setAttribute('transform', `translate(${f(dx)} ${f(dy)})`);
     if (h.tex) h.tex.setAttribute('transform', `translate(${f(dx)} ${f(dy)})`);
     if (h.head) h.head.setAttribute('transform', `translate(${f(G.H.x + dx)} ${f(G.H.y + dy)}) rotate(${f(14 + hr)})`);
     if (h.legN) h.legN.setAttribute('transform', `rotate(${f(ln)})`);
@@ -344,6 +384,6 @@ ${G.pose === 'sit' ? '' : leg('legF', G.hw.x + 15 * s, G.hw.y, G, '#9a3249', '#a
     if (h.layers[2]) h.layers[2].style.transform = `translateY(${f(bob * k)}px)`;
   }
 
-  return { VW, VH, REF, PARAMS, MORPHS, defaults, fromSeed, build, info, bind, tick };
+  return { VW, VH, REF, PARAMS, MORPHS, defaults, fromSeed, girthRange, parseSettings, build, info, bind, tick };
 })();
 if (typeof module !== 'undefined') module.exports = PIGEON;
