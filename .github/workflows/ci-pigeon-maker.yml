@@ -1,0 +1,50 @@
+# 鳩メーカーのチェック。寸法と個体の決め方（pigeon.js）のテストと、JS の構文チェック。
+# このツールと、それが使うもの（共通CSS・package.json）が変わった PR でだけ走る。
+name: CI - pigeon-maker
+
+on:
+  pull_request:
+    branches:
+      - main
+    # synchronize を含める: PR に追加コミットを積んだときも再実行する
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'pigeon-maker/**'
+      - 'shared/**'
+      - 'package.json'
+      - '.github/workflows/ci-pigeon-maker.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: 構文チェック
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: node --check
+        run: for f in pigeon-maker/*.js; do echo "$f"; node --check "$f"; done
+
+  unit:
+    name: Small テスト
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 依存パッケージなしで動く（Node 標準の node:test）ので npm ci は要らない
+      - name: npm run test:pigeon-maker
+        run: npm run test:pigeon-maker

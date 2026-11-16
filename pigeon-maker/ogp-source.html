@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>OGP 生成元 — 鳩メーカー</title>
+  <!-- 1200×630 でスクリーンショットを撮り ogp.png として保存する。鳩は本物の pigeon.js で描く。 -->
+  <style>
+    html, body { margin: 0; }
+    body { width: 1200px; height: 630px; overflow: hidden; background: #14201e; color: #e4efec; font-family: "Hiragino Kaku Gothic ProN", system-ui, sans-serif; position: relative; }
+    #bird { position: absolute; left: 600px; top: 0; width: 600px; height: 630px; overflow: hidden; }
+    #bird svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    h1 { position: absolute; left: 64px; top: 170px; margin: 0; font-size: 96px; line-height: 1.15; }
+    p { position: absolute; left: 64px; top: 440px; margin: 0; width: 480px; font-size: 28px; line-height: 1.6; opacity: .8; }
+    small { position: absolute; left: 64px; top: 64px; font-size: 24px; opacity: .6; }
+  </style>
+</head>
+<body>
+  <small>ysmrastro toolbox</small>
+  <h1>鳩<br>メーカー</h1>
+  <p>体・首・頭・脚を変えて、好きなドバトを作る</p>
+  <div id="bird"></div>
+  <script src="pigeon.js"></script>
+  <script>
+    const p = PIGEON.fromSeed(6575);
+    const b = PIGEON.build(p.p, p.morph, 'stand', 6575);
+    document.getElementById('bird').innerHTML = ['A', 'B', 'C'].map(k => `<svg viewBox="95 -23 440 463" preserveAspectRatio="xMidYMid slice">${b[k]}</svg>`).join('');
+  </script>
+</body>
+</html>
