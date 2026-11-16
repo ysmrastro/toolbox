@@ -61,16 +61,24 @@ toolbox/
 │   ├── test/               # 自動テスト（配信されない）
 │   ├── ogp-source.html     # OGP画像の生成元
 │   └── README.md           # 使い方と問題ファイルの形式
-└── latte-art/              # ラテアート練習（試作。iPhone を傾けて注ぐ）
+├── latte-art/              # ラテアート練習（試作。iPhone を傾けて注ぐ）
+│   ├── index.html
+│   ├── style.css
+│   ├── pour.js             # 傾き→注ぐ量、カップの量→白が浮くか沈むか（純粋関数）
+│   ├── fluid.js            # 液面の2次元流体（Stable Fluids・WebGL2。外部ライブラリなし）
+│   ├── app.js              # センサー・指・マウスの入力と画面。調整値 T もここ
+│   ├── recipes.js          # 決まった注ぎ方（OGP の生成と見比べ用。画面からは使わない）
+│   ├── test/               # 自動テスト（pour.js だけ。配信されない）
+│   ├── ogp-source.html     # OGP画像の生成元（実物の app.js でハートを注いで描く）
+│   └── README.md           # 操作・モデル・調整値・ロゼッタが描けない理由
+└── pigeon-maker/           # 鳩メーカー（試作。ドバトの体つきを変えて作る。寸法は論文の実測が根拠）
     ├── index.html
     ├── style.css
-    ├── pour.js             # 傾き→注ぐ量、カップの量→白が浮くか沈むか（純粋関数）
-    ├── fluid.js            # 液面の2次元流体（Stable Fluids・WebGL2。外部ライブラリなし）
-    ├── app.js              # センサー・指・マウスの入力と画面。調整値 T もここ
-    ├── recipes.js          # 決まった注ぎ方（OGP の生成と見比べ用。画面からは使わない）
-    ├── test/               # 自動テスト（pour.js だけ。配信されない）
-    ├── ogp-source.html     # OGP画像の生成元（実物の app.js でハートを注いで描く）
-    └── README.md           # 操作・モデル・調整値・ロゼッタが描けない理由
+    ├── pigeon.js           # 寸法・個体の決め方・SVG の組み立て・動き（DOM に触らない）
+    ├── app.js              # スライダー・ボタン・アニメーションの駆動
+    ├── test/               # 自動テスト（配信されない）
+    ├── ogp-source.html     # OGP画像の生成元（実物の pigeon.js で描く）
+    └── README.md           # 寸法の出典・仮の値・描き方
 ```
 
 **タブは 計画 / 機材 / 条件 / 結果 の4枚**。最初に開くのは**計画**で、極大が遠い時期に
@@ -211,6 +219,18 @@ fluid.js の射影を触るときはここを崩さない。
 **調整値は `app.js` の `T`。** 見た目は `window.LATTE.drive()` で決まった入力を流して
 Playwright で撮って比べる。流体（fluid.js）は WebGL に結び付いていて単体テストは無い。
 
+## 鳩メーカーについて
+
+**試作。** ドバトの体つきを変えて作る。寸法の出典と、文献値を取れていない「仮」の値は `pigeon-maker/README.md`。
+触る前に読むべき点だけ挙げる。
+
+**寸法は論文の実測の範囲に収める。** 翼長・跗蹠・体重は Acta Vet Scand 2010;52:45 表1（Madrid）。
+画面の「文献」「仮」の印と、テストの範囲検査が対応している。**文献値を足したら `PARAMS` の `src` と
+テストを一緒に直す。** 尾・くちばし・首・頭は未取得（Avian Res 12:45 の Table 1 に載っているが、表を取得できていない）。
+
+**絵は3枚の SVG を重ねている。** 体は羽毛の鱗とふちの乱れ（SVG フィルタ）で重いので動かさず、
+足・首・頭だけを毎フレーム動かす。1枚にまとめると毎フレーム体を描き直して重くなる。
+
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 
 `euphoria-design` スキルの基準に従う。meteor-settings は準拠済み。
@@ -316,6 +336,7 @@ state を注入するのは app.js の役目で、`P.` の薄いラッパにま�
 | `CI - collimation` | `collimation/`・`shared/` | `構文チェック` |
 | `CI - qr-generator` | `qr-generator/`・`shared/` | `構文チェック` |
 | `CI - latte-art` | `latte-art/`・`shared/`・`package.json` | `構文チェック`・`Small テスト`（`npm run test:latte-art`） |
+| `CI - pigeon-maker` | `pigeon-maker/`・`shared/`・`package.json` | `構文チェック`・`Small テスト`（`npm run test:pigeon-maker`） |
 
 どのワークフローも、自分自身の yml が変わったときにも走る。
 
