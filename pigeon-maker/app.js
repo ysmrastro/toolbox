@@ -75,12 +75,37 @@
     raf = requestAnimationFrame(() => render());
   }
 
+  // 体の層（羽毛が多くフィルタも使う）は、画面の解像度に合わせた画像にして貼る。
+  // SVG のまま画面サイズで描くと、スマホ（特に Safari）でフィルタが低解像度になって粗く見える。
+  let renderId = 0;
+  function bodyImage(inner, done) {
+    const w = Math.min(2600, Math.max(P.VW, Math.round((stage.clientWidth || P.VW) * (window.devicePixelRatio || 1) * 1.15)));
+    const h = Math.round(w * P.VH / P.VW);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${P.VW} ${P.VH}" width="${w}" height="${h}">${inner}</svg>`;
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const img = new Image();
+    img.onload = () => done(img, url);
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  }
+
+  let lastBuild = null;
   function render() {
+    const id = ++renderId;
     const b = P.build(st.p, st.morph, st.pose, st.seed);
     const vb = `0 0 ${P.VW} ${P.VH}`;
-    stage.innerHTML = ['A', 'B', 'C'].map(k => `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b[k]}</svg>`).join('');
+    stage.innerHTML = `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.A}</svg><div class="pm__body" aria-hidden="true"></div><svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${b.C}</svg>`;
     handles = P.bind(stage, b.G);
+    const holder = stage.children[1];
+    bodyImage(b.B, (img, url) => {
+      if (id !== renderId) { URL.revokeObjectURL(url); return; }
+      holder.appendChild(img);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    });
+    lastBuild = b;
   }
+  let rz = 0;
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => render(), 250); });
 
   const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   let t0 = performance.now();
@@ -116,7 +141,7 @@
     } catch (_) { alert('設定を読み込めませんでした'); }
   });
   document.getElementById('save').addEventListener('click', () => {
-    const layers = [...stage.querySelectorAll('svg')].map(s => s.innerHTML).join('');
+    const layers = lastBuild.A + lastBuild.B + lastBuild.C;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${P.VW * 2}" height="${P.VH * 2}" viewBox="0 0 ${P.VW} ${P.VH}">${layers}</svg>`;
     const img = new Image();
     img.onload = () => {
