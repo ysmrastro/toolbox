@@ -100,21 +100,26 @@ const PIGEON = (() => {
     };
   }
 
-  // ---- 部品 ----
-  function scallops(x0, x1, y0, y1, sc, col, rnd, op) {
-    let out = '';
-    const dy = sc * .8;
-    let row = 0;
-    for (let y = y0; y < y1; y += dy, row++) {
-      for (let x = x0 + (row % 2) * sc; x < x1; x += sc * 2) {
-        const jx = (rnd() - .5) * sc * .6, jy = (rnd() - .5) * sc * .4, w = sc * (.85 + rnd() * .3);
-        const X = x + jx, Y = y + jy, sh = rnd();
-        out += `<path d="M${f(X - w)},${f(Y)}Q${f(X)},${f(Y + sc * 1.6)} ${f(X + w)},${f(Y)}" fill="${sh > .5 ? '#fff' : '#000'}" fill-opacity="${f(.04 + rnd() * .08)}" stroke="${col}" stroke-opacity="${op}" stroke-width=".9"/>`;
-      }
+  // ---- 色と羽 ----
+  const hex2 = h => { if (h.length === 4) h = '#' + h[1] + h[1] + h[2] + h[2] + h[3] + h[3]; return [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)); };
+  const mix = (a, b, t) => { const A = hex2(a), B = hex2(b); t = Math.max(0, Math.min(1, t)); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+
+  // 羽1枚。根元が原点、先が +x。ang は時計回りの度。tip を渡すと、先の側を別の色にする（帯）
+  function feather(F, x, y, len, wid, ang, col, o) {
+    o = o || {};
+    let fill = col;
+    if (o.tip) {
+      const id = F.pre + (F.n++), from = o.from || .7;
+      F.defs.push(`<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${col}"/><stop offset="${f(from)}" stop-color="${col}"/><stop offset="${f(Math.min(1, from + .09))}" stop-color="${o.tip}"/><stop offset="1" stop-color="${o.tip}"/></linearGradient>`);
+      fill = `url(#${id})`;
     }
-    return out;
+    const d = `M0,${f(-wid * .3)}C${f(len * .22)},${f(-wid)} ${f(len * .7)},${f(-wid * 1.05)} ${f(len * .97)},${f(-wid * .35)}Q${f(len * 1.03)},0 ${f(len * .97)},${f(wid * .35)}C${f(len * .7)},${f(wid * 1.05)} ${f(len * .22)},${f(wid)} 0,${f(wid * .3)}Z`;
+    return `<g transform="translate(${f(x)} ${f(y)}) rotate(${f(ang)})"><path d="${d}" fill="${fill}" stroke="${o.edge || '#000'}" stroke-opacity="${o.ea == null ? .32 : o.ea}" stroke-width=".6"/>` +
+      `<path d="M0,0H${f(len * .94)}" stroke="#000" stroke-opacity=".16" stroke-width=".5"/>` +
+      `<path d="M${f(len * .1)},${f(-wid * .25)}C${f(len * .3)},${f(-wid * .7)} ${f(len * .62)},${f(-wid * .75)} ${f(len * .88)},${f(-wid * .3)}" stroke="#fff" stroke-opacity="${o.hl == null ? .14 : o.hl}" stroke-width="${f(wid * .38)}" fill="none" stroke-linecap="round"/></g>`;
   }
 
+  // ---- 部品 ----
   function leg(id, x, y, G, col, toeCol, shade) {
     const s = G.s, th = G.th, L = G.ll;
     const ay = L - 3 * s;
@@ -129,7 +134,7 @@ const PIGEON = (() => {
 
   function neckPath(G, dx, dy) {
     const { a, b, r, s } = G;
-    const P1 = { x: a * .12, y: -b * .92 }, P2 = { x: a * 1.02, y: -b * .28 };
+    const P1 = { x: a * .12, y: -b * .92 }, P2 = { x: a * .95, y: -b * .28 };
     const Hc = { x: G.H.x + dx, y: G.H.y + dy };
     const Hb = { x: Hc.x - r * .9, y: Hc.y + r * .55 }, Hf = { x: Hc.x + r * .62, y: Hc.y + r * .92 };
     const c1 = { x: (P1.x + Hb.x) / 2 - 6 * s, y: (P1.y + Hb.y) / 2 + 4 * s };
@@ -146,89 +151,136 @@ const PIGEON = (() => {
     const fz = f(2 + fl * 13);
     const bodyD = `M${f(-a * .95)},${f(-b * .05)}C${f(-a * .7)},${f(-b * .95)} ${f(a * .1)},${f(-b * 1.05)} ${f(a * .55)},${f(-b * .8)}C${f(a * 1.05)},${f(-b * .5)} ${f(a * (1.08 + .06 * fl))},${f(b * .35)} ${f(a * .55)},${f(b * .9)}C${f(a * .1)},${f(b * 1.05)} ${f(-a * .7)},${f(b * .8)} ${f(-a * .95)},${f(-b * .05)}Z`;
 
-    // 翼（手首から翼端まで、翼長の実測値で決める）
-    const Wx = a * .7, Wy = -b * .45, L = G.wingL, Tx = Wx - L, Ty = b * .3;
-    const wingD = `M${f(Wx)},${f(Wy)}C${f(Wx - L * .25)},${f(-b * 1.02)} ${f(Wx - L * .7)},${f(-b * .8)} ${f(Tx)},${f(Ty)}C${f(Tx + L * .3)},${f(b * .62)} ${f(Wx - L * .3)},${f(b * .66)} ${f(Wx + a * .05)},${f(Wy + b * .62)}C${f(Wx + a * .18)},${f(Wy + b * .3)} ${f(Wx + a * .12)},${f(Wy + b * .08)} ${f(Wx)},${f(Wy)}Z`;
-    const bar = frac => { const x = Wx - L * frac; return `<path d="M${f(x + 16 * s)},${f(-b * 1.0)}Q${f(x - 6 * s)},${f(-b * .15)} ${f(x + 6 * s)},${f(b * .7)}" stroke="${M.bar}" stroke-width="${f(9 * s)}" fill="none" opacity="${morphKey === 'white' ? .5 : .9}"/>`; };
-    let covert = '';
-    if (M.pat === 'checker') {
-      for (let i = 0; i < 46; i++) { const cx = Wx - L * (.04 + rnd() * .5), cy = -b * .9 + rnd() * b * 1.1, w = (5 + rnd() * 4) * s; covert += `<rect x="${f(cx)}" y="${f(cy)}" width="${f(w)}" height="${f(w * .9)}" rx="${f(w * .25)}" fill="${M.bar}" fill-opacity=".8"/>`; }
-    } else if (M.pat === 't') {
-      covert = `<path d="M${f(Wx + 6)},${f(-b * 1.1)}L${f(Wx - L * .56)},${f(-b * 1.1)}L${f(Wx - L * .5)},${f(b * .5)}L${f(Wx + 6)},${f(b * .5)}Z" fill="${M.bar}" fill-opacity=".72"/>`;
-    } else if (M.pat === 'spread') {
-      covert = `<rect x="${f(Tx)}" y="${f(-b * 1.1)}" width="${f(L + 12)}" height="${f(b * 1.7)}" fill="${M.bar}" fill-opacity=".5"/>`;
-    }
-    let flight = '';
-    for (let i = 0; i < 16; i++) {
-      const y = -b * .55 + i * b * .075, x0 = Wx - L * (.5 + rnd() * .12);
-      flight += `<path d="M${f(x0)},${f(y)}Q${f(x0 - L * .25)},${f(y + b * .04)} ${f(Tx + rnd() * 30 * s)},${f(Ty + (y - Ty) * .25)}" stroke="${M.bar}" stroke-opacity=".28" stroke-width=".9" fill="none"/>`;
+    const F = { n: 0, defs: [], pre: 'fb' };
+    const dk = M.bar;
+
+    // ---- 体の輪郭羽（屋根瓦のように、後ろ・下から先に描き、前・上を重ねる）----
+    const flen = (15 + fl * 8) * s, fwid = (6 + fl * 2.6) * s, sx = fwid * 1.15, sy = flen * .42;
+    let bodyF = '', row = 0;
+    for (let y = b * 1.02; y > -b * 1.1; y -= sy, row++) {
+      for (let x = -a * 1.0 + (row % 2) * sx / 2; x < a * 1.12; x += sx) {
+        const X = x + (rnd() - .5) * sx * .5, Y = y + (rnd() - .5) * sy * .5;
+        const xr = X / a, v = Math.min(1, Math.max(0, (Y + b) / (2 * b)));
+        const ang = 176 - 38 * v - 60 * Math.max(0, xr - .45) + (rnd() - .5) * 9;
+        let c = mix(M.body, M.light, Math.sin(Math.PI * v) * .55);
+        c = mix(c, '#000', Math.max(0, v - .62) * .5);
+        c = mix(c, rnd() > .5 ? '#fff' : '#000', rnd() * .08);
+        const dBr = Math.hypot((X - a * .85) / b, (Y + b * .35) / (b * .8));
+        if (dBr < 1) c = mix(c, '#6a5aa0', (1 - dBr) * .4 * sheen * 1.4);
+        bodyF += feather(F, X, Y, flen * (.9 + rnd() * .25), fwid * (.9 + rnd() * .2), ang, c, { edge: M.dark });
+      }
     }
 
-    // 尾（先に暗い帯）
+    // ---- 翼: 初列・次列風切 → 大雨覆 → 中雨覆 → 小雨覆の順に重ねる ----
+    const Wx = a * .7, Wy = -b * .45, Tx0 = Wx - G.wingL, Ty = b * .3;
+    const L = Math.hypot(Tx0 - Wx, Ty - Wy), th = Math.atan2(Ty - Wy, Tx0 - Wx) * 180 / Math.PI;
+    const pat = M.pat, wcol = pat === 'spread' ? mix(M.wing, dk, .55) : M.wing;
+    const banded = pat === 'bar' || pat === 'checker' || pat === 't';
+    const bandCol = pat === 'none' ? mix(M.wing, '#8a8f98', .35) : dk;
+    const covCol = pat === 't' ? mix(M.wing, dk, .72) : wcol;
+    const wo = { edge: dk, ea: .2, hl: .05 };
+    let W = '';
+    const bandFrom = (len, px) => Math.max(.5, 1 - px / len);
+    const fan = (y0, bx0, tipx, taper) => Math.atan2(-y0 * taper * (tipx / L), tipx - bx0) * 180 / Math.PI;   // 先が翼の中心線に収束する
+    for (let i = 0; i < 9; i++) {   // 初列風切（暗い）
+      const bx0 = L * (.36 + i * .02), tipx = L * (.99 - i * .032), y0 = b * .1 - i * b * .03, len = tipx - bx0;
+      W += feather(F, bx0, y0, len, 6.2 * s, fan(y0, bx0, tipx, .55), mix(wcol, dk, pat === 'none' ? .12 : .5), { tip: mix(wcol, dk, pat === 'none' ? .2 : .8), from: bandFrom(len, 16 * s), edge: dk, ea: .2, hl: .05 });
+    }
+    for (let j = 0; j < 8; j++) {   // 次列風切（先に帯）
+      const bx0 = L * (.2 + j * .012), tipx = L * .62 + j * s * .6, y0 = -b * .02 - j * b * .05, len = tipx - bx0;
+      W += feather(F, bx0, y0, len, 7 * s, fan(y0, bx0, tipx, .5), mix(wcol, dk, .16), banded || pat === 'none' ? { tip: bandCol, from: bandFrom(len, 13 * s), edge: dk, ea: .2, hl: .05 } : wo);
+    }
+    for (let i = 0; i < 11; i++) {  // 大雨覆（先に帯）
+      const bx0 = L * .12, tipx = L * .43, y0 = b * .36 - i * b * .047, len = tipx - bx0;
+      W += feather(F, bx0, y0, len, 7.5 * s, fan(y0, bx0, tipx, .3), covCol, banded && pat !== 't' ? { tip: bandCol, from: bandFrom(len, 13 * s), edge: dk, ea: .2, hl: .05 } : wo);
+    }
+    for (let i = 0; i < 12; i++) {  // 中雨覆（チェッカーは先が暗い）
+      const dark = pat === 'checker' && rnd() < .7, bx0 = L * .03, tipx = L * .25, y0 = b * .44 - i * b * .047;
+      W += feather(F, bx0, y0, tipx - bx0, 6.4 * s, fan(y0, bx0, tipx, .25), covCol, dark ? { tip: mix(wcol, dk, .82), from: .5, edge: dk, ea: .2, hl: .05 } : wo);
+    }
+    for (let i = 0; i < 13; i++) {  // 小雨覆
+      const dark = pat === 'checker' && rnd() < .55, bx0 = -L * .03, tipx = L * .13, y0 = b * .47 - i * b * .036;
+      W += feather(F, bx0, y0, tipx - bx0, 5.2 * s, fan(y0, bx0, tipx, .2), covCol, dark ? { tip: mix(wcol, dk, .8), from: .45, edge: dk, ea: .2, hl: .05 } : wo);
+    }
+
+    // ---- 尾: 12枚の尾羽。先に暗い帯 ----
     const bx = -a * .7;
-    const tailD = `M${f(bx)},${f(-b * .32)}C${f(-a - tl * .4)},${f(-b * .38)} ${f(-a - tl * .9)},${f(-b * .24)} ${f(-a - tl)},${f(-b * .04)}L${f(-a - tl * .98)},${f(b * .26)}C${f(-a - tl * .8)},${f(b * .4)} ${f(-a - tl * .3)},${f(b * .42)} ${f(bx)},${f(b * .36)}Z`;
-    let tailLines = '';
-    for (let i = 0; i < 7; i++) { const y = -b * .28 + i * b * .09; tailLines += `<path d="M${f(bx - 8)},${f(y)}L${f(-a - tl * (.96 - i * .004))},${f(-b * .02 + i * b * .045)}" stroke="#000" stroke-opacity=".16" stroke-width=".9"/>`; }
+    let tailF = '';
+    for (let k = 0; k < 12; k++) {
+      const o = Math.abs(k - 5.5);
+      tailF += feather(F, bx, -b * .05 + (k - 5.5) * b * .03, tl + a * .3 - o * s * .8, 10.5 * s, 180 + (k - 5.5) * 2.3, mix(M.tail, M.body, .25 + (rnd() - .5) * .1), { tip: dk, from: .66, edge: dk, hl: .1 });
+    }
+    // ---- もも（脚のつけ根の羽毛）----
+    let thigh = '';
+    if (G.pose !== 'sit') for (let i = 0; i < 16; i++) thigh += feather(F, a * .06 + (rnd() - .5) * a * .3, b * .55 + rnd() * b * .3, 14 * s, 5.6 * s, 100 + rnd() * 50, mix(M.dark, M.body, .35 + rnd() * .2), { edge: dk });
 
-    // ---- 層B: 体（静止）----
     const B = `
 <defs>
- <filter id="fz" x="-15%" y="-30%" width="130%" height="160%"><feTurbulence type="fractalNoise" baseFrequency=".05 .09" numOctaves="3" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="${fz}" xChannelSelector="R" yChannelSelector="G"/></filter>
- <filter id="fz2" x="-15%" y="-30%" width="130%" height="160%"><feTurbulence type="fractalNoise" baseFrequency=".06 .1" numOctaves="2" seed="9" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="${f(fz * .6)}" xChannelSelector="R" yChannelSelector="G"/></filter>
+ <filter id="fz" x="-10%" y="-20%" width="120%" height="140%"><feTurbulence type="fractalNoise" baseFrequency=".07 .1" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="${f(1.2 + fl * 5)}" xChannelSelector="R" yChannelSelector="G"/></filter>
  <clipPath id="cb"><path d="${bodyD}"/></clipPath>
- <clipPath id="cw"><path d="${wingD}"/></clipPath>
- <linearGradient id="gb" gradientUnits="userSpaceOnUse" x1="0" y1="${f(-b)}" x2="0" y2="${f(b)}"><stop offset="0" stop-color="${M.body}"/><stop offset=".5" stop-color="${M.light}"/><stop offset="1" stop-color="${M.body}"/></linearGradient>
- <linearGradient id="gs" gradientUnits="userSpaceOnUse" x1="0" y1="${f(-b * .1)}" x2="0" y2="${f(b)}"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".42"/></linearGradient>
- <radialGradient id="gh" gradientUnits="userSpaceOnUse" cx="${f(a * .2)}" cy="${f(-b * .55)}" r="${f(a * .95)}"><stop offset="0" stop-color="#fff" stop-opacity=".3"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
- <radialGradient id="gc" gradientUnits="userSpaceOnUse" cx="${f(a * .85)}" cy="${f(-b * .35)}" r="${f(b * .8)}"><stop offset="0" stop-color="#3fae86" stop-opacity="${f(sheen * .6)}"/><stop offset=".55" stop-color="#9a52c9" stop-opacity="${f(sheen * .22)}"/><stop offset=".85" stop-color="#9a52c9" stop-opacity="0"/></radialGradient>
- <linearGradient id="gw" gradientUnits="userSpaceOnUse" x1="${f(Wx)}" y1="0" x2="${f(Tx)}" y2="0"><stop offset="0" stop-color="${M.wing}"/><stop offset=".62" stop-color="${M.wing}"/><stop offset="1" stop-color="${M.bar}" stop-opacity=".85"/></linearGradient>
- <linearGradient id="gt" gradientUnits="userSpaceOnUse" x1="${f(bx)}" y1="0" x2="${f(-a - tl)}" y2="0"><stop offset="0" stop-color="${M.body}"/><stop offset=".5" stop-color="${M.tail}"/><stop offset=".74" stop-color="${M.bar}"/><stop offset=".96" stop-color="${M.bar}"/><stop offset="1" stop-color="${M.light}"/></linearGradient>
+ <linearGradient id="gs" gradientUnits="userSpaceOnUse" x1="0" y1="${f(-b * .1)}" x2="0" y2="${f(b)}"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></linearGradient>
+ <radialGradient id="gh" gradientUnits="userSpaceOnUse" cx="${f(a * .2)}" cy="${f(-b * .6)}" r="${f(a * .95)}"><stop offset="0" stop-color="#fff" stop-opacity=".26"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+ ${F.defs.join('')}
 </defs>
 <g transform="translate(${f(G.CX)} ${f(G.CY)}) rotate(${TILT})">
- <g filter="url(#fz2)"><path d="${tailD}" fill="url(#gt)"/>${tailLines}</g>
- ${G.pose === 'sit' ? '' : `<g filter="url(#fz)"><ellipse cx="${f(a * .06)}" cy="${f(b * .72)}" rx="${f(a * .22)}" ry="${f(b * .3)}" fill="${M.dark}"/></g>`}
+ ${tailF}
+ ${thigh}
  <g filter="url(#fz)">
-  <path d="${bodyD}" fill="url(#gb)"/>
+  <path d="${bodyD}" fill="${M.body}"/>
   <g clip-path="url(#cb)">
-   ${scallops(-a, a * 1.1, -b, b, (7 + fl * 6) * s, M.dark, rnd, .22)}
+   ${bodyF}
    <rect x="${f(-a)}" y="${f(-b * 1.1)}" width="${f(a * 2.3)}" height="${f(b * 2.3)}" fill="url(#gh)"/>
    <rect x="${f(-a)}" y="${f(-b * 1.1)}" width="${f(a * 2.3)}" height="${f(b * 2.3)}" fill="url(#gs)"/>
-   <rect x="${f(-a)}" y="${f(-b * 1.1)}" width="${f(a * 2.3)}" height="${f(b * 2.3)}" fill="url(#gc)"/>
   </g>
  </g>
- <g filter="url(#fz2)">
-  <path d="${wingD}" fill="url(#gw)"/>
-  <g clip-path="url(#cw)">
-   ${M.pat === 'bar' || M.pat === 'checker' ? bar(.3) + bar(.5) : ''}${covert}
-   ${scallops(Tx + L * .5, Wx + 4, -b, b * .6, 10 * s, M.dark, rnd, .3)}
-   ${flight}
-  </g>
-  <path d="${wingD}" fill="none" stroke="#000" stroke-opacity=".28" stroke-width="1.1"/>
- </g>
+ <g transform="translate(${f(Wx)} ${f(Wy)}) rotate(${f(th)})">${W}</g>
 </g>`;
 
-    // ---- 層C: 首と頭（動く）----
+    // ---- 層C: 首と頭（動く。フィルタを使わず、拡大しても崩れない）----
+    const F2 = { n: 0, defs: [], pre: 'fc' };
+    const Pn = [{ x: a * .12, y: -b * .92 }, { x: H.x - r * .9, y: H.y + r * .55 }, { x: H.x + r * .62, y: H.y + r * .92 }, { x: a * .95, y: -b * .28 }, { x: a * .82, y: b * .32 }, { x: a * .12, y: -b * .22 }];
+    const inPoly = (x, y) => { let c = false; for (let i = 0, j = Pn.length - 1; i < Pn.length; j = i++) { if ((Pn[i].y > y) !== (Pn[j].y > y) && x < (Pn[j].x - Pn[i].x) * (y - Pn[i].y) / (Pn[j].y - Pn[i].y) + Pn[i].x) c = !c; } return c; };
+    const GRN = '#2fb27a', TEAL = '#2a9db0', PUR = '#9a52c9';
+    let neckF = '';
+    const nw = 2.5 * s, nl = 6.6 * s;
+    for (let y = H.y + r * 3.9; y > H.y - r * .2; y -= nl * .42) {
+      for (let x = Math.min(Pn[0].x, Pn[1].x) - 6; x < Math.max(Pn[2].x, Pn[3].x) + 6; x += nw * 1.15) {
+        const X = x + (rnd() - .5) * nw * .6, Y = y + (rnd() - .5) * nl * .3;
+        if (!inPoly(X, Y)) continue;
+        const tt = Math.min(1, Math.max(0, (Y - (H.y + r * .4)) / (r * 2.6)));
+        const w = sheen * Math.exp(-Math.pow((Y - (H.y + r * 1.7)) / (r * 1.25), 2)) * Math.min(1, Math.max(0, (X - Pn[0].x) / (r * 1.0)));
+        const tone = tt + (rnd() - .5) * .5 < .38 ? GRN : (tt + (rnd() - .5) * .4 < .62 ? TEAL : PUR);
+        const yb = Pn[5].y + (Pn[4].y - Pn[5].y) * Math.min(1, Math.max(0, (X - Pn[5].x) / (Pn[4].x - Pn[5].x)));
+        const fade = Math.min(1, Math.max(0, (yb - Y) / (r * 1.5)));   // 下端は体の色に溶かす
+        const c = mix(mix(M.body, M.light, .25), mix(mix(M.dark, M.light, .12 + rnd() * .1), tone, w * (.55 + rnd() * .45) * .95), fade);
+        neckF += feather(F2, X, Y, nl, nw, 95 + (rnd() - .5) * 22 + Math.max(0, (X - H.x)) * .4, c, { edge: M.dark, hl: .2 });
+      }
+    }
+    let headF = '';
+    for (let y = r * 1.0; y > -r * 1.0; y -= r * .13) {
+      for (let x = -r * 1.2; x < r * 1.1; x += r * .12) {
+        const X = x + (rnd() - .5) * r * .08, Y = y + (rnd() - .5) * r * .06;
+        const c = mix(M.dark, M.light, .22 * Math.max(0, .6 - (Y / r + 1) / 2) + rnd() * .12);
+        headF += feather(F2, X, Y, r * .34, r * .14, 178 + (rnd() - .5) * 20, c, { edge: M.dark, hl: .12 });
+      }
+    }
+
     const Cc = `
 <defs>
- <filter id="bl"><feGaussianBlur stdDeviation="${f(6 * s)}"/></filter>
- <mask id="nm" maskContentUnits="objectBoundingBox"><linearGradient id="nmg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".22" stop-color="#fff" stop-opacity="1"/></linearGradient><rect width="1" height="1" fill="url(#nmg)"/></mask>
- <clipPath id="ch"><ellipse rx="${f(r * 1.08)}" ry="${f(r * .94)}"/></clipPath>
+ <mask id="nm" maskContentUnits="objectBoundingBox"><linearGradient id="nmg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".2" stop-color="#fff" stop-opacity="1"/></linearGradient><rect width="1" height="1" fill="url(#nmg)"/></mask>
+ <clipPath id="ch"><ellipse rx="${f(r * 1.1)}" ry="${f(r * .96)}"/></clipPath>
  <clipPath id="nk"><path id="nkp" d="${neckPath(G, 0, 0)}"/></clipPath>
- <linearGradient id="gn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${M.dark}" stop-opacity=".4"/><stop offset=".45" stop-color="${M.dark}" stop-opacity=".97"/><stop offset="1" stop-color="${M.dark}"/></linearGradient>
- <radialGradient id="gha" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="${M.light}" stop-opacity=".55"/><stop offset=".5" stop-color="${M.dark}"/><stop offset="1" stop-color="${M.dark}"/></radialGradient>
+ <linearGradient id="gn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${M.dark}" stop-opacity=".5"/><stop offset=".45" stop-color="${M.dark}" stop-opacity=".98"/><stop offset="1" stop-color="${M.dark}"/></linearGradient>
+ <radialGradient id="gha" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="${M.light}" stop-opacity=".5"/><stop offset=".55" stop-color="${M.dark}"/><stop offset="1" stop-color="${M.dark}"/></radialGradient>
  <radialGradient id="gi" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#ffc24a"/><stop offset=".7" stop-color="#e5600c"/><stop offset="1" stop-color="#a63a06"/></radialGradient>
+ ${F2.defs.join('')}
 </defs>
 <g transform="translate(${f(G.CX)} ${f(G.CY)}) rotate(${TILT})">
- <path id="neck" d="${neckPath(G, 0, 0)}" fill="url(#gn)" filter="url(#fz2)" mask="url(#nm)"/>
- <g clip-path="url(#nk)"><g id="sheen" opacity="${f(sheen)}" filter="url(#bl)">
-  <ellipse cx="${f(H.x - r * .1)}" cy="${f(H.y + r * 1.5)}" rx="${f(r * 1.1)}" ry="${f(r * .85)}" fill="#2fb27a"/>
-  <ellipse cx="${f(H.x + r * .1)}" cy="${f(H.y + r * 2.2)}" rx="${f(r * 1.5)}" ry="${f(r * .7)}" fill="#8f4fc4"/>
-  <ellipse cx="${f(H.x - r * .5)}" cy="${f(H.y + r * 2.0)}" rx="${f(r * .5)}" ry="${f(r * .6)}" fill="#2a9db0"/>
- </g></g>
- <g clip-path="url(#nk)"><g id="neckTex">${scallops(H.x - r * 1.5, H.x + r * 1.4, H.y - r * .2, H.y + r * 3.4, 4.6 * s, M.dark, rnd, .38)}</g></g>
+ <g mask="url(#nm)"><path id="neck" d="${neckPath(G, 0, 0)}" fill="url(#gn)"/>
+ <g clip-path="url(#nk)"><g id="neckTex">${neckF}</g></g></g>
  <g id="head" transform="translate(${f(H.x)} ${f(H.y)}) rotate(14)">
-  <ellipse rx="${f(r * 1.12)}" ry="${f(r * .98)}" fill="url(#gha)" filter="url(#fz2)"/>
-  <g clip-path="url(#ch)">${scallops(-r * 1.2, r * 1.1, -r, r, 3.6 * s, M.dark, rnd, .3)}</g>
+  <ellipse rx="${f(r * 1.12)}" ry="${f(r * .98)}" fill="url(#gha)"/>
+  <g clip-path="url(#ch)">${headF}</g>
   <path d="M${f(r * .9)},${f(-r * .2)}C${f(r * .9 + bl * .5)},${f(-r * .27)} ${f(r * .9 + bl * .85)},${f(-r * .2)} ${f(r * .9 + bl)},${f(r * .13)}C${f(r * .9 + bl * .7)},${f(r * .13)} ${f(r * .9 + bl * .4)},${f(r * .1)} ${f(r * .9)},${f(r * .1)}Z" fill="#3a3a41"/>
   <path d="M${f(r * .9)},${f(r * .1)}Q${f(r * .9 + bl * .5)},${f(r * .06)} ${f(r * .9 + bl * .96)},${f(r * .12)}" stroke="#15151a" stroke-width="1" fill="none"/>
   <ellipse cx="${f(r * .9 + bl * .26)}" cy="${f(-r * .17)}" rx="${f(bl * .24)}" ry="${f(bl * .15)}" fill="#efe9e1" stroke="#cdc4b8" stroke-width=".8"/>
@@ -263,7 +315,7 @@ ${G.pose === 'sit' ? '' : leg('legF', G.hw.x + 15 * s, G.hw.y, G, '#9a3249', '#a
   // ---- 動き ----
   function bind(stage, G) {
     const q = id => stage.querySelector('#' + id);
-    return { G, layers: [...stage.querySelectorAll('svg')], neck: q('neck'), nkp: q('nkp'), sheen: q('sheen'), tex: q('neckTex'), head: q('head'), legN: q('legN'), legF: q('legF') };
+    return { G, layers: [...stage.children], neck: q('neck'), nkp: q('nkp'), sheen: q('sheen'), tex: q('neckTex'), head: q('head'), legN: q('legN'), legF: q('legF') };
   }
 
   function tick(h, t, pose) {
