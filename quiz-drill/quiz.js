@@ -16,6 +16,23 @@ var QD_QUIZ = (function () {
 
   var FORMAT = 'yontaku-drill/1';
 
+  /* ===================== まとめて削除 ===================== */
+
+  /**
+   * まとめて削除の確認の文。pick は { sets, texts, records }（true のものを消す）、
+   * n は { sets: 問題集の数, questions: 問題の数, texts: テキストの数, records: 回答の件数 }。
+   * 何も選んでいなければ null
+   */
+  function wipeConfirmText(pick, n) {
+    var items = [];
+    if (pick.sets) items.push('問題集 ' + n.sets + '個（' + n.questions + '問）');
+    if (pick.texts) items.push('自作テキスト ' + n.texts + '個');
+    if (pick.records) items.push('学習の記録（回答 ' + n.records + '件・前回の正解の位置・進行中の出題）');
+    if (!items.length) return null;
+    return '次のものを、この端末から削除します。\n\n・' + items.join('\n・') +
+      '\n\n元に戻せません。必要なら、先に「記録を書き出す」で書き出してください。よろしいですか？';
+  }
+
   /* ===================== 数式（TeX）の切り分け ===================== */
 
   /**
@@ -1084,6 +1101,7 @@ var QD_QUIZ = (function () {
     circled: circled,
     excerpt: excerpt,
     splitMath: splitMath,
+    wipeConfirmText: wipeConfirmText,
   };
 })();
 

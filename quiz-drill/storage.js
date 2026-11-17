@@ -107,6 +107,11 @@ var QD_STORAGE = (function () {
       });
   }
 
+  /** store の中身をすべて消す */
+  function clearAll(name) {
+    return withStore('readwrite', function (store) { store.clear(); }, name);
+  }
+
   function deleteOne(id, name) {
     return withStore('readwrite', function (store) { store.delete(id); }, name);
   }
@@ -177,6 +182,17 @@ var QD_STORAGE = (function () {
     loadMock: function () { return readJson(MOCK_KEY); },
     saveMock: function (m) { writeJson(MOCK_KEY, m); },
     clearMock: function () { writeJson(MOCK_KEY, null); },
+    clearSets: function () { return clearAll(STORE); },
+    clearTexts: function () { return clearAll(TEXT_STORE); },
+    /** 学習の記録をすべて消す（回答のログ・前回の正解の位置・以前の成績の記録・進行中のセッションと模擬試験）。
+     *  移行済みの印は残す（消したあとに、以前の成績の記録が戻らないようにするため） */
+    clearRecords: function () {
+      writeJson(STATS_KEY, null);
+      writeJson(POSITIONS_KEY, null);
+      writeJson(SESSION_KEY, null);
+      writeJson(MOCK_KEY, null);
+      return clearAll(LOG_STORE);
+    },
     getAllLog: getAllLog,
     addLog: addLog,
     newLogId: newLogId,
