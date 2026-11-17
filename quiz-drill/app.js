@@ -914,7 +914,7 @@
     }
     $('btn-quit').textContent = review ? (state.reviewFrom === 'stats' ? '成績へ' : '結果へ') : '中断';
 
-    $('q-text').textContent = q.question;
+    setRich($('q-text'), q.question);
 
     var fig = $('q-figure');
     fig.hidden = !q.image;
@@ -938,7 +938,7 @@
       num.textContent = String(displayIndex + 1);
       var text = document.createElement('span');
       text.className = 'qd-choice-text';
-      text.textContent = q.choices[original];
+      setRich(text, q.choices[original]);
       btn.appendChild(num);
       btn.appendChild(text);
       if (answer) {
@@ -982,7 +982,7 @@
       num.textContent = Q.circled(i + 1);
       var text = document.createElement('span');
       text.className = 'qd-original-text';
-      text.textContent = choice;
+      setRich(text, choice);
       li.appendChild(num);
       li.appendChild(text);
       var correct = Q.isCorrectOriginal(q, i);
@@ -997,13 +997,64 @@
     });
 
     $('q-explanation-wrap').hidden = !q.explanation;
-    $('q-explanation').textContent = q.explanation || '';
+    setRich($('q-explanation'), q.explanation);
     $('q-supplement-wrap').hidden = !q.supplement;
-    $('q-supplement').textContent = q.supplement || '';
+    setRich($('q-supplement'), q.supplement);
 
     var next = $('btn-next');
     if (review) next.textContent = state.reviewFrom === 'stats' ? '成績に戻る' : '結果に戻る';
     else next.textContent = state.session.pos + 1 >= state.session.order.length ? '結果を見る' : '次の問題へ';
+  }
+
+  /* ===================== 数式（KaTeX） ===================== */
+
+  var katexLoading = null;   // KaTeX の読み込み（式を含む問題が出たときに、一度だけ始める）
+
+  /** KaTeX（同梱）を読み込む。読み込めなければ reject。式のない問題集では呼ばれない */
+  function loadKatex() {
+    if (window.katex) return Promise.resolve(window.katex);
+    if (katexLoading) return katexLoading;
+    katexLoading = new Promise(function (resolve, reject) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'vendor/katex/katex.min.css';
+      document.head.appendChild(link);
+      var sc = document.createElement('script');
+      sc.src = 'vendor/katex/katex.min.js';
+      sc.onload = function () { window.katex ? resolve(window.katex) : reject(new Error('katex')); };
+      sc.onerror = function () { katexLoading = null; reject(new Error('katex')); };
+      document.head.appendChild(sc);
+    });
+    return katexLoading;
+  }
+
+  /**
+   * 文字列を、文字と式に分けて el に入れる。文字はテキストノード（innerHTML は使わない）、
+   * 式は KaTeX で描く（読み込みが終わるまでは、TeX の文字のまま出す）。
+   * `$` を含まない文字列は、これまでと同じ textContent だけで出す。
+   */
+  function setRich(el, text) {
+    text = text == null ? '' : String(text);
+    if (text.indexOf('$') < 0) { el.textContent = text; return; }
+    var parts = Q.splitMath(text);
+    el.textContent = '';
+    var maths = [];
+    parts.forEach(function (p) {
+      if (p.type === 'text') { el.appendChild(document.createTextNode(p.value)); return; }
+      var span = document.createElement(p.display ? 'div' : 'span');
+      span.className = p.display ? 'qd-math qd-math--display' : 'qd-math';
+      span.textContent = (p.display ? '$$' : '$') + p.value + (p.display ? '$$' : '$');
+      el.appendChild(span);
+      maths.push({ el: span, tex: p.value, display: p.display });
+    });
+    if (!maths.length) return;
+    loadKatex().then(function (katex) {
+      maths.forEach(function (m) {
+        if (!m.el.isConnected) return;
+        m.el.textContent = '';
+        katex.render(m.tex, m.el, { throwOnError: false, trust: false, displayMode: m.display });
+      });
+    }, function () { /* 読み込めないときは、TeX の文字のまま */ });
   }
 
   function tag(text, cls) {
@@ -1179,7 +1230,7 @@
 
       var text = document.createElement('p');
       text.className = 'qd-qtext';
-      text.textContent = q.question;
+      setRich(text, q.question);
       card.appendChild(text);
 
       if (q.image) {
@@ -1205,7 +1256,7 @@
         num.textContent = String(i + 1);
         var label = document.createElement('span');
         label.className = 'qd-choice-text';
-        label.textContent = choice;
+        setRich(label, choice);
         btn.appendChild(num);
         btn.appendChild(label);
         btn.addEventListener('click', function () {
