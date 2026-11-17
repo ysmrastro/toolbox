@@ -83,6 +83,7 @@
   }
 
   function renderHome() {
+    renderWipe();
     var has = state.sets.length > 0;
     $('empty-guide').hidden = has;
     $('start-card').hidden = !has;
@@ -675,6 +676,57 @@
       return file.text().then(function (text) { return { name: file.name, text: text }; });
     })).then(importBooks).finally(function () {
       ev.target.value = '';
+    });
+  }
+
+  /* ===================== まとめて削除 ===================== */
+
+  function wipePick() {
+    return { sets: $('wipe-sets').checked, texts: $('wipe-texts').checked, records: $('wipe-records').checked };
+  }
+
+  function wipeCounts() {
+    return {
+      sets: state.sets.length,
+      questions: Q.countQuestions(state.sets),
+      texts: state.texts.length,
+      records: state.log.length,
+    };
+  }
+
+  /** 件数の表示と、ボタンの有効・無効を更新する（ホームを描くたびに呼ぶ） */
+  function renderWipe() {
+    var n = wipeCounts();
+    $('wipe-sets-label').textContent = '問題集（' + n.sets + '個・' + n.questions + '問）';
+    $('wipe-texts-label').textContent = '自作テキスト（' + n.texts + '個）';
+    $('wipe-records-label').textContent = '学習の記録（回答 ' + n.records + '件）と、進行中の出題';
+    var p = wipePick();
+    $('btn-wipe').disabled = !(p.sets || p.texts || p.records);
+  }
+
+  function onWipe() {
+    var pick = wipePick();
+    var text = Q.wipeConfirmText(pick, wipeCounts());
+    if (!text || !confirm(text)) return;
+    var jobs = [];
+    if (pick.sets) jobs.push(S.clearSets().then(function () { S.clearSession(); S.clearMock(); state.mock = null; }));
+    if (pick.texts) jobs.push(S.clearTexts());
+    if (pick.records) jobs.push(S.clearRecords().then(function () {
+      state.mock = null;
+      state.positions = {};
+      setLog([]);
+    }));
+    Promise.all(jobs).then(function () {
+      return Promise.all([S.getAllSets(), S.getAllTexts()]);
+    }).then(function (r) {
+      setSets(r[0]);
+      state.texts = r[1];
+      ['wipe-sets', 'wipe-texts', 'wipe-records'].forEach(function (id) { $(id).checked = false; });
+      renderHome();
+      renderBooks();
+      showMessage(['削除しました。'], false, 'wipe-msg');
+    }).catch(function (e) {
+      showMessage(['削除できませんでした: ' + e], true, 'wipe-msg');
     });
   }
 
@@ -1663,6 +1715,8 @@
   $('tab-drill').addEventListener('click', function () { selectTab('drill'); });
   $('tab-book').addEventListener('click', function () { selectTab('book'); });
   $('btn-export').addEventListener('click', exportHistory);
+  ['wipe-sets', 'wipe-texts', 'wipe-records'].forEach(function (id) { $(id).addEventListener('change', renderWipe); });
+  $('btn-wipe').addEventListener('click', onWipe);
   $('btn-export-result').addEventListener('click', exportHistory);
   $('btn-stats').addEventListener('click', openStats);
   $('btn-stats-home').addEventListener('click', function () { renderHome(); showScreen('home'); });

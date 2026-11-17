@@ -1104,3 +1104,18 @@ test('splitMath: 中身が空の式は、印を文字のまま残す', () => {
   assert.deepStrictEqual(Q.splitMath('a$$$$b'), [{ type: 'text', value: 'a$$$$b' }]);
   assert.deepStrictEqual(Q.splitMath('a$ $b'), [{ type: 'text', value: 'a$ $b' }]);
 });
+
+/* ===================== まとめて削除の確認の文 ===================== */
+
+test('wipeConfirmText: 何も選んでいなければ null', () => {
+  assert.strictEqual(Q.wipeConfirmText({ sets: false, texts: false, records: false }, { sets: 2, questions: 80, texts: 1, records: 10 }), null);
+});
+
+test('wipeConfirmText: 選んだものだけを、件数つきで並べる', () => {
+  const n = { sets: 2, questions: 80, texts: 1, records: 3000 };
+  const t = Q.wipeConfirmText({ sets: true, texts: false, records: true }, n);
+  assert.ok(t.includes('問題集 2個（80問）'));
+  assert.ok(t.includes('学習の記録（回答 3000件'));
+  assert.ok(!t.includes('自作テキスト'));
+  assert.ok(t.includes('元に戻せません'));
+});
