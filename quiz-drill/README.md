@@ -264,5 +264,5 @@
 | `app.js` | DOM・イベント・描画。計算は持たない |
 | `test/quiz.test.js` | `quiz.js` の Small テスト（`npm test`） |
 | `sample.json` | 見本の問題 |
-| `sample-calc.json` | 計算問題の見本（自作27問。astro-kentei-2 の `tools/make_sample_calc.py` で作った） |
+| `sample-calc.json` | 計算問題の見本（自作27問。astro-kentei の `grade2/tools/make_sample_calc.py` で作った） |
 | `ogp-source.html` | OGP 画像の生成元（1200×630 で撮って `ogp.png`） |
