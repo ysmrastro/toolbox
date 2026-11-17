@@ -1054,3 +1054,53 @@ test('filterWrongKeys: 選んだ鍵の問題だけに絞る（filterWrong と違
   assert.deepStrictEqual(keysOf(Q.filterWrongKeys(tagged, Q.wrongKeysSince(log, null))), ['s1::a']);
 });
 
+
+/* ===================== 数式（TeX）の切り分け ===================== */
+
+test('splitMath: $ を含まない文字列は、元の文字列1つの文字になる（従来の描画と同じ）', () => {
+  for (const s of ['', '通常の文', '1.5×10^8 km（約1天文単位）', 'a\\b', '「$」ではない全角＄']) {
+    assert.deepStrictEqual(Q.splitMath(s), [{ type: 'text', value: s }]);
+  }
+});
+
+test('splitMath: 行内の式', () => {
+  assert.deepStrictEqual(Q.splitMath('質量 $M_\\odot$ の星'), [
+    { type: 'text', value: '質量 ' },
+    { type: 'math', value: 'M_\\odot', display: false },
+    { type: 'text', value: ' の星' },
+  ]);
+});
+
+test('splitMath: 独立した式（$$…$$）', () => {
+  assert.deepStrictEqual(Q.splitMath('次の式。$$\\frac{a}{b}$$ 以上'), [
+    { type: 'text', value: '次の式。' },
+    { type: 'math', value: '\\frac{a}{b}', display: true },
+    { type: 'text', value: ' 以上' },
+  ]);
+});
+
+test('splitMath: 日本語のすぐ隣、連続する式', () => {
+  assert.deepStrictEqual(Q.splitMath('波長$\\lambda$と振動数$\\nu$'), [
+    { type: 'text', value: '波長' },
+    { type: 'math', value: '\\lambda', display: false },
+    { type: 'text', value: 'と振動数' },
+    { type: 'math', value: '\\nu', display: false },
+  ]);
+  assert.deepStrictEqual(Q.splitMath('$a$$b$').map((p) => p.value), ['a', 'b']);
+});
+
+test('splitMath: \\$ は文字の $ になる。式の中の \\$ は TeX のまま渡す', () => {
+  assert.deepStrictEqual(Q.splitMath('価格は\\$5'), [{ type: 'text', value: '価格は$5' }]);
+  assert.deepStrictEqual(Q.splitMath('$x \\$ y$'), [{ type: 'math', value: 'x \\$ y', display: false }]);
+});
+
+test('splitMath: 対応が取れない $ は、何も落とさず全体を文字にする', () => {
+  for (const s of ['$a', 'a$', '$a$ と $b', '$$a$']) {
+    assert.deepStrictEqual(Q.splitMath(s), [{ type: 'text', value: s }]);
+  }
+});
+
+test('splitMath: 中身が空の式は、印を文字のまま残す', () => {
+  assert.deepStrictEqual(Q.splitMath('a$$$$b'), [{ type: 'text', value: 'a$$$$b' }]);
+  assert.deepStrictEqual(Q.splitMath('a$ $b'), [{ type: 'text', value: 'a$ $b' }]);
+});

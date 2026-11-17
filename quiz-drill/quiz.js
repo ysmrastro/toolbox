@@ -16,6 +16,56 @@ var QD_QUIZ = (function () {
 
   var FORMAT = 'yontaku-drill/1';
 
+  /* ===================== 数式（TeX）の切り分け ===================== */
+
+  /**
+   * 文字列を「文字」と「式」に分ける。式の印は `$…$`（行内）と `$$…$$`（独立した式）。
+   * ドル記号そのものは `\$` と書く（文字の側では `$` に直す。式の中ではそのまま TeX に渡す）。
+   * 対応が取れない `$`（奇数個など）があるときは、何も落とさず全体を1つの文字として返す。
+   * 中身が空の式（`$$` だけ、`$ $` ではなく `$$` の直後が `$$`）も、印を文字のまま残す。
+   * `$` も `\$` も含まない文字列は、必ず [{type:'text', value: 元の文字列}] になる（従来の描画と同じ）。
+   * 戻り値: [{type:'text', value}] と [{type:'math', value, display}] の並び
+   */
+  function splitMath(text) {
+    var s = String(text == null ? '' : text);
+    if (s.indexOf('$') < 0) return [{ type: 'text', value: s }];
+    var out = [];
+    var buf = '';
+    var i = 0;
+    function flush() {
+      if (buf) out.push({ type: 'text', value: buf });
+      buf = '';
+    }
+    /** from 以降で、エスケープされていない delim の位置。無ければ -1 */
+    function findClose(from, delim) {
+      for (var j = from; j < s.length; j++) {
+        if (s[j] === '\\') { j++; continue; }
+        if (s.substr(j, delim.length) === delim) return j;
+      }
+      return -1;
+    }
+    while (i < s.length) {
+      var c = s[i];
+      if (c === '\\' && s[i + 1] === '$') { buf += '$'; i += 2; continue; }
+      if (c !== '$') { buf += c; i++; continue; }
+      var display = s[i + 1] === '$';
+      var delim = display ? '$$' : '$';
+      var start = i + delim.length;
+      var end = findClose(start, delim);
+      if (end < 0) return [{ type: 'text', value: s }];
+      var body = s.slice(start, end);
+      if (body.trim() === '') {
+        buf += s.slice(i, end + delim.length);   // 空の式は、印を文字のまま残す
+      } else {
+        flush();
+        out.push({ type: 'math', value: body.trim(), display: display });
+      }
+      i = end + delim.length;
+    }
+    flush();
+    return out;
+  }
+
   /* ===================== 検証 ===================== */
 
   function isNonEmptyString(v) {
@@ -1033,6 +1083,7 @@ var QD_QUIZ = (function () {
     questionLabel: questionLabel,
     circled: circled,
     excerpt: excerpt,
+    splitMath: splitMath,
   };
 })();
 
