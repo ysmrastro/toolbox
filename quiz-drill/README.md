@@ -5,6 +5,8 @@
 - サイト: https://ysmrastro.github.io/toolbox/quiz-drill/
 - **アプリには問題が入っていない。** 問題は利用者が読み込み、その端末のブラウザの中（IndexedDB）にだけ保存される。どこにも送信しない
 - 見本の問題（`sample.json`、架空の一般常識の問題5問）で動きを試せる
+- 計算問題の見本（`sample-calc.json`、自作の27問。型ごとに1問）も置いてある。天文宇宙検定2級の計算問題の型にならって数字を変えて作った問題で、
+  **過去問の問題は含まない**（問題文が過去問に近すぎるものは外してある）。ダウンロードして「問題ファイルを読み込む」から選ぶ
 
 ## 使い方
 
@@ -262,4 +264,5 @@
 | `app.js` | DOM・イベント・描画。計算は持たない |
 | `test/quiz.test.js` | `quiz.js` の Small テスト（`npm test`） |
 | `sample.json` | 見本の問題 |
+| `sample-calc.json` | 計算問題の見本（自作27問。astro-kentei-2 の `tools/make_sample_calc.py` で作った） |
 | `ogp-source.html` | OGP 画像の生成元（1200×630 で撮って `ogp.png`） |
