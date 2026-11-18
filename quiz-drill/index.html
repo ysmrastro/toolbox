@@ -182,6 +182,16 @@
         </label>
         <div id="load-msg" class="qd-load-msg" hidden></div>
       </section>
+
+      <section id="wipe-card" class="qd-card">
+        <h2 class="qd-card-title">データの削除</h2>
+        <p class="qd-note">この端末のデータを、選んだ種類ごとにまとめて消します。元に戻せないので、必要なら先に「記録を書き出す」で書き出してください。</p>
+        <label class="qd-check"><input type="checkbox" id="wipe-sets"> <span id="wipe-sets-label">問題集</span></label>
+        <label class="qd-check"><input type="checkbox" id="wipe-texts"> <span id="wipe-texts-label">自作テキスト</span></label>
+        <label class="qd-check"><input type="checkbox" id="wipe-records"> <span id="wipe-records-label">学習の記録</span></label>
+        <button type="button" id="btn-wipe" class="tb-btn tb-btn--secondary tb-btn--block" disabled>選んだものを削除する</button>
+        <div id="wipe-msg" class="qd-load-msg" hidden></div>
+      </section>
     </div>
 
     <div id="panel-book" role="tabpanel" aria-labelledby="tab-book" hidden>
