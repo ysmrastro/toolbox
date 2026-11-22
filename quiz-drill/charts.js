@@ -19,18 +19,18 @@ var QD_CHARTS = (function () {
 
   function r1(n) { return Math.round(n * 10) / 10; }
 
-  /** 0 から max を覆う、きりのよい目盛り（1・2・5 × 10^k の刻み）。max が 0 以下なら [0, … , fallback] */
-  function niceTicks(max, count, fallback) {
-    var top = max > 0 ? max : (fallback || 10);
-    var raw = top / (count || 4);
+  /** 0 から max を、ちょうど div 区切りで覆う目盛り（刻みは 1・1.5・2・2.5・3・4・5・6・8 × 10^k に切り上げ。整数）。max が 0 以下なら fallback で */
+  function fixedTicks(max, div, fallback) {
+    var top = max > 0 ? max : fallback;
+    var raw = top / div;
     var mag = Math.pow(10, Math.floor(Math.log10(raw)));
     var f = raw / mag;
-    var step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag;
-    step = Math.max(1, step);
-    var ticks = [];
-    for (var v = 0; v < top + step * 0.999; v += step) ticks.push(v);
-    if (ticks[ticks.length - 1] < top) ticks.push(ticks[ticks.length - 1] + step);
-    return ticks;
+    // 区切りの数が決まっているので、刻みの候補を細かくして上の余りを小さくする
+    var nice = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].filter(function (x) { return x >= f; })[0];
+    var step = Math.max(1, Math.ceil(nice * mag));
+    var out = [];
+    for (var i = 0; i <= div; i++) out.push(step * i);
+    return out;
   }
 
   /** 3桁ごとの区切り（1,234） */
@@ -97,8 +97,9 @@ var QD_CHARTS = (function () {
     var W = Math.max(240, opts.width), H = opts.height || 260;
     var uid = opts.uid || 'dx';
     var days = series.days, n = days.length;
-    var leftTicks = niceTicks(series.max, 4, 10);
-    var rightTicks = niceTicks(series.cumMax, 4, 100);
+    // 左右の目盛りを同じ高さの線に乗せるため、区切りの数を両方 4 に固定する
+    var leftTicks = fixedTicks(series.max, 4, 10);
+    var rightTicks = fixedTicks(series.cumMax, 4, 100);
     var lMax = leftTicks[leftTicks.length - 1], rMax = rightTicks[rightTicks.length - 1];
     var rightW = Math.max(36, num(rMax).length * 8 + 10);
     var pad = { l: 36, r: rightW, t: 18, b: 30 };
@@ -285,7 +286,7 @@ var QD_CHARTS = (function () {
     esc: esc,
     num: num,
     md: md,
-    niceTicks: niceTicks,
+    fixedTicks: fixedTicks,
     smoothPath: smoothPath,
     dualAxis: dualAxis,
     accuracy: accuracy,
