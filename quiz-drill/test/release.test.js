@@ -48,6 +48,6 @@ test('version.js が、ほかの js より先に読まれる', () => {
 });
 
 test('更新日時が未来でない', () => {
-  const t = new Date(m[2].replace(' ', 'T') + ':00');   // 端末のローカル時刻として読む
+  const t = new Date(m[2].replace(' ', 'T') + ':00+09:00');   // 更新日時は日本時間（CI は UTC で動くので、タイムゾーンを明示する）
   assert.ok(t.getTime() <= Date.now() + 60 * 1000, `更新日時が未来: ${m[2]}`);
 });

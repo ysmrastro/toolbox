@@ -7,7 +7,7 @@
 （meteor-settings の tools/release.py と同じ考え方。Service Worker は無いので、その分は無い）。
 
   1. version.js の QD_VERSION.version
-  2. version.js の QD_VERSION.updated  ← このスクリプトが「いまの時刻」を入れる
+  2. version.js の QD_VERSION.updated  ← このスクリプトが「いまの時刻（日本時間）」を入れる
   3. index.html の <meta name="app-version"> と、自作の js/css の ?v=
 
 実行後は、`npm run test:quiz-drill` を通す（3か所の一致と、更新時刻が未来でないことを
@@ -26,7 +26,9 @@ def main():
     if len(sys.argv) != 2 or not SEMVER.match(sys.argv[1]):
         raise SystemExit('使い方: python3 quiz-drill/tools/release.py 1.1.0')
     version = sys.argv[1]
-    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
+    # 更新日時は日本時間で固定する（どの端末で打っても、CI（UTC）で読んでも、同じ意味になる）
+    jst = datetime.timezone(datetime.timedelta(hours=9))
+    now = datetime.datetime.now(jst).strftime('%Y-%m-%d %H:%M')
 
     vjs = DIR / 'version.js'
     src = vjs.read_text(encoding='utf-8')
