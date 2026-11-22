@@ -55,6 +55,8 @@ toolbox/
 │   ├── index.html
 │   ├── style.css
 │   ├── quiz.js             # 検証・統合・絞り込み・出題順・並べ替え・正誤・採点・記録の集計（純粋関数。乱数は引数）
+│   ├── analysis.js         # 分析タブの集計（日別・累計・連続日数・習熟度など。純粋関数。「いま」は引数）
+│   ├── charts.js           # 分析タブのグラフの SVG を文字列で返す（外部ライブラリなし。DOM に触らない）
 │   ├── storage.js          # 問題集と学習の記録（回答のログ）は IndexedDB、セッションなどは localStorage
 │   ├── app.js              # DOM・イベント・描画。計算は持たない
 │   ├── sample.json         # 見本の問題（架空の一般常識の問題5問）
@@ -243,6 +245,10 @@ Blob の画像にして貼り、動かさない。足・首・頭だけを毎フ
 **`pigeon-maker/` の js・css を変えたら、`index.html` の `?v=` を上げる。** `app.js` は `pigeon.js` の関数
 （`parseSettings`・`girthRange` など）を呼ぶので、古い `pigeon.js` がキャッシュに残ると描画が止まる
 （meteor-settings の「版ずれで真っ白」と同じ仕組み。GitHub Pages のキャッシュは10分）。
+
+**4択ドリルの `index.html` が読む自作のスクリプトと CSS には `?v=` を付ける**（`quiz.js`・`analysis.js`・`charts.js`・
+`storage.js`・`app.js`・`style.css`）。互いの関数を呼び合うので、古い `index.html` や `app.js` がキャッシュに残ると
+起動が止まる（版ずれ。GitHub Pages のキャッシュは10分）。**これらを変えたら、数字を上げる**（現在 `?v=2`）。
 
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 

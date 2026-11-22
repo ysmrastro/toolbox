@@ -19,6 +19,8 @@
 
   var Q = QD_QUIZ;
   var S = QD_STORAGE;
+  var AN = QD_ANALYSIS;
+  var CH = QD_CHARTS;
 
   var MODE_NAMES = {
     'seq': '問題集ごとに通し',
@@ -38,7 +40,7 @@
     sets: [],          // 読み込み済みの問題集（保存順）
     texts: [],         // 読み込み済みの自作テキスト（保存順）
     mock: S.loadMock(), // 進行中の模擬試験（無ければ null）
-    tab: S.loadTab() === 'book' ? 'book' : 'drill',   // ホームで開いているタブ
+    tab: ['book', 'analysis'].indexOf(S.loadTab()) >= 0 ? S.loadTab() : 'drill',   // ホームで開いているタブ
     bookId: S.loadBookTab(),   // 自作テキストのサブタブで選んでいるテキストの id
     index: {},         // 鍵 → { set, question, index }
     session: null,     // 進行中のセッション
@@ -486,18 +488,568 @@
   /* ===================== ホームのタブ ===================== */
 
   function renderTab() {
-    ['drill', 'book'].forEach(function (name) {
+    ['drill', 'book', 'analysis'].forEach(function (name) {
       var on = state.tab === name;
       $('tab-' + name).setAttribute('aria-selected', on ? 'true' : 'false');
       $('tab-' + name).classList.toggle('is-active', on);
       $('panel-' + name).hidden = !on;
     });
+    // 記録や問題集が変わると renderHome からここに来るので、分析を開いていれば描き直す
+    if (state.tab === 'analysis') scheduleAnalysis();
   }
 
   function selectTab(name) {
+    var opening = name === 'analysis' && state.tab !== 'analysis';
     state.tab = name;
     S.saveTab(name);
+    if (opening) an.animate = true;   // タブを開いたときだけ、数字とグラフを動かす
     renderTab();
+  }
+
+
+  /* ===================== 分析 ===================== */
+
+  // 集計は analysis.js、SVG は charts.js。ここはデータを渡して描き、操作に応えるだけ。
+  var an = {
+    range: '30',       // 毎日のグラフと週ごとの正答率の期間
+    since: '',         // 問題集ごと・分類ごとの開始日付（'' は全期間、'month' / '30' / 'YYYY-MM-DD'）
+    animate: true,     // 次に描くときに動かすか（タブを開いたときだけ）
+    pending: false,
+    data: null,        // 最後に集計した結果（幅が変わったときの描き直しに使う）
+    widths: {},        // グラフごとの、最後に描いた幅
+    observer: null,
+  };
+  var WEEK_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  /** 表示してから描く（隠れているパネルは幅が 0 になるので、次のフレームで測る） */
+  function scheduleAnalysis() {
+    if (an.pending) return;
+    an.pending = true;
+    requestAnimationFrame(function () {
+      an.pending = false;
+      if ($('panel-analysis').hidden || $('screen-home').hidden) return;
+      renderAnalysis();
+    });
+  }
+
+  function fmtDate(key, withYear) {
+    var d = AN.keyDate(key);
+    return (withYear ? d.getFullYear() + '/' : '') + (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK_NAMES[d.getDay()] + '）';
+  }
+
+  /** 数字のカウントアップ（動きを減らす設定のときと、動かさないときは、すぐに最終の値） */
+  function countUp(el, value, animate) {
+    var text = CH.num(value);
+    if (!animate || reducedMotion() || value === 0) { el.textContent = text; return; }
+    var start = performance.now(), dur = 900;
+    el.textContent = '0';
+    function tick(t) {
+      var p = Math.min(1, (t - start) / dur);
+      var e = 1 - Math.pow(1 - p, 3);
+      el.textContent = CH.num(value * e);
+      if (p < 1) requestAnimationFrame(tick); else el.textContent = text;
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function renderAnalysis() {
+    var now = new Date();
+    var animate = an.animate;
+    an.animate = false;
+    var daily = AN.dailyCounts(state.log);
+    an.data = {
+      now: now,
+      daily: daily,
+      series: AN.dailySeries(daily, an.range, now),
+      weeks: AN.weeklyAccuracy(daily, an.range, now),
+      heat: AN.heatmap(daily, now),
+    };
+    renderAnSummary(AN.summaryCards(daily, now), animate);
+    an.widths = {};
+    drawAnCharts(animate);
+    renderAnDonut(AN.mastery(state.sets, state.log), animate);
+    renderAnMilestones(AN.milestones(daily));
+    renderAnBreakdown(animate);
+    observeAnCharts();
+  }
+
+  function renderAnSummary(s, animate) {
+    countUp($('an-today'), s.today, animate);
+    countUp($('an-week'), s.week, animate);
+    countUp($('an-total'), s.total, animate);
+    countUp($('an-streak'), s.streak, animate);
+    countUp($('an-best'), s.best ? s.best.count : 0, animate);
+    $('an-best-date').textContent = s.best ? fmtDate(s.best.date, true) : 'まだありません';
+    $('an-streak-note').textContent = s.streak === 0 ? '今日の1問から始まります'
+      : s.today > 0 ? '今日の分も入っています' : '今日解くと ' + (s.streak + 1) + '日になります';
+    var head;
+    if (s.total === 0) head = '解いた記録が、ここに育っていきます。';
+    else if (s.today > 0) head = '今日は ' + CH.num(s.today) + '問。連続 ' + s.streak + '日です。';
+    else if (s.streak > 0) head = '連続 ' + s.streak + '日。今日の分で ' + (s.streak + 1) + '日に伸びます。';
+    else head = '今週は ' + CH.num(s.week) + '問。今日の1問から、また積み上げましょう。';
+    $('an-headline').textContent = head;
+  }
+
+  /** グラフの入れ物の幅（パディングを除く）。0 なら描かない */
+  function hostWidth(id) {
+    return $(id).clientWidth;
+  }
+
+  function drawAnCharts(animate) {
+    drawAnDaily(animate);
+    drawAnHeat(animate);
+    drawAnAccuracy(animate);
+  }
+
+  function setSvg(host, svg, animate) {
+    var box = host.querySelector('.qd-an-svg');
+    box.innerHTML = svg;   // charts.js が作る文字列。中身は数字と日付だけ（エスケープ済み）
+    box.classList.toggle('qd-anim', !!animate && !reducedMotion());
+    host.querySelector('.qd-tip').hidden = true;
+  }
+
+  function showEmpty(host, text) {
+    var p = host.querySelector('.qd-an-empty');
+    if (!p) return;
+    p.hidden = !text;
+    p.textContent = '';
+    if (text) {
+      var span = document.createElement('span');
+      span.textContent = text;
+      p.appendChild(span);
+    }
+  }
+
+  /** ツールチップを、入れ物の中の (x, y) の上に出す。はみ出さないよう左右を寄せる */
+  function placeTip(host, x, y, nodes) {
+    var tip = host.querySelector('.qd-tip');
+    tip.textContent = '';
+    nodes.forEach(function (n) { tip.appendChild(n); });
+    tip.hidden = false;
+    var w = tip.offsetWidth, h = tip.offsetHeight, W = host.clientWidth;
+    var left = Math.max(0, Math.min(W - w, x - w / 2));
+    var top = y - h - 12;
+    if (top < 0) top = y + 16;
+    tip.style.transform = 'translate(' + Math.round(left) + 'px,' + Math.round(top) + 'px)';
+  }
+
+  function tipLine(text, cls, strong) {
+    var div = document.createElement('div');
+    if (cls) div.className = cls;
+    if (strong !== undefined) {
+      div.appendChild(document.createTextNode(text));
+      var b = document.createElement('b');
+      b.textContent = strong;
+      div.appendChild(b);
+    } else div.textContent = text;
+    return div;
+  }
+
+  function hideTip(host) {
+    host.querySelector('.qd-tip').hidden = true;
+    var cur = host.querySelector('.qd-cursor');
+    if (cur) cur.setAttribute('visibility', 'hidden');
+    Array.prototype.forEach.call(host.querySelectorAll('.is-pick'), function (el) { el.classList.remove('is-pick'); });
+    var bars = host.querySelector('.qd-bars');
+    if (bars) bars.classList.remove('has-pick');
+    host.dataset.pick = '';
+  }
+
+  var RANGE_NAMES = { '30': '直近30日', '90': '直近90日', '365': '直近1年', 'all': '始めてから' };
+
+  function drawAnDaily(animate) {
+    var host = $('an-daily');
+    var W = hostWidth('an-daily');
+    if (!W) return;
+    an.widths['an-daily'] = W;
+    var s = an.data.series;
+    var H = W < 520 ? 240 : 300;
+    var r = CH.dualAxis(s, { width: W, height: H, uid: 'qd-daily' });
+    host._plot = r.plot;
+    setSvg(host, r.svg, animate);
+    showEmpty(host, s.active === 0
+      ? (s.cumMax === 0 ? '解くと、ここに毎日の棒と累計の線が育ちます。' : 'この期間に解いた日はありません。期間を広げると、これまでの分が見えます。')
+      : '');
+    var total = s.days.reduce(function (n, d) { return n + d.answers; }, 0);
+    var label = RANGE_NAMES[an.range] + 'の毎日の問題数と累計。' + s.active + '日解いて ' + total + '問、累計は ' +
+      s.cumMax + '問。いちばん多い日は ' + s.max + '問。左右の矢印キーで日を選べます。';
+    host.setAttribute('aria-label', label);
+    $('an-daily-foot').textContent = s.active > 0
+      ? RANGE_NAMES[an.range] + 'で ' + s.active + '日・' + CH.num(total) + '問。1日あたり ' +
+        (Math.round(total / s.active * 10) / 10) + '問（解いた日の平均）。'
+      : '';
+  }
+
+  function pickDaily(host, i) {
+    var s = an.data.series, p = host._plot;
+    if (!p || !s.days.length) return;
+    i = Math.max(0, Math.min(s.days.length - 1, i));
+    host.dataset.pick = String(i);
+    var d = s.days[i];
+    var x = p.left + p.step * (i + 0.5);
+    var cur = host.querySelector('.qd-cursor');
+    cur.setAttribute('x1', x);
+    cur.setAttribute('x2', x);
+    cur.setAttribute('visibility', 'visible');
+    var bars = host.querySelector('.qd-bars');
+    Array.prototype.forEach.call(bars.querySelectorAll('.is-pick'), function (el) { el.classList.remove('is-pick'); });
+    var bar = bars.querySelector('[data-i="' + i + '"]');
+    bars.classList.toggle('has-pick', !!bar);
+    if (bar) bar.classList.add('is-pick');
+    placeTip(host, x, p.top + 8, [
+      tipLine(fmtDate(d.date, true)),
+      tipLine('その日 ', null, CH.num(d.answers) + '問'),
+      tipLine('累計 ' + CH.num(d.cum) + '問', 'is-line'),
+    ]);
+  }
+
+  function drawAnAccuracy(animate) {
+    var host = $('an-acc');
+    var W = hostWidth('an-acc');
+    if (!W) return;
+    an.widths['an-acc'] = W;
+    var weeks = an.data.weeks;
+    var r = CH.accuracy(weeks, { width: W, height: W < 520 ? 210 : 240, uid: 'qd-acc' });
+    host._plot = r.plot;
+    host._points = r.points;
+    setSvg(host, r.svg, animate);
+    showEmpty(host, r.points.length === 0 ? '解くと、週ごとの正答率の線がここに伸びます。' : '');
+    $('an-acc-range').textContent = RANGE_NAMES[an.range];
+    var rates = r.points.map(function (p) { return Math.round(weeks[p.i].rate * 100); });
+    host.setAttribute('aria-label', '週ごとの正答率（' + RANGE_NAMES[an.range] + '）。回答のある週は ' + rates.length + '週' +
+      (rates.length ? '。最初の週 ' + rates[0] + '%、最後の週 ' + rates[rates.length - 1] + '%、最高 ' + Math.max.apply(null, rates) +
+        '%、最低 ' + Math.min.apply(null, rates) + '%' : '') + '。左右の矢印キーで週を選べます。');
+  }
+
+  function pickAccuracy(host, j) {
+    var pts = host._points || [];
+    if (!pts.length) return;
+    j = Math.max(0, Math.min(pts.length - 1, j));
+    host.dataset.pick = String(j);
+    var p = pts[j], w = an.data.weeks[p.i];
+    Array.prototype.forEach.call(host.querySelectorAll('.qd-dot.is-pick'), function (el) { el.classList.remove('is-pick'); });
+    var dot = host.querySelector('.qd-dot[data-i="' + p.i + '"]');
+    if (dot) dot.classList.add('is-pick');
+    var cur = host.querySelector('.qd-cursor');
+    cur.setAttribute('x1', p.x);
+    cur.setAttribute('x2', p.x);
+    cur.setAttribute('visibility', 'visible');
+    placeTip(host, p.x, p.y, [
+      tipLine(fmtDate(w.week, true) + 'からの週'),
+      tipLine('正答率 ', null, Math.round(w.rate * 100) + '%'),
+      tipLine(w.corrects + ' / ' + w.answers + '問 正解' + (w.answers < 10 ? '（少ないので、ぶれやすい）' : '')),
+    ]);
+  }
+
+  /** 点のうち、x がいちばん近いものの添字 */
+  function nearestPoint(pts, x) {
+    var best = 0;
+    pts.forEach(function (p, j) { if (Math.abs(p.x - x) < Math.abs(pts[best].x - x)) best = j; });
+    return best;
+  }
+
+  function drawAnHeat(animate) {
+    var host = $('an-heat');
+    var W = hostWidth('an-heat');
+    if (!W) return;
+    an.widths['an-heat'] = W;
+    var hm = an.data.heat;
+    var gap = 3, cols = hm.weeks.length;
+    // 収まるならマスを広げて幅いっぱいに（10〜18px）。収まらない狭い画面では 12px にして横にスクロールする
+    var fit = Math.floor((W - 22) / cols) - gap;
+    var cell = fit >= 10 ? Math.min(18, fit) : 12;
+    var r = CH.heatmap(hm, { cell: cell, gap: gap });
+    setSvg(host, r.svg, animate);
+    host.querySelector('.qd-an-heat-days').innerHTML = r.labels;
+    var scroller = host.querySelector('.qd-an-scroll');
+    scroller.scrollLeft = scroller.scrollWidth;   // いちばん新しい週（右端）から見せる
+    var active = 0;
+    hm.weeks.forEach(function (col) { col.forEach(function (d) { if (d && d.answers > 0) active += 1; }); });
+    $('an-heat-total').textContent = active + '日・' + CH.num(hm.total) + '問';
+    $('an-heat-note').textContent = hm.total === 0 ? '解いた日のマスに色が付きます。多く解いた日ほど濃くなります。' : '色の濃さは、その日に解いた問題数（この1年に解いた日の件数を4つに分けて、多いほど濃い）。' +
+      '区切り: ' + hm.thresholds[0] + '問まで／' + hm.thresholds[1] + '問まで／' + hm.thresholds[2] + '問まで／それより多い。';
+    host.setAttribute('aria-label', '直近1年の学習のカレンダー。' + fmtDate(hm.from, true) + 'から今日まで、' + active + '日解いて ' +
+      hm.total + '問。左右の矢印キーで日を選べます。');
+  }
+
+  function pickHeat(host, rect) {
+    if (!rect) return;
+    Array.prototype.forEach.call(host.querySelectorAll('.qd-heat-cell.is-pick'), function (el) { el.classList.remove('is-pick'); });
+    rect.classList.add('is-pick');
+    host.dataset.pick = rect.getAttribute('data-date');
+    var hb = host.getBoundingClientRect(), rb = rect.getBoundingClientRect();
+    var n = Number(rect.getAttribute('data-n'));
+    placeTip(host, rb.left - hb.left + rb.width / 2, rb.top - hb.top, [
+      tipLine(fmtDate(rect.getAttribute('data-date'), true)),
+      n > 0 ? tipLine('', null, CH.num(n) + '問') : tipLine('解いていません'),
+    ]);
+  }
+
+  /** カレンダーで、選んでいる日から delta 日動く（見えていなければスクロールして見せる） */
+  function stepHeat(host, delta) {
+    var key = host.dataset.pick || AN.dayKeyOf(an.data.now);
+    var next = AN.addDays(key, delta);
+    var rect = host.querySelector('.qd-heat-cell[data-date="' + next + '"]') ||
+      host.querySelector('.qd-heat-cell[data-date="' + key + '"]');
+    if (!rect) return;
+    var sc = host.querySelector('.qd-an-scroll');
+    var sb = sc.getBoundingClientRect(), rb = rect.getBoundingClientRect();
+    if (rb.left < sb.left) sc.scrollLeft -= sb.left - rb.left;
+    else if (rb.right > sb.right) sc.scrollLeft += rb.right - sb.right;
+    pickHeat(host, rect);
+  }
+
+  var DONUT_NAMES = { mastered: '定着', learning: '学習中', weak: '苦手', unseen: '未回答' };
+
+  function renderAnDonut(m, animate) {
+    var box = $('an-donut');
+    box.innerHTML = CH.donut(m, { size: 200, stroke: 18, uid: 'qd-donut' });
+    box.classList.toggle('qd-anim', !!animate && !reducedMotion());
+    var rate = m.answeredRate === null ? 0 : Math.round(m.answeredRate * 100);
+    countUp($('an-donut-rate'), rate, animate);
+    var list = $('an-donut-legend');
+    list.textContent = '';
+    CH.DONUT_ORDER.forEach(function (k) {
+      var li = document.createElement('li');
+      li.className = 'is-' + k;
+      li.appendChild(document.createElement('i'));
+      li.appendChild(document.createTextNode(DONUT_NAMES[k]));
+      var b = document.createElement('b');
+      b.textContent = CH.num(m[k]) + '問';
+      li.appendChild(b);
+      list.appendChild(li);
+    });
+    box.setAttribute('aria-label', m.total === 0 ? '問題集を読み込むと、習熟度の内訳が出ます。'
+      : '習熟度の内訳。全 ' + m.total + '問のうち、解いた問題 ' + rate + '%。' + CH.DONUT_ORDER.map(function (k) {
+        return DONUT_NAMES[k] + ' ' + m[k] + '問';
+      }).join('、') + '。');
+  }
+
+  var MILESTONE_GROUPS = [
+    { kind: 'total', title: '累計の問題数', name: function (t) { return CH.num(t) + '問'; }, disc: function (t) { return t >= 1000 ? (t / 1000) + 'k' : String(t); } },
+    { kind: 'streak', title: '連続学習', name: function (t) { return t + '日連続'; }, disc: function (t) { return t + '日'; } },
+    { kind: 'day', title: '1日の問題数', name: function (t) { return '1日 ' + t + '問'; }, disc: function (t) { return String(t); } },
+  ];
+
+  function renderAnMilestones(ms) {
+    var done = ms.list.filter(function (m) { return m.achieved; }).length;
+    var next = $('an-next');
+    next.textContent = '';
+    if (ms.next) {
+      next.appendChild(document.createTextNode('次の目標「累計 ' + CH.num(ms.next.target) + '問」まで、あと '));
+      var b = document.createElement('b');
+      b.textContent = CH.num(ms.next.remaining) + '問';
+      next.appendChild(b);
+      next.appendChild(document.createTextNode('。'));
+    } else {
+      next.textContent = '累計の目標はすべて達成しました。';
+    }
+    var box = $('an-badges');
+    box.textContent = '';
+    box.setAttribute('aria-label', 'マイルストーン ' + ms.list.length + '個のうち ' + done + '個を達成');
+    MILESTONE_GROUPS.forEach(function (g) {
+      var wrap = document.createElement('div');
+      var h = document.createElement('h3');
+      h.className = 'qd-badge-group-title';
+      h.textContent = g.title;
+      wrap.appendChild(h);
+      var ul = document.createElement('ul');
+      ul.className = 'qd-badge-row';
+      ms.list.filter(function (m) { return m.kind === g.kind; }).forEach(function (m) {
+        var li = document.createElement('li');
+        li.className = 'qd-medal' + (m.achieved ? ' is-done' : '');
+        var disc = document.createElement('span');
+        disc.className = 'qd-medal-disc';
+        disc.setAttribute('aria-hidden', 'true');
+        disc.textContent = g.disc(m.target);
+        var name = document.createElement('span');
+        name.className = 'qd-medal-name';
+        name.textContent = g.name(m.target);
+        var date = document.createElement('span');
+        date.className = 'qd-medal-date';
+        date.textContent = m.achieved ? fmtDate(m.date, true).replace(/（.）$/, '') : 'まだ';
+        li.appendChild(disc);
+        li.appendChild(name);
+        li.appendChild(date);
+        li.setAttribute('aria-label', g.name(m.target) + (m.achieved ? '、' + fmtDate(m.date, true) + 'に達成' : '、未達成'));
+        ul.appendChild(li);
+      });
+      wrap.appendChild(ul);
+      box.appendChild(wrap);
+    });
+  }
+
+  function barItem(title, g, animate) {
+    var li = document.createElement('li');
+    li.className = 'qd-bars-item';
+    var top = document.createElement('div');
+    top.className = 'qd-bars-top';
+    var name = document.createElement('span');
+    name.className = 'qd-bars-name';
+    name.textContent = title;
+    var rate = document.createElement('span');
+    rate.className = 'qd-bars-rate' + (g.rate === null ? ' is-none' : '');
+    rate.textContent = g.rate === null ? '回答なし' : Math.round(g.rate * 100) + '%';
+    top.appendChild(name);
+    top.appendChild(rate);
+    var track = document.createElement('div');
+    track.className = 'qd-bars-track';
+    var fill = document.createElement('div');
+    fill.className = 'qd-bars-fill';
+    fill.style.width = (g.rate === null ? 0 : Math.round(g.rate * 1000) / 10) + '%';
+    track.appendChild(fill);
+    var meta = document.createElement('span');
+    meta.className = 'qd-bars-meta';
+    meta.textContent = '回答 ' + CH.num(g.answers) + '件　解いた問題 ' + g.answered + ' / ' + g.questions + '問';
+    li.appendChild(top);
+    li.appendChild(track);
+    li.appendChild(meta);
+    li.setAttribute('aria-label', title + '、正答率 ' + (g.rate === null ? 'なし' : Math.round(g.rate * 100) + '%') + '、' + meta.textContent);
+    return li;
+  }
+
+  function renderAnBreakdown(animate) {
+    var choice = an.since;
+    var since = AN.sinceMs(choice, new Date());
+    $('an-since').value = since === null ? '' : AN.dayKeyOf(new Date(since));
+    Array.prototype.forEach.call(document.querySelectorAll('[data-since]'), function (b) {
+      var on = b.getAttribute('data-since') === (choice || 'all');
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var r = AN.breakdown(state.sets, state.log, since);
+    var fill = function (id, groups, titleOf, empty) {
+      var ul = $(id);
+      ul.textContent = '';
+      ul.classList.toggle('qd-anim', !!animate && !reducedMotion());
+      if (!groups.length) {
+        var li = document.createElement('li');
+        li.className = 'qd-note';
+        li.textContent = empty;
+        ul.appendChild(li);
+        return;
+      }
+      groups.forEach(function (g) { ul.appendChild(barItem(titleOf(g), g, animate)); });
+    };
+    fill('an-sets', r.bySet, function (g) { return g.title; }, '問題集を読み込むと、ここに並びます。');
+    fill('an-cats', r.byCategory, function (g) { return g.category === null ? '（分類なし）' : g.category; }, '問題集を読み込むと、ここに並びます。');
+  }
+
+  /** 幅が変わったら、そのグラフだけ動かさずに描き直す（文字が潰れないよう、viewBox の拡大縮小に頼らない） */
+  function observeAnCharts() {
+    if (an.observer || typeof ResizeObserver === 'undefined') return;
+    var draw = { 'an-daily': drawAnDaily, 'an-heat': drawAnHeat, 'an-acc': drawAnAccuracy };
+    var queued = {};
+    an.observer = new ResizeObserver(function (entries) {
+      entries.forEach(function (e) {
+        var id = e.target.id;
+        var w = e.target.clientWidth;
+        if (!w || !an.data || an.widths[id] === w || queued[id]) return;
+        queued[id] = true;
+        requestAnimationFrame(function () { queued[id] = false; draw[id](false); });
+      });
+    });
+    Object.keys(draw).forEach(function (id) { an.observer.observe($(id)); });
+  }
+
+  /** グラフの操作: ホバー・タップでツールチップ、矢印キーで選ぶ位置を動かす、Esc で閉じる */
+  function bindAnCharts() {
+    var daily = $('an-daily');
+    var xIn = function (host, ev) { return ev.clientX - host.getBoundingClientRect().left; };
+    daily.addEventListener('pointermove', function (ev) {
+      if (!host_ok(daily)) return;
+      var p = daily._plot;
+      pickDaily(daily, Math.floor((xIn(daily, ev) - p.left) / p.step));
+    });
+    daily.addEventListener('pointerdown', function (ev) {
+      if (!host_ok(daily)) return;
+      var p = daily._plot;
+      pickDaily(daily, Math.floor((xIn(daily, ev) - p.left) / p.step));
+    });
+    daily.addEventListener('pointerleave', function (ev) { if (ev.pointerType === 'mouse') hideTip(daily); });
+
+    var acc = $('an-acc');
+    var pickAccAt = function (ev) {
+      var pts = acc._points || [];
+      if (pts.length) pickAccuracy(acc, nearestPoint(pts, xIn(acc, ev)));
+    };
+    acc.addEventListener('pointermove', pickAccAt);
+    acc.addEventListener('pointerdown', pickAccAt);
+    acc.addEventListener('pointerleave', function (ev) { if (ev.pointerType === 'mouse') hideTip(acc); });
+
+    var heat = $('an-heat');
+    var pickHeatAt = function (ev) {
+      var rect = ev.target.closest && ev.target.closest('.qd-heat-cell');
+      if (rect) pickHeat(heat, rect);
+    };
+    heat.addEventListener('pointerover', pickHeatAt);
+    heat.addEventListener('pointerdown', pickHeatAt);
+    heat.addEventListener('pointerleave', function (ev) { if (ev.pointerType === 'mouse') hideTip(heat); });
+    heat.querySelector('.qd-an-scroll').addEventListener('scroll', function () { heat.querySelector('.qd-tip').hidden = true; });
+
+    var keys = function (host, step, first) {
+      host.addEventListener('keydown', function (ev) {
+        var d = { ArrowLeft: -1, ArrowRight: 1, Home: -1e6, End: 1e6 }[ev.key];
+        if (ev.key === 'Escape') { hideTip(host); return; }
+        if (d === undefined) return;
+        ev.preventDefault();
+        step(d);
+      });
+      host.addEventListener('blur', function () { hideTip(host); });
+      host.addEventListener('focus', function () { if (first) first(); });
+    };
+    keys(daily, function (d) {
+      var cur = daily.dataset.pick === '' || daily.dataset.pick === undefined ? an.data.series.days.length - 1 : Number(daily.dataset.pick) + d;
+      pickDaily(daily, cur);
+    });
+    keys(acc, function (d) {
+      var n = (acc._points || []).length;
+      if (!n) return;
+      var cur = acc.dataset.pick === '' || acc.dataset.pick === undefined ? n - 1 : Number(acc.dataset.pick) + d;
+      pickAccuracy(acc, cur);
+    });
+    keys(heat, function (d) {
+      if (Math.abs(d) > 1) d = d > 0 ? 400 : -400;
+      if (Math.abs(d) === 400) {
+        var cells = heat.querySelectorAll('.qd-heat-cell');
+        var target = d > 0 ? cells[cells.length - 1] : cells[0];
+        heat.dataset.pick = target.getAttribute('data-date');
+        stepHeat(heat, 0);
+        return;
+      }
+      stepHeat(heat, heat.dataset.pick ? d : 0);
+    });
+
+    function host_ok(host) { return !!host._plot && !!an.data; }
+
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="an-range"]'), function (el) {
+      el.addEventListener('change', function () {
+        an.range = el.value;
+        if (!an.data) return;
+        var daily2 = an.data.daily;
+        var now = new Date();
+        an.data.now = now;
+        an.data.series = AN.dailySeries(daily2, an.range, now);
+        an.data.weeks = AN.weeklyAccuracy(daily2, an.range, now);
+        drawAnDaily(true);
+        drawAnAccuracy(true);
+      });
+    });
+    $('an-since').addEventListener('change', function () {
+      an.since = $('an-since').value;   // 空なら全期間
+      renderAnBreakdown(false);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-since]'), function (b) {
+      b.addEventListener('click', function () {
+        var v = b.getAttribute('data-since');
+        an.since = v === 'all' ? '' : v;
+        renderAnBreakdown(true);
+      });
+    });
   }
 
   /* ===================== 自作テキスト ===================== */
@@ -1816,6 +2368,8 @@
   $('book-input').addEventListener('change', onBookFiles);
   $('tab-drill').addEventListener('click', function () { selectTab('drill'); });
   $('tab-book').addEventListener('click', function () { selectTab('book'); });
+  $('tab-analysis').addEventListener('click', function () { selectTab('analysis'); });
+  bindAnCharts();
   $('btn-export').addEventListener('click', exportHistory);
   ['wipe-sets', 'wipe-texts', 'wipe-records'].forEach(function (id) { $(id).addEventListener('change', renderWipe); });
   $('btn-wipe').addEventListener('click', onWipe);

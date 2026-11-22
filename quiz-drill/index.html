@@ -28,7 +28,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 
@@ -41,10 +41,11 @@
       <p class="qd-subtitle">自作問題ファイルを読み込み、4択問題で練習する</p>
     </div>
 
-    <!-- ホームは2つのタブで切り替える。最後に開いていたタブを覚えておく -->
+    <!-- ホームは3つのタブで切り替える。最後に開いていたタブを覚えておく -->
     <div class="qd-tabs" role="tablist" aria-label="切り替え">
       <button type="button" role="tab" id="tab-drill" class="qd-tab" aria-controls="panel-drill" aria-selected="true">4択ドリル</button>
       <button type="button" role="tab" id="tab-book" class="qd-tab" aria-controls="panel-book" aria-selected="false">自作テキスト</button>
+      <button type="button" role="tab" id="tab-analysis" class="qd-tab" aria-controls="panel-analysis" aria-selected="false">分析</button>
     </div>
 
     <div id="panel-drill" role="tabpanel" aria-labelledby="tab-drill">
@@ -220,6 +221,115 @@
         </label>
         <div id="book-msg" class="qd-load-msg" hidden></div>
       </section>
+    </div>
+
+    <!-- 分析: 学習の記録をグラフで見る。集計は analysis.js、SVG は charts.js、描くのは app.js -->
+    <div id="panel-analysis" role="tabpanel" aria-labelledby="tab-analysis" hidden>
+      <div class="qd-an">
+        <p id="an-headline" class="qd-an-headline"></p>
+
+        <section class="qd-an-summary" aria-label="サマリー">
+          <div class="qd-an-tile qd-an-tile--streak"><span class="qd-an-tile-label">連続学習</span><span class="qd-an-tile-value"><span id="an-streak" class="qd-an-num">0</span><span class="qd-an-unit">日</span></span><span id="an-streak-note" class="qd-an-tile-note"></span></div>
+          <div class="qd-an-tile"><span class="qd-an-tile-label">今日</span><span class="qd-an-tile-value"><span id="an-today" class="qd-an-num">0</span><span class="qd-an-unit">問</span></span></div>
+          <div class="qd-an-tile"><span class="qd-an-tile-label">今週（月曜から）</span><span class="qd-an-tile-value"><span id="an-week" class="qd-an-num">0</span><span class="qd-an-unit">問</span></span></div>
+          <div class="qd-an-tile"><span class="qd-an-tile-label">累計</span><span class="qd-an-tile-value"><span id="an-total" class="qd-an-num">0</span><span class="qd-an-unit">問</span></span></div>
+          <div class="qd-an-tile"><span class="qd-an-tile-label">自己ベストの日</span><span class="qd-an-tile-value"><span id="an-best" class="qd-an-num">0</span><span class="qd-an-unit">問</span></span><span id="an-best-date" class="qd-an-tile-note"></span></div>
+        </section>
+
+        <section class="qd-card qd-an-card qd-an-span-all">
+          <div class="qd-an-head">
+            <h2 class="qd-card-title">毎日の問題数と累計</h2>
+            <div class="qd-seg" role="radiogroup" aria-label="期間">
+              <label class="qd-seg-opt"><input type="radio" name="an-range" value="30" checked><span>30日</span></label>
+              <label class="qd-seg-opt"><input type="radio" name="an-range" value="90"><span>90日</span></label>
+              <label class="qd-seg-opt"><input type="radio" name="an-range" value="365"><span>1年</span></label>
+              <label class="qd-seg-opt"><input type="radio" name="an-range" value="all"><span>すべて</span></label>
+            </div>
+          </div>
+          <p class="qd-an-legend"><span class="qd-an-legend-item"><span class="qd-key qd-key--bar"></span>その日の問題数（左の目盛り）</span><span class="qd-an-legend-item"><span class="qd-key qd-key--line"></span>始めてからの累計（右の目盛り）</span></p>
+          <div id="an-daily" class="qd-an-chart" role="img" tabindex="0">
+            <div class="qd-an-svg"></div>
+            <p class="qd-an-empty" hidden></p>
+            <div class="qd-tip" hidden></div>
+          </div>
+          <p id="an-daily-foot" class="qd-note"></p>
+        </section>
+
+        <section class="qd-card qd-an-card qd-an-span-all">
+          <div class="qd-an-head">
+            <h2 class="qd-card-title">学習のカレンダー（直近1年）</h2>
+            <p id="an-heat-total" class="qd-an-sub"></p>
+          </div>
+          <div id="an-heat" class="qd-an-chart qd-an-heat" role="img" tabindex="0">
+            <div class="qd-an-heat-row"><div class="qd-an-heat-days"></div><div class="qd-an-scroll"><div class="qd-an-svg"></div></div></div>
+            <div class="qd-tip" hidden></div>
+          </div>
+          <div class="qd-heat-legend" aria-hidden="true">
+            <span>少ない</span><i class="qd-heat-key qd-heat-l0"></i><i class="qd-heat-key qd-heat-l1"></i><i class="qd-heat-key qd-heat-l2"></i><i class="qd-heat-key qd-heat-l3"></i><i class="qd-heat-key qd-heat-l4"></i><span>多い</span>
+          </div>
+          <p id="an-heat-note" class="qd-note"></p>
+        </section>
+
+        <section class="qd-card qd-an-card qd-an-span-2">
+          <div class="qd-an-head">
+            <h2 class="qd-card-title">週ごとの正答率</h2>
+            <p id="an-acc-range" class="qd-an-sub"></p>
+          </div>
+          <div id="an-acc" class="qd-an-chart" role="img" tabindex="0">
+            <div class="qd-an-svg"></div>
+            <p class="qd-an-empty" hidden></p>
+            <div class="qd-tip" hidden></div>
+          </div>
+          <p class="qd-note">点が大きいほど、その週に多く解いています。薄い点は回答が10件未満の週で、ぶれやすい値です。</p>
+        </section>
+
+        <section class="qd-card qd-an-card">
+          <h2 class="qd-card-title">習熟度</h2>
+          <div class="qd-donut-wrap">
+            <div id="an-donut" class="qd-donut-box" role="img"></div>
+            <div class="qd-donut-center" aria-hidden="true">
+              <span class="qd-donut-big"><span id="an-donut-rate" class="qd-an-num">0</span><span class="qd-an-unit">%</span></span>
+              <span class="qd-donut-label">解いた問題</span>
+            </div>
+          </div>
+          <ul id="an-donut-legend" class="qd-donut-legend"></ul>
+          <p class="qd-note">定着 = 直近3回が続けて正解で、正答率80%以上。苦手 = 正答率70%未満か、最後に不正解（成績の画面と同じ）。</p>
+        </section>
+
+        <section class="qd-card qd-an-card qd-an-ms">
+          <h2 class="qd-card-title">マイルストーン</h2>
+          <p id="an-next" class="qd-an-next"></p>
+          <div id="an-badges" class="qd-badges"></div>
+        </section>
+
+        <section class="qd-card qd-an-card qd-an-span-all">
+          <div class="qd-an-head">
+            <h2 class="qd-card-title">問題集ごと・分類ごと</h2>
+          </div>
+          <div class="qd-an-filter">
+            <label class="tb-label" for="an-since">この日以降に解いた分</label>
+            <div class="qd-an-filter-row">
+              <input type="date" id="an-since" class="tb-input qd-an-date">
+              <div class="qd-seg qd-seg--small" role="group" aria-label="よく使う期間">
+                <button type="button" class="qd-seg-btn" data-since="month">今月</button>
+                <button type="button" class="qd-seg-btn" data-since="30">30日</button>
+                <button type="button" class="qd-seg-btn" data-since="all">全期間</button>
+              </div>
+            </div>
+          </div>
+          <div class="qd-an-cols">
+            <div>
+              <h3 class="qd-an-subtitle">問題集ごと</h3>
+              <ul id="an-sets" class="qd-bars-list"></ul>
+            </div>
+            <div>
+              <h3 class="qd-an-subtitle">分類ごと</h3>
+              <ul id="an-cats" class="qd-bars-list"></ul>
+            </div>
+          </div>
+          <p class="qd-note">実施数の多い順。消した問題集の記録は、成績の画面と同じく数えません。</p>
+        </section>
+      </div>
     </div>
   </section>
 
@@ -397,8 +507,10 @@
   <img id="lightbox-img" alt="">
 </div>
 
-<script src="quiz.js"></script>
-<script src="storage.js"></script>
-<script src="app.js"></script>
+<script src="quiz.js?v=2"></script>
+<script src="analysis.js?v=2"></script>
+<script src="charts.js?v=2"></script>
+<script src="storage.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
