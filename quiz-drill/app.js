@@ -48,7 +48,7 @@
     positions: S.loadPositions(),   // 鍵 → 前回表示したときの代表の正解の表示位置
     currentOrder: null, // 回答前の問題の表示順
     reviewKey: null,   // 結果画面・成績の画面から見返している問題の鍵
-    reviewFrom: null,  // 見返しから戻る画面（'result' | 'stats'）
+    reviewFrom: null,  // 見返しから戻る画面（'result' | 'stats' | 'search'）
     loaded: false,     // 保存済みの問題集を読み出せたか
   };
 
@@ -57,7 +57,7 @@
   /* ===================== 画面の切り替え ===================== */
 
   function showScreen(name) {
-    ['home', 'quiz', 'result', 'stats', 'mock', 'mockreview'].forEach(function (n) {
+    ['home', 'quiz', 'result', 'stats', 'search', 'mock', 'mockreview'].forEach(function (n) {
       $('screen-' + n).hidden = n !== name;
     });
     // 残り時間は模擬試験の2つの画面にいる間だけ数える
@@ -87,6 +87,7 @@
     var has = state.sets.length > 0;
     $('empty-guide').hidden = has;
     $('start-card').hidden = !has;
+    $('search-card').hidden = !has;
     $('set-empty').hidden = has;
 
     // 問題集の一覧
@@ -942,6 +943,13 @@
     return order;
   }
 
+  /** 見返しから戻る先ごとの、上のボタンと下のボタンの文言 */
+  var REVIEW_BACK = {
+    result: { quit: '結果へ', next: '結果に戻る' },
+    stats: { quit: '成績へ', next: '成績に戻る' },
+    search: { quit: '探す画面へ', next: '探す画面に戻る' },
+  };
+
   /**
    * 問題を描く。answer があれば回答後の表示にする。
    * review は結果画面からの見返し（進み具合を出さず、ボタンを「結果に戻る」にする）。
@@ -964,7 +972,7 @@
       $('q-progress').textContent = (s.pos + 1) + ' / ' + s.order.length;
       $('q-score').textContent = '正解 ' + countCorrect(s);
     }
-    $('btn-quit').textContent = review ? (state.reviewFrom === 'stats' ? '成績へ' : '結果へ') : '中断';
+    $('btn-quit').textContent = review ? REVIEW_BACK[state.reviewFrom || 'result'].quit : '中断';
 
     setRich($('q-text'), q.question);
 
@@ -1054,8 +1062,16 @@
     setRich($('q-supplement'), q.supplement);
 
     var next = $('btn-next');
-    if (review) next.textContent = state.reviewFrom === 'stats' ? '成績に戻る' : '結果に戻る';
+    if (review) next.textContent = REVIEW_BACK[state.reviewFrom || 'result'].next;
     else next.textContent = state.session.pos + 1 >= state.session.order.length ? '結果を見る' : '次の問題へ';
+
+    // 「探す」からの見返しだけ、同じ問題集の前後の問題へ動くボタンを出す
+    var nav = review && state.reviewFrom === 'search';
+    $('q-search-nav').hidden = !nav;
+    if (nav) {
+      $('btn-prevq').disabled = !Q.neighborKey(entry.set, key, -1);
+      $('btn-nextq').disabled = !Q.neighborKey(entry.set, key, 1);
+    }
   }
 
   /* ===================== 数式（KaTeX） ===================== */
@@ -1695,6 +1711,92 @@
     showScreen('stats');
   }
 
+  /* ===================== 問題を探す ===================== */
+
+  var SEARCH_LIMIT = 50;
+
+  /** 探す画面を開く。問題集の選択肢を作り直す（選んでいた問題集が残っていれば、そのまま） */
+  function openSearch() {
+    var sel = $('search-set');
+    var keep = sel.value;
+    sel.textContent = '';
+    var all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'すべての問題集';
+    sel.appendChild(all);
+    state.sets.forEach(function (set) {
+      var o = document.createElement('option');
+      o.value = set.id;
+      o.textContent = set.title;
+      sel.appendChild(o);
+    });
+    if (keep && state.sets.some(function (s) { return s.id === keep; })) sel.value = keep;
+    renderSearch();
+    showScreen('search');
+  }
+
+  function renderSearch() {
+    var r = Q.searchQuestions(state.sets, $('search-set').value, $('search-input').value, SEARCH_LIMIT);
+    var list = $('search-list');
+    list.textContent = '';
+    var status = $('search-status');
+    var more = $('search-more');
+    more.hidden = true;
+    if (r.mode === 'empty') {
+      status.textContent = '問番号か語を入れてください。';
+      return;
+    }
+    if (r.total === 0) {
+      status.textContent = '見つかりません。';
+      return;
+    }
+    status.textContent = r.total + '問見つかりました（' + (r.mode === 'number' ? '問番号' : '語') + 'で探しています）。';
+    r.hits.forEach(function (h) {
+      var li = document.createElement('li');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'qd-wrong-item';
+      var label = document.createElement('span');
+      label.className = 'qd-wrong-label';
+      label.textContent = Q.questionLabel(h.set, h.question, h.index);
+      var text = document.createElement('span');
+      text.className = 'qd-wrong-text';
+      text.textContent = Q.excerpt(h.question.question, EXCERPT_LEN);
+      btn.appendChild(label);
+      btn.appendChild(text);
+      btn.addEventListener('click', function () { viewFromSearch(h.key); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    if (r.total > r.hits.length) {
+      more.hidden = false;
+      more.textContent = 'ほかに ' + (r.total - r.hits.length) + ' 件あります。語を足して絞り込んでください。';
+    }
+  }
+
+  /** 探した問題の、回答後の表示（元の番号の選択肢と解説）を見る。並べ替えも記録もしない */
+  function viewFromSearch(key) {
+    state.reviewFrom = 'search';
+    showSearchQuestion(key);
+    showScreen('quiz');
+  }
+
+  function showSearchQuestion(key) {
+    var q = state.index[key].question;
+    state.reviewKey = key;
+    var order = q.choices.map(function (_, i) { return i; });
+    drawQuestion(key, order, { order: order, picked: null, correct: null }, true);
+  }
+
+  /** 同じ問題集の中で、問番号順に前後の問題へ動く */
+  function stepSearch(delta) {
+    var e = state.index[state.reviewKey];
+    var k = e && Q.neighborKey(e.set, state.reviewKey, delta);
+    if (!k) return;
+    showSearchQuestion(k);
+    window.scrollTo(0, 0);
+  }
+
   /* ===================== 画像の拡大 ===================== */
 
   function openLightbox(ev) {
@@ -1719,6 +1821,12 @@
   $('btn-wipe').addEventListener('click', onWipe);
   $('btn-export-result').addEventListener('click', exportHistory);
   $('btn-stats').addEventListener('click', openStats);
+  $('btn-search').addEventListener('click', openSearch);
+  $('btn-search-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
+  $('search-set').addEventListener('change', renderSearch);
+  $('search-input').addEventListener('input', renderSearch);
+  $('btn-prevq').addEventListener('click', function () { stepSearch(-1); });
+  $('btn-nextq').addEventListener('click', function () { stepSearch(1); });
   $('btn-stats-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
   $('history-input').addEventListener('change', onHistoryFile);
   $('btn-sample').addEventListener('click', loadSample);

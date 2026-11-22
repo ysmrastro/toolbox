@@ -1119,3 +1119,83 @@ test('wipeConfirmText: 選んだものだけを、件数つきで並べる', () 
   assert.ok(!t.includes('自作テキスト'));
   assert.ok(t.includes('元に戻せません'));
 });
+
+/* ===================== 問題を探す ===================== */
+
+function searchSets() {
+  return [
+    {
+      id: 'a', title: '見本A', questions: [
+        q('x3', { no: 3, question: '光の速さは約いくつか', explanation: '$\\int I\\,d\\Omega$ を使う' }),
+        q('x1', { no: 1, question: 'Apple の色は何か', choices: ['赤', '青', '緑', '黄'] }),
+        q('x2', { no: 2, question: '番号2の問題。ＡＢＣ について', supplement: '補足の語 星雲' }),
+      ],
+    },
+    {
+      id: 'b', title: '見本B', questions: [
+        q('y1', { question: '無番号その1' }),                 // no 無し → 位置+1 = 1
+        q('y2', { question: '無番号その2 2024年' }),           // 位置+1 = 2
+      ],
+    },
+  ];
+}
+
+test('searchQuestions: 数字だけは問番号として探す（no が無い問題は位置+1）', () => {
+  const sets = searchSets();
+  const r = Q.searchQuestions(sets, '', '2', 50);
+  assert.strictEqual(r.mode, 'number');
+  assert.deepStrictEqual(r.hits.map((h) => h.key), ['a::x2', 'b::y2']);
+  assert.strictEqual(r.total, 2);
+  assert.deepStrictEqual(Q.searchQuestions(sets, 'b', '１', 50).hits.map((h) => h.key), ['b::y1']);   // 全角の数字
+});
+
+test('searchQuestions: 引用符で囲むと、数字だけでも語として探す', () => {
+  const r = Q.searchQuestions(searchSets(), '', '"2"', 50);
+  assert.strictEqual(r.mode, 'text');
+  assert.deepStrictEqual(r.hits.map((h) => h.key), ['a::x2', 'b::y2']);   // 「番号2の問題」「2024年」
+  assert.deepStrictEqual(Q.searchQuestions(searchSets(), '', '“2024”', 50).hits.map((h) => h.key), ['b::y2']);
+});
+
+test('searchQuestions: 空の入力・引用符だけは empty', () => {
+  assert.strictEqual(Q.searchQuestions(searchSets(), '', '   ', 50).mode, 'empty');
+  assert.strictEqual(Q.searchQuestions(searchSets(), '', '""', 50).mode, 'empty');
+  assert.strictEqual(Q.searchQuestions(searchSets(), '', '', 50).total, 0);
+});
+
+test('searchQuestions: 語は大文字小文字・全角半角を区別せず、空白区切りは AND', () => {
+  const sets = searchSets();
+  assert.deepStrictEqual(Q.searchQuestions(sets, '', 'apple', 50).hits.map((h) => h.key), ['a::x1']);
+  assert.deepStrictEqual(Q.searchQuestions(sets, '', 'abc', 50).hits.map((h) => h.key), ['a::x2']);   // 全角ＡＢＣ
+  assert.deepStrictEqual(Q.searchQuestions(sets, '', '星雲　問題', 50).hits.map((h) => h.key), ['a::x2']);
+  assert.strictEqual(Q.searchQuestions(sets, '', '星雲 光', 50).total, 0);
+  assert.strictEqual(Q.searchQuestions(sets, '', '青', 50).total, 1);   // 選択肢も対象
+});
+
+test('searchQuestions: TeX の式をそのままの文字として探せる', () => {
+  const r = Q.searchQuestions(searchSets(), '', '\\int', 50);
+  assert.deepStrictEqual(r.hits.map((h) => h.key), ['a::x3']);
+});
+
+test('searchQuestions: 問題集で絞る・並び順・件数の上限', () => {
+  const sets = searchSets();
+  // 「番号」は a の x2、b の y1・y2 に含まれる。問題集の並び順 → 問番号順（no 無しは位置の順）
+  assert.deepStrictEqual(Q.searchQuestions(sets, '', '番号', 50).hits.map((h) => h.key), ['a::x2', 'b::y1', 'b::y2']);
+  assert.deepStrictEqual(Q.searchQuestions(sets, 'b', '番号', 50).hits.map((h) => h.key), ['b::y1', 'b::y2']);
+  const limited = Q.searchQuestions(sets, '', '番号', 2);
+  assert.strictEqual(limited.hits.length, 2);
+  assert.strictEqual(limited.total, 3);
+  const none = Q.searchQuestions(sets, '', '該当しない語', 50);
+  assert.deepStrictEqual(none.hits, []);
+  assert.strictEqual(none.total, 0);
+  assert.strictEqual(none.mode, 'text');
+});
+
+test('neighborKey: 問題集の中を問番号順に前後へ動く。端は null', () => {
+  const set = searchSets()[0];   // 配列は 3,1,2 → 番号順は x1, x2, x3
+  assert.strictEqual(Q.neighborKey(set, 'a::x1', 1), 'a::x2');
+  assert.strictEqual(Q.neighborKey(set, 'a::x2', 1), 'a::x3');
+  assert.strictEqual(Q.neighborKey(set, 'a::x2', -1), 'a::x1');
+  assert.strictEqual(Q.neighborKey(set, 'a::x1', -1), null);
+  assert.strictEqual(Q.neighborKey(set, 'a::x3', 1), null);
+  assert.strictEqual(Q.neighborKey(set, 'a::zz', 1), null);
+});

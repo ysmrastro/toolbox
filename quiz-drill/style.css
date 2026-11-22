@@ -744,3 +744,12 @@ body {
 .qd-check { display: flex; align-items: center; gap: var(--tb-space-sm); padding: var(--tb-space-xs) 0; }
 .qd-check input { width: 1.2rem; height: 1.2rem; flex: 0 0 auto; }
 #btn-wipe { margin-top: var(--tb-space-sm); }
+
+/* 問題を探す: 前の問題・次の問題 */
+.qd-search-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--tb-space-sm);
+  margin-bottom: var(--tb-space-sm);
+}
+.qd-search-nav .tb-btn:disabled { opacity: 0.4; cursor: default; }
