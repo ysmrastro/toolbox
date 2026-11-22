@@ -16,6 +16,27 @@
 
   --qd-tap: 3rem;          /* タップ目標の最小（2.75rem 以上という基準に余裕を持たせる） */
   --qd-content-w: 40rem;
+  --qd-wide-w: 76rem;      /* 分析のタブを開いているときだけ広げる */
+
+  /* 分析のグラフ。棒はアクセント、累計の線は星の光の金色（青の棒と並べて見分けやすい） */
+  --qd-viz-bar: var(--tb-accent);
+  --qd-viz-line: #f2c46d;
+  --qd-viz-line-subtle: rgba(242, 196, 109, 0.14);
+  --qd-viz-grid: rgba(139, 148, 158, 0.16);
+  --qd-viz-glow: rgba(126, 184, 218, 0.35);
+  --qd-viz-glow-gold: rgba(242, 196, 109, 0.35);
+  --qd-viz-panel: linear-gradient(160deg, rgba(126, 184, 218, 0.07), rgba(126, 184, 218, 0) 55%);
+  /* カレンダーの5段階。アクセントを背景に混ぜて作る */
+  --qd-heat-0: var(--tb-bg-tertiary);
+  --qd-heat-1: color-mix(in srgb, var(--tb-accent) 24%, var(--tb-bg-tertiary));
+  --qd-heat-2: color-mix(in srgb, var(--tb-accent) 46%, var(--tb-bg-tertiary));
+  --qd-heat-3: color-mix(in srgb, var(--tb-accent) 72%, var(--tb-bg-tertiary));
+  --qd-heat-4: var(--tb-accent-hover);
+  /* 習熟度の4つ */
+  --qd-seg-mastered: var(--tb-accent);
+  --qd-seg-learning: var(--qd-viz-line);
+  --qd-seg-weak: var(--tb-danger);
+  --qd-seg-unseen: var(--tb-border);
 }
 
 /* hidden 属性はクラスの display に負けるので打ち消しておく（CLAUDE.md の注意） */
@@ -456,7 +477,7 @@ body {
 /* ホームのタブ（4択ドリル / 自作テキスト） */
 .qd-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   padding: 4px;
   margin-bottom: var(--tb-space-md);
@@ -755,3 +776,365 @@ body {
   margin-bottom: var(--tb-space-sm);
 }
 .qd-search-nav .tb-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ===================== 分析 ===================== */
+
+/* 分析のタブを開いているときだけ、コンテナを広げる（ほかのタブ・画面の幅は変えない）。
+   上の見出しとタブの幅は、ほかのタブと同じに保つ */
+.qd-app:has(> #screen-home:not([hidden]) #panel-analysis:not([hidden])) { max-width: var(--qd-wide-w); }
+.qd-app:has(> #screen-home:not([hidden]) #panel-analysis:not([hidden])) .qd-intro,
+.qd-app:has(> #screen-home:not([hidden]) #panel-analysis:not([hidden])) .qd-tabs {
+  max-width: calc(var(--qd-content-w) - 2 * var(--tb-space-md));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.qd-an {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--tb-space-md);
+}
+.qd-an > * { min-width: 0; margin-bottom: 0; }
+
+.qd-an-headline {
+  font-size: var(--tb-font-size-lg);
+  font-weight: 700;
+  color: var(--tb-text-primary);
+  line-height: 1.5;
+  padding: var(--tb-space-xs) var(--tb-space-xs) 0;
+}
+
+.qd-an-card {
+  padding: var(--tb-space-lg) var(--tb-space-md);
+  background: var(--qd-viz-panel), var(--tb-bg-secondary);
+  border-radius: 1rem;
+}
+.qd-an-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tb-space-sm) var(--tb-space-md);
+  margin-bottom: var(--tb-space-sm);
+}
+.qd-an-head .qd-card-title { margin-bottom: 0; }
+.qd-an-sub { font-size: var(--tb-font-size-sm); color: var(--tb-text-secondary); font-variant-numeric: tabular-nums; }
+
+/* サマリー */
+.qd-an-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tb-space-sm);
+}
+.qd-an-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tb-space-xs);
+  padding: var(--tb-space-md);
+  background: var(--tb-bg-secondary);
+  border: 1px solid var(--tb-border);
+  border-radius: 1rem;
+  min-width: 0;
+}
+.qd-an-tile-label { font-size: var(--qd-font-size-label); color: var(--tb-text-secondary); }
+.qd-an-tile-value { display: flex; align-items: baseline; gap: 0.15em; color: var(--tb-text-primary); }
+.qd-an-num {
+  font-size: var(--tb-font-size-2xl);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.qd-an-unit { font-size: var(--tb-font-size-sm); color: var(--tb-text-secondary); font-weight: 700; }
+.qd-an-tile-note { font-size: var(--qd-font-size-label); color: var(--tb-text-secondary); font-variant-numeric: tabular-nums; }
+/* 連続学習は1つだけ目立たせる（続けることが一番の目標なので） */
+.qd-an-tile--streak {
+  grid-column: 1 / -1;
+  border-color: var(--tb-accent);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(126, 184, 218, 0.22), transparent 60%), var(--tb-bg-secondary);
+  box-shadow: 0 0 32px -8px var(--qd-viz-glow);
+}
+.qd-an-tile--streak .qd-an-num { font-size: var(--tb-font-size-2xl); color: var(--tb-accent); text-shadow: 0 0 18px var(--qd-viz-glow); }
+.qd-an-tile--streak .qd-an-tile-label { color: var(--tb-accent); font-weight: 700; }
+
+/* 期間の切り替え（つながったボタン） */
+.qd-seg {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 3px;
+  background: var(--tb-bg-primary);
+  border: 1px solid var(--tb-border);
+  border-radius: 999px;
+}
+.qd-seg-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.qd-seg-opt span,
+.qd-seg-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  min-width: 3.5rem;
+  padding: 0 var(--tb-space-sm);
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--tb-text-secondary);
+  font: inherit;
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--tb-transition), color var(--tb-transition);
+}
+.qd-seg-opt input:checked + span,
+.qd-seg-btn.is-active { background: var(--tb-accent); color: var(--tb-bg-primary); }
+.qd-seg-opt input:focus-visible + span,
+.qd-seg-btn:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
+
+.qd-an-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tb-space-xs) var(--tb-space-sm);
+  font-size: var(--qd-font-size-label);
+  color: var(--tb-text-secondary);
+  margin-bottom: var(--tb-space-sm);
+}
+.qd-an-legend-item { display: inline-flex; align-items: center; gap: var(--tb-space-xs); white-space: nowrap; margin-right: var(--tb-space-md); }
+.qd-key { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 3px; }
+.qd-key--bar { background: linear-gradient(var(--qd-viz-bar), color-mix(in srgb, var(--qd-viz-bar) 30%, transparent)); }
+.qd-key--line { height: 3px; width: 1rem; border-radius: 2px; background: var(--qd-viz-line); box-shadow: 0 0 6px var(--qd-viz-glow-gold); }
+
+/* グラフの入れ物。ツールチップはこの中に重ねる */
+.qd-an-chart { position: relative; border-radius: var(--tb-radius-lg); }
+.qd-an-chart:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 4px; }
+.qd-an-svg { min-height: 2rem; }
+/* 共通の reset.css の svg { max-width: 100% } で縮まないようにする（幅は描くときに合わせてある） */
+.qd-chart { display: block; max-width: none; overflow: visible; touch-action: pan-y; }
+.qd-chart text { font-family: var(--tb-font-family); }
+.qd-ax { fill: var(--tb-text-secondary); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.qd-ax--line { fill: var(--qd-viz-line); }
+.qd-ax--ref { fill: var(--tb-text-secondary); }
+.qd-grid { stroke: var(--qd-viz-grid); stroke-width: 1; }
+.qd-axis { stroke: var(--tb-border); stroke-width: 1; }
+.qd-ref { stroke: var(--tb-text-muted); stroke-width: 1; stroke-dasharray: 4 4; }
+.qd-cursor { stroke: var(--tb-text-secondary); stroke-width: 1; stroke-dasharray: 2 3; }
+.qd-bar { transition: opacity var(--tb-transition); }
+.qd-bars.has-pick .qd-bar { opacity: 0.45; }
+.qd-bars.has-pick .qd-bar.is-pick { opacity: 1; }
+.qd-line { fill: none; stroke: var(--qd-viz-line); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.qd-line--acc { stroke: var(--tb-accent); stroke-width: 2; }
+.qd-line-end { fill: var(--qd-viz-line); }
+.qd-dot { fill: var(--tb-accent); stroke: var(--tb-bg-secondary); stroke-width: 2; }
+.qd-dot.is-thin { fill-opacity: 0.4; }
+.qd-dot.is-pick { stroke: var(--tb-text-primary); }
+
+.qd-an-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--tb-space-md);
+  text-align: center;
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+  line-height: 1.7;
+  pointer-events: none;
+}
+.qd-an-empty span {
+  padding: var(--tb-space-sm) var(--tb-space-md);
+  background: var(--tb-bg-secondary);
+  border: 1px dashed var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+}
+
+.qd-tip {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  left: 0;
+  padding: var(--tb-space-sm) var(--tb-space-md);
+  background: var(--tb-bg-primary);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-primary);
+  line-height: 1.5;
+  white-space: nowrap;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.qd-tip b { font-size: var(--tb-font-size-base); }
+.qd-tip .is-line { color: var(--qd-viz-line); }
+
+/* カレンダー */
+.qd-an-heat-row { display: flex; }
+.qd-an-heat-days { flex: none; }
+.qd-an-scroll { flex: 1 1 auto; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: var(--tb-space-xs); }
+.qd-heat-cell { stroke: rgba(139, 148, 158, 0.08); stroke-width: 1; }
+.qd-heat-cell.is-pick { stroke: var(--tb-text-primary); stroke-width: 1.5; }
+.qd-heat-l0 { fill: var(--qd-heat-0); background: var(--qd-heat-0); }
+.qd-heat-l1 { fill: var(--qd-heat-1); background: var(--qd-heat-1); }
+.qd-heat-l2 { fill: var(--qd-heat-2); background: var(--qd-heat-2); }
+.qd-heat-l3 { fill: var(--qd-heat-3); background: var(--qd-heat-3); }
+.qd-heat-l4 { fill: var(--qd-heat-4); background: var(--qd-heat-4); }
+.qd-heat-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: var(--tb-space-sm);
+  font-size: var(--qd-font-size-label);
+  color: var(--tb-text-secondary);
+}
+.qd-heat-legend span { margin: 0 var(--tb-space-xs); }
+.qd-heat-key { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(139, 148, 158, 0.2); }
+
+/* 習熟度 */
+.qd-donut-wrap { position: relative; width: 12.5rem; height: 12.5rem; margin: var(--tb-space-sm) auto var(--tb-space-md); }
+.qd-donut-box, .qd-donut-box svg { width: 100%; height: 100%; }
+.qd-donut-track { fill: none; stroke: var(--tb-bg-tertiary); }
+.qd-donut-seg { fill: none; stroke-linecap: butt; }
+.qd-seg--mastered { stroke: var(--qd-seg-mastered); }
+.qd-seg--learning { stroke: var(--qd-seg-learning); }
+.qd-seg--weak { stroke: var(--qd-seg-weak); }
+.qd-seg--unseen { stroke: var(--qd-seg-unseen); }
+.qd-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.qd-donut-big { display: flex; align-items: baseline; color: var(--tb-text-primary); }
+.qd-donut-big .qd-an-num { font-size: 2.25rem; }
+.qd-donut-label { font-size: var(--qd-font-size-label); color: var(--tb-text-secondary); }
+.qd-donut-legend { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: var(--tb-space-xs) var(--tb-space-md); }
+.qd-donut-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--tb-space-sm);
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.qd-donut-legend b { margin-left: auto; color: var(--tb-text-primary); }
+.qd-donut-legend i { flex: none; width: 0.75rem; height: 0.75rem; border-radius: 50%; }
+.qd-donut-legend .is-mastered i { background: var(--qd-seg-mastered); }
+.qd-donut-legend .is-learning i { background: var(--qd-seg-learning); }
+.qd-donut-legend .is-weak i { background: var(--qd-seg-weak); }
+.qd-donut-legend .is-unseen i { background: var(--qd-seg-unseen); }
+
+/* マイルストーン */
+.qd-an-next {
+  font-size: var(--tb-font-size-base);
+  color: var(--tb-text-primary);
+  margin-bottom: var(--tb-space-md);
+}
+.qd-an-next b { color: var(--qd-viz-line); font-variant-numeric: tabular-nums; }
+.qd-badges { display: grid; gap: var(--tb-space-md); }
+.qd-badge-group-title { font-size: var(--qd-font-size-label); color: var(--tb-text-secondary); margin-bottom: var(--tb-space-xs); }
+.qd-badge-row { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr)); gap: var(--tb-space-sm); }
+.qd-medal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--tb-space-sm) 2px;
+  text-align: center;
+  opacity: 0.4;
+}
+.qd-medal-disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 50%;
+  border: 2px dashed var(--tb-border);
+  color: var(--tb-text-secondary);
+  font-size: var(--tb-font-size-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.qd-medal-name { font-size: var(--qd-font-size-label); color: var(--tb-text-secondary); }
+.qd-medal-date { font-size: var(--qd-font-size-label); color: var(--tb-text-muted); font-variant-numeric: tabular-nums; }
+.qd-medal.is-done { opacity: 1; }
+.qd-medal.is-done .qd-medal-disc {
+  border: 2px solid var(--qd-viz-line);
+  background: radial-gradient(circle at 35% 30%, rgba(242, 196, 109, 0.45), rgba(242, 196, 109, 0.08) 70%);
+  color: var(--tb-text-primary);
+  box-shadow: 0 0 18px -2px var(--qd-viz-glow-gold), inset 0 0 10px var(--qd-viz-line-subtle);
+}
+.qd-medal.is-done .qd-medal-name { color: var(--tb-text-primary); font-weight: 700; }
+.qd-medal.is-done .qd-medal-date { color: var(--qd-viz-line); }
+
+/* 問題集ごと・分類ごと */
+.qd-an-filter { margin-bottom: var(--tb-space-md); }
+.qd-an-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tb-space-sm); }
+.qd-an-date { width: auto; min-width: 10rem; flex: 1 1 10rem; max-width: 14rem; min-height: 2.5rem; }
+.qd-an-cols { display: grid; gap: var(--tb-space-lg); }
+.qd-an-subtitle { font-size: var(--tb-font-size-sm); font-weight: 700; color: var(--tb-text-secondary); margin-bottom: var(--tb-space-sm); }
+.qd-bars-list { list-style: none; display: grid; gap: var(--tb-space-md); }
+.qd-bars-item { min-width: 0; }
+.qd-bars-top { display: flex; align-items: baseline; gap: var(--tb-space-sm); }
+.qd-bars-name { flex: 1 1 auto; min-width: 0; font-size: var(--tb-font-size-base); font-weight: 700; color: var(--tb-text-primary); overflow-wrap: anywhere; }
+.qd-bars-rate { flex: none; font-size: var(--tb-font-size-lg); font-weight: 700; color: var(--tb-accent); font-variant-numeric: tabular-nums; }
+.qd-bars-rate.is-none { color: var(--tb-text-muted); font-size: var(--tb-font-size-sm); }
+.qd-bars-track { height: 0.5rem; margin: var(--tb-space-xs) 0; border-radius: 999px; background: var(--tb-bg-tertiary); overflow: hidden; }
+.qd-bars-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--tb-accent) 45%, transparent), var(--tb-accent));
+  box-shadow: 0 0 10px var(--qd-viz-glow);
+  transform-origin: left center;
+}
+.qd-bars-meta { font-size: var(--qd-font-size-label); color: var(--tb-text-secondary); font-variant-numeric: tabular-nums; }
+
+/* 動き（最初に描くときだけ .qd-anim を付ける） */
+@keyframes qd-grow { from { transform: scaleY(0); } }
+@keyframes qd-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes qd-fade { from { opacity: 0; } }
+@keyframes qd-pop { from { opacity: 0; transform: scale(0.3); } }
+@keyframes qd-sweep { from { stroke-dasharray: 0 var(--c); } }
+@keyframes qd-fill { from { transform: scaleX(0); } }
+.qd-anim .qd-bar { transform-box: fill-box; transform-origin: 50% 100%; animation: qd-grow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: var(--d); }
+.qd-anim .qd-line { stroke-dasharray: 1; animation: qd-draw 1.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s both; }
+.qd-anim .qd-area, .qd-anim .qd-line-end { animation: qd-fade 0.8s ease 1.2s both; }
+.qd-anim .qd-dot { transform-box: fill-box; transform-origin: center; animation: qd-pop 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both; animation-delay: var(--d); }
+.qd-anim .qd-donut-seg { animation: qd-sweep 0.9s cubic-bezier(0.4, 0, 0.2, 1) both; animation-delay: var(--d); }
+.qd-anim .qd-bars-fill { animation: qd-fill 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.qd-anim .qd-heat-cell { animation: qd-fade 0.6s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qd-anim .qd-bar, .qd-anim .qd-line, .qd-anim .qd-area, .qd-anim .qd-line-end, .qd-anim .qd-dot,
+  .qd-anim .qd-donut-seg, .qd-anim .qd-bars-fill, .qd-anim .qd-heat-cell { animation: none; }
+  .qd-seg-opt span, .qd-seg-btn, .qd-bar { transition: none; }
+}
+
+/* タブレット: 2列。毎日のグラフとカレンダー、問題集ごと・分類ごとは2列ぶちぬき */
+@media (min-width: 600px) {
+  .qd-an { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; }
+  .qd-an-headline, .qd-an-summary, .qd-an-span-all, .qd-an-span-2 { grid-column: 1 / -1; }
+  .qd-an-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .qd-an-card { padding: var(--tb-space-lg); }
+  .qd-an-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tb-space-xl); }
+}
+/* PC: 3列。サマリーは1行に並べ、毎日のグラフは幅いっぱい */
+@media (min-width: 1024px) {
+  .qd-an { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--tb-space-lg); }
+  .qd-an-span-2 { grid-column: span 2; }
+  .qd-an-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--tb-space-md); }
+  .qd-an-tile--streak { grid-column: auto; }
+  .qd-an-tile { padding: var(--tb-space-lg); }
+  .qd-an-num { font-size: 2.25rem; }
+  .qd-an-tile--streak .qd-an-num { font-size: 2.25rem; }
+  .qd-an-ms { grid-column: 1 / -1; }
+  .qd-an-ms .qd-badges { grid-template-columns: 5fr 4fr 2fr; gap: var(--tb-space-xl); }
+  .qd-an-ms .qd-badge-row { grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); }
+}
