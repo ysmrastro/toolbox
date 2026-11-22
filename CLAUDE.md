@@ -246,9 +246,14 @@ Blob の画像にして貼り、動かさない。足・首・頭だけを毎フ
 （`parseSettings`・`girthRange` など）を呼ぶので、古い `pigeon.js` がキャッシュに残ると描画が止まる
 （meteor-settings の「版ずれで真っ白」と同じ仕組み。GitHub Pages のキャッシュは10分）。
 
-**4択ドリルの `index.html` が読む自作のスクリプトと CSS には `?v=` を付ける**（`quiz.js`・`analysis.js`・`charts.js`・
-`storage.js`・`app.js`・`style.css`）。互いの関数を呼び合うので、古い `index.html` や `app.js` がキャッシュに残ると
-起動が止まる（版ずれ。GitHub Pages のキャッシュは10分）。**これらを変えたら、数字を上げる**（現在 `?v=4`）。
+**4択ドリルの版は、`quiz-drill/tools/release.py` で打つ**（meteor-settings と同じ考え方。Service Worker は無い）。
+`version.js` の版・更新日時、`index.html` の `<meta name="app-version">` と、自作の js/css の `?v=` を、まとめて書き換える。
+手で書くと、必ずどこかを忘れる。**スクリプトや CSS を変えたら、必ず打つ**:
+`python3 quiz-drill/tools/release.py 1.1.0`（バグ修正は +0.0.1、機能追加は +0.1.0）→ `npm run test:quiz-drill`
+（`test/release.test.js` が、3か所の一致と、更新日時が未来でないことを検査する）。互いの関数を呼び合うので、
+古い `index.html` や `app.js` がキャッシュに残ると起動が止まる（版ずれ。GitHub Pages のキャッシュは10分）。
+`app.js` は、起動時に `<meta>` と `version.js` を突き合わせ、食い違っていたら、HTML を読み直す
+（自動では1回だけ。それでも直らなければ、「作り直す」ボタンの帯を出す）。ホームの一番下に、版と更新日時を出す。
 
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 
