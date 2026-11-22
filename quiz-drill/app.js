@@ -1664,6 +1664,9 @@
       var span = document.createElement(p.display ? 'div' : 'span');
       span.className = p.display ? 'qd-math qd-math--display' : 'qd-math';
       span.textContent = (p.display ? '$$' : '$') + p.value + (p.display ? '$$' : '$');
+      // KaTeX が届くまで、TeX の文字は隠しておく（場所だけ確保）。見せたまま式に差し替えると、
+      // iPhone（WebKit）で、最初の積分記号の上側が欠けて描かれることがあった（実機で確認）
+      span.classList.add('qd-math--pending');
       el.appendChild(span);
       maths.push({ el: span, tex: p.value, display: p.display });
     });
@@ -1673,8 +1676,12 @@
         if (!m.el.isConnected) return;
         m.el.textContent = '';
         katex.render(m.tex, m.el, { throwOnError: false, trust: false, displayMode: m.display });
+        m.el.classList.remove('qd-math--pending');
       });
-    }, function () { /* 読み込めないときは、TeX の文字のまま */ });
+    }, function () {
+      // 読み込めないときは、TeX の文字のまま見せる
+      maths.forEach(function (m) { m.el.classList.remove('qd-math--pending'); });
+    });
   }
 
   function tag(text, cls) {
