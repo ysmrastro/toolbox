@@ -1732,26 +1732,6 @@
   }
 
   /**
-   * 式を描いたあと、枠を一度非表示→表示にして、再描画を強制する。iPhone（WebKit）で、最初の式の最初の積分記号の
-   * 上側が欠けたまま残ることがあり、テストページでは、この強制更新だけが確実に直した。描いた直後と、
-   * 次のフレーム、少し後の3回行う
-   */
-  function repaintMath(maths) {
-    function kick() {
-      maths.forEach(function (m) {
-        if (!m.el.isConnected) return;
-        var d = m.el.style.display;
-        m.el.style.display = 'none';
-        void m.el.offsetHeight;
-        m.el.style.display = d;
-      });
-    }
-    kick();
-    if (window.requestAnimationFrame) window.requestAnimationFrame(function () { window.requestAnimationFrame(kick); });
-    setTimeout(kick, 300);
-  }
-
-  /**
    * 文字列を、文字と式に分けて el に入れる。文字はテキストノード（innerHTML は使わない）、
    * 式は KaTeX で描く（読み込みが終わるまでは、TeX の文字のまま出す）。
    * `$` を含まない文字列は、これまでと同じ textContent だけで出す。
@@ -1781,7 +1761,6 @@
         katex.render(m.tex, m.el, { throwOnError: false, trust: false, displayMode: m.display });
         m.el.classList.remove('qd-math--pending');
       });
-      repaintMath(maths);
     }, function () {
       // 読み込めないときは、TeX の文字のまま見せる
       maths.forEach(function (m) { m.el.classList.remove('qd-math--pending'); });
