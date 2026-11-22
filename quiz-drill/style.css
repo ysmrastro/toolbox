@@ -1140,3 +1140,6 @@ body {
   .qd-an-ms .qd-badges { grid-template-columns: 5fr 4fr 2fr; gap: var(--tb-space-xl); }
   .qd-an-ms .qd-badge-row { grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); }
 }
+
+/* ホームの一番下の「版 N」。読み込んでいる版の確認用 */
+.qd-version { text-align: center; opacity: 0.6; margin-top: var(--tb-space-lg); }

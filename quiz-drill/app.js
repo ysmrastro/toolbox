@@ -17,6 +17,67 @@
 (function () {
   'use strict';
 
+  /* ===================== 版の食い違いからの復帰 =====================
+   * 古い index.html ＋ 新しい app.js の組み合わせで起動すると、新しい JS が古い HTML に無い要素を触って落ち、
+   * 画面が動かなくなる（ブラウザは HTML を10分、JS をURLごとにキャッシュする）。
+   * index.html に埋めた <meta name="app-version"> と version.js の版を突き合わせ、食い違っていたら
+   * HTML を読み直す（cache-busting の ?r= を付けて）。無限に繰り返さないよう、自動では1回だけ。
+   * meteor-settings と同じ考え方（Service Worker は使わない）。
+   */
+  var RECOVERY_KEY = 'qd-recovery';
+
+  function stampedVersion() {
+    var m = document.querySelector('meta[name="app-version"]');
+    return m ? m.getAttribute('content') : null;
+  }
+
+  function showBanner(text, actionLabel, onAction) {
+    if (document.getElementById('qdBanner')) return;
+    var bar = document.createElement('div');
+    bar.id = 'qdBanner';
+    bar.setAttribute('role', 'alert');
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;padding:10px 12px;font:13px/1.5 system-ui,sans-serif;' +
+      'background:#4a1f14;color:#ffd9c9;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.5)';
+    bar.appendChild(document.createTextNode(text + ' '));
+    if (actionLabel) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = actionLabel;
+      btn.style.cssText = 'margin-left:6px;padding:3px 10px;border-radius:6px;border:1px solid #ffd9c9;background:transparent;color:#ffd9c9;font:inherit';
+      btn.addEventListener('click', onAction);
+      bar.appendChild(btn);
+    }
+    (document.body || document.documentElement).appendChild(bar);
+  }
+
+  /** HTML を、キャッシュを避けて読み直す */
+  function reloadFresh(reason) {
+    try { sessionStorage.setItem(RECOVERY_KEY, reason); } catch (e) { /* 続行する */ }
+    location.replace(location.pathname + '?r=' + Date.now());
+  }
+
+  /** 食い違っていたら true（このとき app.js は起動しない） */
+  function versionMismatch() {
+    var js = typeof QD_VERSION !== 'undefined' ? QD_VERSION.version : null;
+    if (stampedVersion() === js && js !== null) {
+      try { sessionStorage.removeItem(RECOVERY_KEY); } catch (e) { /* 無視 */ }
+      return false;
+    }
+    var tried = null;
+    try { tried = sessionStorage.getItem(RECOVERY_KEY); } catch (e) { /* 無視 */ }
+    if (!tried) { reloadFresh('version-mismatch'); return true; }
+    showBanner('ファイルの版が揃っていません。', '作り直す', function () { reloadFresh('manual'); });
+    return true;
+  }
+
+  if (versionMismatch()) return;
+
+  /** ホームの一番下に、いま動いている版と更新日時を出す */
+  function renderVersion() {
+    var el = document.getElementById('app-version');
+    if (el) el.textContent = '版 ' + QD_VERSION.version + '・' + QD_VERSION.updated;
+  }
+
   var Q = QD_QUIZ;
   var S = QD_STORAGE;
   var AN = QD_ANALYSIS;
@@ -1634,18 +1695,40 @@
   function loadKatex() {
     if (window.katex) return Promise.resolve(window.katex);
     if (katexLoading) return katexLoading;
+    // スクリプトだけでなく、CSS とフォントが届くまで待ってから、式を描く。待たずに描くと、スタイルが当たる前の
+    // 見た目で描かれたあとに、CSS とフォントが届いて見た目が大きく変わり、iPhone（WebKit）で最初の式の
+    // 最初の積分記号が欠けることがあった（実機で確認。最初に式を出すときだけ起きる）
     katexLoading = new Promise(function (resolve, reject) {
-      var link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'vendor/katex/katex.min.css';
-      document.head.appendChild(link);
-      var sc = document.createElement('script');
-      sc.src = 'vendor/katex/katex.min.js';
-      sc.onload = function () { window.katex ? resolve(window.katex) : reject(new Error('katex')); };
-      sc.onerror = function () { katexLoading = null; reject(new Error('katex')); };
-      document.head.appendChild(sc);
+      var cssDone = new Promise(function (ok) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'vendor/katex/katex.min.css';
+        link.onload = ok;
+        link.onerror = ok;   // CSS が読めなくても、式は描く（見た目が崩れるだけ）
+        document.head.appendChild(link);
+      });
+      var scriptDone = new Promise(function (ok, ng) {
+        var sc = document.createElement('script');
+        sc.src = 'vendor/katex/katex.min.js';
+        sc.onload = function () { window.katex ? ok() : ng(new Error('katex')); };
+        sc.onerror = function () { ng(new Error('katex')); };
+        document.head.appendChild(sc);
+      });
+      Promise.all([cssDone, scriptDone]).then(waitKatexFonts).then(function () {
+        resolve(window.katex);
+      }, function (e) { katexLoading = null; reject(e); });
     });
     return katexLoading;
+  }
+
+  /** KaTeX のフォントが届くまで待つ（最大3秒。届かなくても、そのまま描く） */
+  function waitKatexFonts() {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    var faces = ['1em KaTeX_Main', 'italic 1em KaTeX_Main', '1em KaTeX_Math', 'italic 1em KaTeX_Math',
+      '1em KaTeX_Size1', '1em KaTeX_Size2', '1em KaTeX_Size3', '1em KaTeX_Size4', '1em KaTeX_AMS'];
+    var loading = Promise.all(faces.map(function (f) { return document.fonts.load(f).catch(function () {}); }));
+    var timeout = new Promise(function (ok) { setTimeout(ok, 3000); });
+    return Promise.race([loading, timeout]);
   }
 
   /**
@@ -2370,6 +2453,8 @@
   }
 
   /* ===================== 起動 ===================== */
+
+  renderVersion();
 
   $('file-input').addEventListener('change', onFiles);
   $('book-input').addEventListener('change', onBookFiles);
