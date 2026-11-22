@@ -762,6 +762,8 @@ body {
 /* 積分記号のように、行の高さからはみ出して描かれる記号が切れないよう、上下に余白（padding）を取る。
    margin は同じ量を引いて、見た目の間隔は変えない。 */
 .qd-math--display { display: block; margin: 0.05em 0; padding: 0.35em 0; overflow-x: auto; overflow-y: hidden; }
+/* KaTeX が届くまで、TeX の文字は見せない（場所は残す）。差し替えの見え方の不具合を避ける */
+.qd-math--pending { visibility: hidden; }
 
 /* まとめて削除 */
 .qd-check { display: flex; align-items: center; gap: var(--tb-space-sm); padding: var(--tb-space-xs) 0; }
