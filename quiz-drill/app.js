@@ -1959,7 +1959,8 @@
       head.appendChild(flag);
       card.appendChild(head);
 
-      var text = document.createElement('p');
+      // p ではなく div にする（式の div を p の中に入れると、iPhone の WebKit で最初の積分記号の上が欠ける）
+      var text = document.createElement('div');
       text.className = 'qd-qtext';
       setRich(text, q.question);
       card.appendChild(text);
