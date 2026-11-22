@@ -246,6 +246,10 @@ Blob の画像にして貼り、動かさない。足・首・頭だけを毎フ
 （`parseSettings`・`girthRange` など）を呼ぶので、古い `pigeon.js` がキャッシュに残ると描画が止まる
 （meteor-settings の「版ずれで真っ白」と同じ仕組み。GitHub Pages のキャッシュは10分）。
 
+**4択ドリルの `index.html` が読む自作のスクリプトと CSS には `?v=` を付ける**（`quiz.js`・`analysis.js`・`charts.js`・
+`storage.js`・`app.js`・`style.css`）。互いの関数を呼び合うので、古い `index.html` や `app.js` がキャッシュに残ると
+起動が止まる（版ずれ。GitHub Pages のキャッシュは10分）。**これらを変えたら、数字を上げる**（現在 `?v=2`）。
+
 ## タイポグラフィ（eu-phoria デザイン基準 v1）
 
 `euphoria-design` スキルの基準に従う。meteor-settings は準拠済み。
