@@ -1634,18 +1634,40 @@
   function loadKatex() {
     if (window.katex) return Promise.resolve(window.katex);
     if (katexLoading) return katexLoading;
+    // スクリプトだけでなく、CSS とフォントが届くまで待ってから、式を描く。待たずに描くと、スタイルが当たる前の
+    // 見た目で描かれたあとに、CSS とフォントが届いて見た目が大きく変わり、iPhone（WebKit）で最初の式の
+    // 最初の積分記号が欠けることがあった（実機で確認。最初に式を出すときだけ起きる）
     katexLoading = new Promise(function (resolve, reject) {
-      var link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'vendor/katex/katex.min.css';
-      document.head.appendChild(link);
-      var sc = document.createElement('script');
-      sc.src = 'vendor/katex/katex.min.js';
-      sc.onload = function () { window.katex ? resolve(window.katex) : reject(new Error('katex')); };
-      sc.onerror = function () { katexLoading = null; reject(new Error('katex')); };
-      document.head.appendChild(sc);
+      var cssDone = new Promise(function (ok) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'vendor/katex/katex.min.css';
+        link.onload = ok;
+        link.onerror = ok;   // CSS が読めなくても、式は描く（見た目が崩れるだけ）
+        document.head.appendChild(link);
+      });
+      var scriptDone = new Promise(function (ok, ng) {
+        var sc = document.createElement('script');
+        sc.src = 'vendor/katex/katex.min.js';
+        sc.onload = function () { window.katex ? ok() : ng(new Error('katex')); };
+        sc.onerror = function () { ng(new Error('katex')); };
+        document.head.appendChild(sc);
+      });
+      Promise.all([cssDone, scriptDone]).then(waitKatexFonts).then(function () {
+        resolve(window.katex);
+      }, function (e) { katexLoading = null; reject(e); });
     });
     return katexLoading;
+  }
+
+  /** KaTeX のフォントが届くまで待つ（最大3秒。届かなくても、そのまま描く） */
+  function waitKatexFonts() {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    var faces = ['1em KaTeX_Main', 'italic 1em KaTeX_Main', '1em KaTeX_Math', 'italic 1em KaTeX_Math',
+      '1em KaTeX_Size1', '1em KaTeX_Size2', '1em KaTeX_Size3', '1em KaTeX_Size4', '1em KaTeX_AMS'];
+    var loading = Promise.all(faces.map(function (f) { return document.fonts.load(f).catch(function () {}); }));
+    var timeout = new Promise(function (ok) { setTimeout(ok, 3000); });
+    return Promise.race([loading, timeout]);
   }
 
   /**
@@ -2370,6 +2392,13 @@
   }
 
   /* ===================== 起動 ===================== */
+
+  // どの版を読み込んでいるか（古い画面が残っていないかを確かめる用）。index.html の app.js?v=N から取る
+  (function showVersion() {
+    var sc = document.querySelector('script[src*="app.js"]');
+    var m = sc && /[?&]v=([^&]+)/.exec(sc.getAttribute('src') || '');
+    if (m && $('app-version')) $('app-version').textContent = '版 ' + m[1];
+  })();
 
   $('file-input').addEventListener('change', onFiles);
   $('book-input').addEventListener('change', onBookFiles);
