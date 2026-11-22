@@ -172,6 +172,13 @@
         <div id="history-msg" class="qd-load-msg" hidden></div>
       </section>
 
+      <!-- 特定の問題を探して、解説をもう一度見る（学習の記録には残さない） -->
+      <section id="search-card" class="qd-card" hidden>
+        <h2 class="qd-card-title">問題を探す</h2>
+        <p class="qd-note">問番号か語から問題を探して、問題・正解・解説をもう一度見られます。学習の記録には残りません。</p>
+        <button type="button" id="btn-search" class="tb-btn tb-btn--secondary tb-btn--block qd-big-btn">問題を探す</button>
+      </section>
+
       <section class="qd-card">
         <h2 class="qd-card-title">読み込んだ問題集</h2>
         <ul id="set-list" class="qd-set-list"></ul>
@@ -260,7 +267,37 @@
         <p id="q-supplement" class="qd-prose"></p>
       </div>
 
+      <div id="q-search-nav" class="qd-search-nav" hidden>
+        <button type="button" id="btn-prevq" class="tb-btn tb-btn--secondary qd-big-btn">前の問題</button>
+        <button type="button" id="btn-nextq" class="tb-btn tb-btn--secondary qd-big-btn">次の問題</button>
+      </div>
       <button type="button" id="btn-next" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">次の問題へ</button>
+    </section>
+  </section>
+
+  <!-- ===================== 問題を探す ===================== -->
+  <section id="screen-search" class="qd-screen" hidden>
+    <div class="qd-qhead-row qd-stats-head">
+      <h1 class="qd-qlabel">問題を探す</h1>
+      <button type="button" id="btn-search-home" class="tb-btn tb-btn--ghost qd-quit">ホームへ</button>
+    </div>
+
+    <section class="qd-card">
+      <div class="tb-form-group">
+        <label class="tb-label" for="search-set">問題集</label>
+        <select id="search-set" class="tb-select"></select>
+      </div>
+      <div class="tb-form-group">
+        <label class="tb-label" for="search-input">問番号か語</label>
+        <input type="search" id="search-input" class="tb-input" placeholder="例: 8 または 積分" autocomplete="off" enterkeyhint="search">
+      </div>
+      <p class="qd-note">数字だけなら問番号、それ以外は問題文・選択肢・解説・補足から語を探します（空白で区切ると、すべてを含む問題）。数字を語として探すときは "2" のように引用符で囲みます。</p>
+    </section>
+
+    <section class="qd-card">
+      <p id="search-status" class="qd-note"></p>
+      <ul id="search-list" class="qd-wrong-list"></ul>
+      <p id="search-more" class="qd-note" hidden></p>
     </section>
   </section>
 

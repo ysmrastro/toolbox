@@ -389,6 +389,79 @@ var QD_QUIZ = (function () {
       .map(function (e) { return questionKey(set.id, e.q.id); });
   }
 
+  /* ===================== 問題を探す =====================
+   * 入力が数字だけなら問番号（その問題集の no。no が無い問題は配列の順＝位置+1）、
+   * それ以外は語（問題文・選択肢・解説・補足に含まれる文字列）として探す。
+   * 前後を引用符 "…" で囲むと、数字だけでも語として探す。
+   */
+
+  /** 検索用の正規化: 全角半角（NFKC）をそろえ、大文字小文字を区別しない */
+  function normalizeForSearch(text) {
+    return String(text == null ? '' : text).normalize('NFKC').toLowerCase();
+  }
+
+  /** 問題の探す対象の文字（問題文・選択肢・解説・補足）。TeX の式もそのまま入る */
+  function searchableText(question) {
+    var parts = [question.question];
+    (question.choices || []).forEach(function (c) { parts.push(c); });
+    parts.push(question.explanation, question.supplement);
+    return normalizeForSearch(parts.filter(function (x) { return x != null; }).join('\n'));
+  }
+
+  /**
+   * 問題を探す。setId が空（null・''）なら sets すべて。
+   * 返り値 { mode: 'empty'|'number'|'text', hits: [{ key, set, question, index }], total }。
+   * hits は limit 件まで（問題集の並び順 → 問題集の中は問番号順）。total は該当の総数。
+   */
+  function searchQuestions(sets, setId, input, limit) {
+    var raw = normalizeForSearch(input).trim();
+    var empty = { mode: 'empty', hits: [], total: 0 };
+    if (!raw) return empty;
+    var mode = 'text';
+    var terms;
+    var m = /^["\u201c\u201d](.*)["\u201c\u201d]$/.exec(raw);
+    if (m && raw.length >= 2) {
+      terms = m[1].split(/\s+/).filter(Boolean);   // 引用符の中は語として探す（数字だけでも）
+      if (!terms.length) return empty;
+    } else if (/^\d+$/.test(raw)) {
+      mode = 'number';
+      terms = [parseInt(raw, 10)];
+    } else {
+      terms = raw.split(/\s+/).filter(Boolean);
+    }
+    var target = setId ? sets.filter(function (s) { return s.id === setId; }) : sets;
+    var all = [];
+    target.forEach(function (set) {
+      var entries = set.questions.map(function (q, i) {
+        return { key: questionKey(set.id, q.id), set: set, question: q, index: i };
+      }).sort(function (a, b) {
+        var an = a.question.no !== undefined ? a.question.no : Infinity;
+        var bn = b.question.no !== undefined ? b.question.no : Infinity;
+        return an - bn || a.index - b.index;
+      });
+      entries.forEach(function (e) {
+        var ok;
+        if (mode === 'number') {
+          ok = (e.question.no !== undefined ? e.question.no : e.index + 1) === terms[0];
+        } else {
+          var hay = searchableText(e.question);
+          ok = terms.every(function (t) { return hay.indexOf(t) >= 0; });
+        }
+        if (ok) all.push(e);
+      });
+    });
+    return { mode: mode, hits: all.slice(0, limit == null ? all.length : limit), total: all.length };
+  }
+
+  /** 同じ問題集の中で、問番号順に delta（-1 / +1）だけ隣の問題の鍵。端なら null */
+  function neighborKey(set, key, delta) {
+    var order = sequentialOrder(set);
+    var i = order.indexOf(key);
+    if (i < 0) return null;
+    var j = i + delta;
+    return j >= 0 && j < order.length ? order[j] : null;
+  }
+
   /** 問題集の中でランダム */
   function randomOrder(set, rand) {
     return shuffle(sequentialOrder(set), rand);
@@ -1100,6 +1173,8 @@ var QD_QUIZ = (function () {
     questionLabel: questionLabel,
     circled: circled,
     excerpt: excerpt,
+    searchQuestions: searchQuestions,
+    neighborKey: neighborKey,
     splitMath: splitMath,
     wipeConfirmText: wipeConfirmText,
   };
