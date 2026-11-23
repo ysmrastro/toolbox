@@ -72,7 +72,7 @@
 
   if (versionMismatch()) return;
 
-  /** ホームの一番下に、いま動いている版と更新日時を出す */
+  /** 設定タブに、いま動いている版と更新日時を出す */
   function renderVersion() {
     var el = document.getElementById('app-version');
     if (el) el.textContent = '版 ' + QD_VERSION.version + '・' + QD_VERSION.updated;
@@ -92,6 +92,7 @@
     'mock': '模擬試験',
     'weak': '苦手な問題',
     'retry': '間違えた問題だけもう一度',
+    'daily': '今日の一問',
   };
   var ALL_SETS = '';   // 問題集の選択肢の「すべての問題集」（前に間違えた問題・苦手な問題でだけ出す）
   var MAX_ERRORS_SHOWN = 20;
@@ -101,13 +102,14 @@
     sets: [],          // 読み込み済みの問題集（保存順）
     texts: [],         // 読み込み済みの自作テキスト（保存順）
     mock: S.loadMock(), // 進行中の模擬試験（無ければ null）
-    tab: ['book', 'analysis'].indexOf(S.loadTab()) >= 0 ? S.loadTab() : 'drill',   // ホームで開いているタブ
+    tab: ['book', 'analysis', 'settings'].indexOf(S.loadTab()) >= 0 ? S.loadTab() : 'drill',   // ホームで開いているタブ
     bookId: S.loadBookTab(),   // 自作テキストのサブタブで選んでいるテキストの id
     index: {},         // 鍵 → { set, question, index }
     session: null,     // 進行中のセッション
     finished: null,    // 直前に終えたセッション（結果画面と見返し用）
     log: [],           // 学習の記録（回答ごとのログ）
     summary: {},       // ログの集計（鍵 → { attempts, corrects, wrongs, rate, last, lastAt }）
+    dailyExcluded: Q.parseExcludedSets(S.loadDailyExcluded()),   // 今日の一問の対象から外した問題集の id
     positions: S.loadPositions(),   // 鍵 → 前回表示したときの代表の正解の表示位置
     currentOrder: null, // 回答前の問題の表示順
     reviewKey: null,   // 結果画面・成績の画面から見返している問題の鍵
@@ -197,6 +199,8 @@
     }
 
     renderMockResume();
+    renderDaily();
+    renderDailySettings();
     renderModeFields();
   }
 
@@ -549,7 +553,7 @@
   /* ===================== ホームのタブ ===================== */
 
   function renderTab() {
-    ['drill', 'book', 'analysis'].forEach(function (name) {
+    ['drill', 'book', 'analysis', 'settings'].forEach(function (name) {
       var on = state.tab === name;
       $('tab-' + name).setAttribute('aria-selected', on ? 'true' : 'false');
       $('tab-' + name).classList.toggle('is-active', on);
@@ -1473,6 +1477,93 @@
     state.finished = null;
     S.saveSession(state.session);
     renderQuestion();
+  }
+
+  /* ===================== 今日の一問 ===================== */
+
+  /** 今日の一問のカードの状態。問題集が無ければ null */
+  /** 今日の一問の対象の問題集（設定で外したものを除く） */
+  function dailyTargetSets() {
+    return Q.dailySets(state.sets, state.dailyExcluded);
+  }
+
+  /** 設定タブの、今日の一問の対象の問題集のチェックボックス */
+  function renderDailySettings() {
+    var box = $('daily-set-list');
+    box.textContent = '';
+    $('daily-set-empty').hidden = state.sets.length > 0;
+    state.sets.forEach(function (set) {
+      var label = document.createElement('label');
+      label.className = 'qd-check';
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = state.dailyExcluded.indexOf(set.id) < 0;
+      input.addEventListener('change', function () {
+        state.dailyExcluded = Q.setExcluded(state.dailyExcluded, set.id, input.checked);
+        S.saveDailyExcluded(state.dailyExcluded);
+        renderDaily();
+      });
+      var span = document.createElement('span');
+      span.textContent = set.title + '（' + set.questions.length + '問）';
+      label.appendChild(input);
+      label.appendChild(span);
+      box.appendChild(label);
+    });
+  }
+
+  function dailyStatus() {
+    if (state.sets.length === 0) return null;
+    var now = new Date();
+    var today = Q.localDayKey(now);
+    var sets = dailyTargetSets();
+    // 対象の問題集が無い。カードは出すが、押せない
+    if (sets.length === 0) return { empty: true };
+    var key = Q.dailyQuestion(sets, state.log, now);
+    if (!key) return null;
+    var daily = AN.dailyCounts(state.log);
+    var solvedToday = daily[today] ? daily[today].answers : 0;
+    var done = Q.effectiveLog(state.log).some(function (e) {
+      return e.key === key && Q.localDayKey(new Date(e.at)) === today;
+    });
+    return { now: now, sets: sets, key: key, done: done, solvedToday: solvedToday, streak: AN.currentStreak(daily, now) };
+  }
+
+  function renderDaily() {
+    var d = dailyStatus();
+    var card = $('daily-card');
+    card.hidden = !d;
+    if (!d) return;
+    if (d.empty) {
+      card.classList.remove('qd-daily--done');
+      $('daily-title').textContent = '今日の一問';
+      $('daily-desc').textContent = '対象の問題集がありません。設定で選んでください。';
+      $('btn-daily').textContent = '今日の一問を解く';
+      $('btn-daily').disabled = true;
+      return;
+    }
+    card.classList.toggle('qd-daily--done', d.done);
+    var more = d.done ? Q.extraQuestion(d.sets, state.log, d.now) : d.key;
+    if (d.done) {
+      $('daily-title').textContent = '今日はできました（連続 ' + d.streak + ' 日）';
+      $('daily-desc').textContent = more ? 'もう少し解くなら、もう1問どうぞ。' : '解ける問題は、今日の分をすべて解きました。';
+      $('btn-daily').textContent = 'もう1問';
+    } else {
+      $('daily-title').textContent = '今日の一問';
+      $('daily-desc').textContent = d.solvedToday > 0
+        ? '今日は ' + d.solvedToday + ' 問解いています（連続 ' + d.streak + ' 日）。今日の一問も解いてみませんか。'
+        : (d.streak > 0 ? 'いま連続 ' + d.streak + ' 日。1問だけでも続きます。' : '1問だけでも続けるのが大事です。');
+      $('btn-daily').textContent = '今日の一問を解く';
+    }
+    $('btn-daily').disabled = !more;
+  }
+
+  function onDaily() {
+    var d = dailyStatus();
+    if (!d || d.empty) return;
+    var key = d.done ? Q.extraQuestion(d.sets, state.log, d.now) : d.key;
+    if (!key) { renderDaily(); return; }
+    if (state.session && !confirm('途中の問題があります。新しく始めると、途中の分は消えます。よろしいですか？')) return;
+    startSession('daily', [key], d.done ? '今日の一問（もう1問）' : '今日の一問');
   }
 
   function onStart() {
@@ -2462,6 +2553,7 @@
   $('tab-drill').addEventListener('click', function () { selectTab('drill'); });
   $('tab-book').addEventListener('click', function () { selectTab('book'); });
   $('tab-analysis').addEventListener('click', function () { selectTab('analysis'); });
+  $('tab-settings').addEventListener('click', function () { selectTab('settings'); });
   bindAnCharts();
   $('btn-export').addEventListener('click', exportHistory);
   ['wipe-sets', 'wipe-texts', 'wipe-records'].forEach(function (id) { $(id).addEventListener('change', renderWipe); });
@@ -2479,6 +2571,11 @@
   $('btn-sample').addEventListener('click', loadSample);
   $('btn-start').addEventListener('click', onStart);
   $('btn-resume').addEventListener('click', renderQuestion);
+  $('btn-daily').addEventListener('click', onDaily);
+  // ホーム画面に置いたアプリは開いたままのことが多いので、戻ってきたとき（日付が変わっていても）カードを描き直す
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && !$('screen-home').hidden) renderDaily();
+  });
   $('btn-next').addEventListener('click', onNext);
   $('btn-lucky').addEventListener('click', onLucky);
   $('btn-quit').addEventListener('click', onQuit);
