@@ -481,7 +481,7 @@ body {
 /* ホームのタブ（4択ドリル / 自作テキスト） */
 .qd-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
   padding: 4px;
   margin-bottom: var(--tb-space-md);
@@ -490,6 +490,9 @@ body {
   border-radius: var(--tb-radius-xl);
 }
 .qd-tab {
+  padding: 0 2px;
+  font-size: 0.8125rem;   /* 4つ並べても「自作テキスト」が折れない大きさ */
+  white-space: nowrap;
   min-height: var(--qd-tap);
   border: none;
   border-radius: var(--tb-radius-lg);

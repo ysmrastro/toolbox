@@ -33,7 +33,8 @@ var QD_STORAGE = (function () {
   var MOCK_KEY = 'quiz-drill.mock';               // 進行中の模擬試験（答え・印・開始時刻）
   var DEVICE_KEY = 'quiz-drill.device';           // 端末ごとに固定のランダムな ID
   var SEQ_KEY = 'quiz-drill.seq';                 // 回答の id に付ける連番
-  var TAB_KEY = 'quiz-drill.tab';                 // ホームで最後に開いていたタブ（'drill' | 'book' | 'analysis'）
+  var TAB_KEY = 'quiz-drill.tab';                 // ホームで最後に開いていたタブ（'drill' | 'book' | 'analysis' | 'settings'）
+  var DAILY_KEY = 'quiz-drill.daily-sets';        // 今日の一問の対象から外した問題集の id の配列
   var START_KEY = 'quiz-drill.start';             // 最後に「はじめる」を押したときの出題方法・問題集・絞り込みなど
   var BOOK_KEY = 'quiz-drill.book';               // 自作テキストで最後に開いていたテキストの id
   var POSITIONS_KEY = 'quiz-drill.positions';   // 鍵 → 前回表示したときの代表の正解の表示位置
@@ -206,6 +207,8 @@ var QD_STORAGE = (function () {
     saveStart: function (v) { writeJson(START_KEY, v); },
     loadTab: function () { return readJson(TAB_KEY); },
     saveTab: function (t) { writeJson(TAB_KEY, t); },
+    loadDailyExcluded: function () { return readJson(DAILY_KEY); },
+    saveDailyExcluded: function (v) { writeJson(DAILY_KEY, v); },
     loadBookTab: function () { return readJson(BOOK_KEY); },
     saveBookTab: function (id) { writeJson(BOOK_KEY, id); },
   };

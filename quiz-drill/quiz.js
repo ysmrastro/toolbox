@@ -613,14 +613,13 @@ var QD_QUIZ = (function () {
   /**
    * 今日の一問の選び方（優先順）。summary は summarizeLog() の返り値、todayKey は今日の日の鍵。
    *   1. 前に間違えた問題（最後の回答が不正解）のうち、最後に回答した日が今日より前のもの
-   *   2. まだ一度も解いていない問題（問題集の id に topic を含むものがあれば、そちらを優先）
+   *   2. まだ一度も解いていない問題
    *   3. 全問題
    * exclude（鍵 → true）の問題は、どれからも外す。候補が0なら null。
    */
   function pickDaily(sets, summary, todayKey, seed, exclude) {
     var wrong = [];
     var unseen = [];
-    var unseenTopic = [];
     var all = [];
     sets.forEach(function (set) {
       set.questions.forEach(function (q) {
@@ -630,14 +629,33 @@ var QD_QUIZ = (function () {
         var st = summary[key];
         if (!st || !(st.attempts > 0)) {
           unseen.push(key);
-          if (String(set.id).indexOf('topic') >= 0) unseenTopic.push(key);
         } else if (st.last === 'wrong' && localDayKey(new Date(st.lastAt)) < todayKey) {
           wrong.push(key);
         }
       });
     });
-    var pool = wrong.length ? wrong : unseenTopic.length ? unseenTopic : unseen.length ? unseen : all;
+    var pool = wrong.length ? wrong : unseen.length ? unseen : all;
     return pickBySeed(pool, seed);
+  }
+
+  /** 保存された「今日の一問の対象から外した問題集の id」を、文字列の配列に正す（壊れた値は空にする） */
+  function parseExcludedSets(value) {
+    if (!Array.isArray(value)) return [];
+    var out = [];
+    value.forEach(function (v) { if (typeof v === 'string' && out.indexOf(v) < 0) out.push(v); });
+    return out;
+  }
+
+  /** 外した id の一覧に、問題集 id を入れる（included: false）か外す（true）。新しい配列を返す */
+  function setExcluded(excluded, setId, included) {
+    var rest = parseExcludedSets(excluded).filter(function (id) { return id !== setId; });
+    return included ? rest : rest.concat([setId]);
+  }
+
+  /** 外した問題集を除いた問題集（今日の一問の対象）。一覧に無い id は無視する。引数は書き換えない */
+  function dailySets(sets, excluded) {
+    var ex = parseExcludedSets(excluded);
+    return sets.filter(function (set) { return ex.indexOf(set.id) < 0; });
   }
 
   /** ログのうち、today（日の鍵）より前の回答だけにする。消去の印は時刻によらず残す（問題集の消去を反映するため） */
@@ -1258,6 +1276,9 @@ var QD_QUIZ = (function () {
     localDayKey: localDayKey,
     hashString: hashString,
     pickDaily: pickDaily,
+    parseExcludedSets: parseExcludedSets,
+    setExcluded: setExcluded,
+    dailySets: dailySets,
     dailyQuestion: dailyQuestion,
     extraQuestion: extraQuestion,
     choiceOrder: choiceOrder,

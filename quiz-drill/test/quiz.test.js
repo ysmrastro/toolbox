@@ -1208,7 +1208,7 @@ function dailySets() {
     title: id,
     questions: Array.from({ length: n }, (_, i) => ({ id: 'q' + (i + 1), question: 'テスト問題' + (i + 1), choices: ['あ', 'い'], answer: 1 })),
   });
-  return [mk('basic-1', 10), mk('topic-a', 10)];
+  return [mk('basic-1', 10), mk('set-b', 10)];
 }
 
 /** 日の鍵と時刻から、その日のローカルの時刻を持つ回答のログ1件 */
@@ -1233,20 +1233,6 @@ test('今日の一問: 日付が変わると、ほぼ別の問題になる（30�
   assert.ok(seen.size >= 10, '種類数: ' + seen.size);
 });
 
-test('今日の一問: 記録が無ければ話題別（topic を含む id）の問題集の問題を優先する', () => {
-  const sets = dailySets();
-  for (let d = 1; d <= 20; d++) {
-    assert.ok(Q.dailyQuestion(sets, [], NOON(2026, 11, d)).startsWith('topic-a::'));
-  }
-});
-
-test('今日の一問: 話題別の問題がすべて解いた後なら、ほかの未解答から選ぶ', () => {
-  const sets = dailySets();
-  const log = sets[1].questions.map((q, i) => dayEntry('a' + i, 'topic-a::' + q.id, '2026-11-10', 9, true));
-  const key = Q.dailyQuestion(sets, log, NOON(2026, 11, 20));
-  assert.ok(key.startsWith('basic-1::'));
-});
-
 test('今日の一問: 前に間違えた問題が、未解答より優先される', () => {
   const sets = dailySets();
   const log = [dayEntry('a', 'basic-1::q3', '2026-11-19', 9, false)];
@@ -1258,7 +1244,7 @@ test('今日の一問: 間違えたあと正解し直した問題は、間違え
   const log = [dayEntry('a', 'basic-1::q3', '2026-11-18', 9, false), dayEntry('b', 'basic-1::q3', '2026-11-19', 9, true)];
   const key = Q.dailyQuestion(sets, log, NOON(2026, 11, 20));
   assert.notStrictEqual(key, 'basic-1::q3');
-  assert.ok(key.startsWith('topic-a::'));
+  assert.ok(key.startsWith('set-b::'));
 });
 
 test('今日の一問: 間違えた問題が複数あれば、日付で1つに決まる（どれも選ばれうる）', () => {
@@ -1278,7 +1264,7 @@ test('今日の一問: 今日解いた回答は、今日の一問を変えない
   const before = [dayEntry('a', 'basic-1::q3', '2026-11-19', 9, false)];
   const first = Q.dailyQuestion(sets, before, NOON(2026, 11, 20));
   // 今日、別の問題を解いても、今日の一問を解いて正解しても変わらない
-  const after = before.concat([dayEntry('b', first, '2026-11-20', 8, true), dayEntry('c', 'topic-a::q1', '2026-11-20', 9, false)]);
+  const after = before.concat([dayEntry('b', first, '2026-11-20', 8, true), dayEntry('c', 'set-b::q1', '2026-11-20', 9, false)]);
   assert.strictEqual(Q.dailyQuestion(sets, after, NOON(2026, 11, 20)), first);
 });
 
@@ -1340,4 +1326,53 @@ test('hashString: 同じ文字列は同じ値で、0 以上の整数', () => {
   assert.strictEqual(Q.hashString('daily:2026-11-20'), Q.hashString('daily:2026-11-20'));
   assert.ok(Number.isInteger(Q.hashString('x')) && Q.hashString('x') >= 0);
   assert.notStrictEqual(Q.hashString('daily:2026-11-20'), Q.hashString('daily:2026-11-21'));
+});
+
+test('今日の一問: 未解答があれば、どの問題集のものでも未解答から選ぶ（問題集の id で優遇しない）', () => {
+  const sets = dailySets();
+  // basic-1 は全問解き済み。set-b だけ未解答
+  const log = sets[0].questions.map((q, i) => dayEntry('a' + i, 'basic-1::' + q.id, '2026-11-10', 9, true));
+  for (let d = 11; d <= 20; d++) assert.ok(Q.dailyQuestion(sets, log, NOON(2026, 11, d)).startsWith('set-b::'));
+  // 逆に set-b を解き済みにすれば basic-1 から出る
+  const log2 = sets[1].questions.map((q, i) => dayEntry('b' + i, 'set-b::' + q.id, '2026-11-10', 9, true));
+  for (let d = 11; d <= 20; d++) assert.ok(Q.dailyQuestion(sets, log2, NOON(2026, 11, d)).startsWith('basic-1::'));
+});
+
+test('parseExcludedSets: 配列の文字列だけを残し、重複と壊れた値は捨てる', () => {
+  assert.deepStrictEqual(Q.parseExcludedSets(['a', 'b', 'a', 3, null]), ['a', 'b']);
+  assert.deepStrictEqual(Q.parseExcludedSets(null), []);
+  assert.deepStrictEqual(Q.parseExcludedSets('a'), []);
+  assert.deepStrictEqual(Q.parseExcludedSets({ a: 1 }), []);
+});
+
+test('setExcluded: 外す・戻す。元の配列は書き換えない', () => {
+  const base = ['a'];
+  assert.deepStrictEqual(Q.setExcluded(base, 'b', false), ['a', 'b']);
+  assert.deepStrictEqual(Q.setExcluded(base, 'b', false).length, 2);
+  assert.deepStrictEqual(Q.setExcluded(['a', 'b'], 'a', true), ['b']);
+  assert.deepStrictEqual(Q.setExcluded(['a'], 'a', false), ['a']);   // 二重に入れない
+  assert.deepStrictEqual(Q.setExcluded(null, 'a', false), ['a']);
+  assert.deepStrictEqual(base, ['a']);
+});
+
+test('dailySets: 外した問題集を除く。一覧に残った存在しない id は無視する', () => {
+  const sets = dailySets();
+  assert.deepStrictEqual(Q.dailySets(sets, []).map((s) => s.id), ['basic-1', 'set-b']);
+  assert.deepStrictEqual(Q.dailySets(sets, ['basic-1', 'gone']).map((s) => s.id), ['set-b']);
+  assert.deepStrictEqual(Q.dailySets(sets, ['basic-1', 'set-b']), []);
+  assert.deepStrictEqual(Q.dailySets(sets, undefined).length, 2);
+});
+
+test('今日の一問: 外した問題集の問題は、今日の一問にも もう1問にも出ない。全部外すと選べない', () => {
+  const sets = dailySets();
+  const target = Q.dailySets(sets, ['basic-1']);
+  const log = [];
+  for (let d = 1; d <= 20; d++) {
+    const now = NOON(2026, 11, d);
+    assert.ok(Q.dailyQuestion(target, log, now).startsWith('set-b::'));
+    assert.ok(Q.extraQuestion(target, log, now).startsWith('set-b::'));
+  }
+  const none = Q.dailySets(sets, ['basic-1', 'set-b']);
+  assert.strictEqual(Q.dailyQuestion(none, [], NOON(2026, 11, 20)), null);
+  assert.strictEqual(Q.extraQuestion(none, [], NOON(2026, 11, 20)), null);
 });

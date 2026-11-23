@@ -48,6 +48,7 @@
       <button type="button" role="tab" id="tab-drill" class="qd-tab" aria-controls="panel-drill" aria-selected="true">4択ドリル</button>
       <button type="button" role="tab" id="tab-book" class="qd-tab" aria-controls="panel-book" aria-selected="false">自作テキスト</button>
       <button type="button" role="tab" id="tab-analysis" class="qd-tab" aria-controls="panel-analysis" aria-selected="false">分析</button>
+      <button type="button" role="tab" id="tab-settings" class="qd-tab" aria-controls="panel-settings" aria-selected="false">設定</button>
     </div>
 
     <div id="panel-drill" role="tabpanel" aria-labelledby="tab-drill">
@@ -200,16 +201,6 @@
         <div id="load-msg" class="qd-load-msg" hidden></div>
       </section>
 
-      <section id="wipe-card" class="qd-card">
-        <h2 class="qd-card-title">データの削除</h2>
-        <p class="qd-note">この端末のデータを、選んだ種類ごとにまとめて消します。元に戻せないので、必要なら先に「記録を書き出す」で書き出してください。</p>
-        <label class="qd-check"><input type="checkbox" id="wipe-sets"> <span id="wipe-sets-label">問題集</span></label>
-        <label class="qd-check"><input type="checkbox" id="wipe-texts"> <span id="wipe-texts-label">自作テキスト</span></label>
-        <label class="qd-check"><input type="checkbox" id="wipe-records"> <span id="wipe-records-label">学習の記録</span></label>
-        <button type="button" id="btn-wipe" class="tb-btn tb-btn--secondary tb-btn--block" disabled>選んだものを削除する</button>
-        <div id="wipe-msg" class="qd-load-msg" hidden></div>
-      </section>
-      <p id="app-version" class="qd-note qd-version"></p>
     </div>
 
     <div id="panel-book" role="tabpanel" aria-labelledby="tab-book" hidden>
@@ -231,6 +222,27 @@
         </label>
         <div id="book-msg" class="qd-load-msg" hidden></div>
       </section>
+    </div>
+
+    <!-- 設定: この端末だけの設定、データの削除、版の表示 -->
+    <div id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <section id="daily-settings-card" class="qd-card">
+        <h2 class="qd-card-title">今日の一問の対象</h2>
+        <p class="qd-note">チェックを入れた問題集から、今日の一問を選びます。新しく読み込んだ問題集は、自動で対象になります。</p>
+        <div id="daily-set-list"></div>
+        <p id="daily-set-empty" class="qd-note">問題集がありません。</p>
+      </section>
+
+      <section id="wipe-card" class="qd-card">
+        <h2 class="qd-card-title">データの削除</h2>
+        <p class="qd-note">この端末のデータを、選んだ種類ごとにまとめて消します。元に戻せないので、必要なら先に「記録を書き出す」で書き出してください。</p>
+        <label class="qd-check"><input type="checkbox" id="wipe-sets"> <span id="wipe-sets-label">問題集</span></label>
+        <label class="qd-check"><input type="checkbox" id="wipe-texts"> <span id="wipe-texts-label">自作テキスト</span></label>
+        <label class="qd-check"><input type="checkbox" id="wipe-records"> <span id="wipe-records-label">学習の記録</span></label>
+        <button type="button" id="btn-wipe" class="tb-btn tb-btn--secondary tb-btn--block" disabled>選んだものを削除する</button>
+        <div id="wipe-msg" class="qd-load-msg" hidden></div>
+      </section>
+      <p id="app-version" class="qd-note qd-version"></p>
     </div>
 
     <!-- 分析: 学習の記録をグラフで見る。集計は analysis.js、SVG は charts.js、描くのは app.js -->
