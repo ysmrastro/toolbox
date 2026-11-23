@@ -1199,3 +1199,145 @@ test('neighborKey: 問題集の中を問番号順に前後へ動く。端は nul
   assert.strictEqual(Q.neighborKey(set, 'a::x3', 1), null);
   assert.strictEqual(Q.neighborKey(set, 'a::zz', 1), null);
 });
+
+/* ===================== 今日の一問 ===================== */
+
+function dailySets() {
+  const mk = (id, n) => ({
+    id,
+    title: id,
+    questions: Array.from({ length: n }, (_, i) => ({ id: 'q' + (i + 1), question: 'テスト問題' + (i + 1), choices: ['あ', 'い'], answer: 1 })),
+  });
+  return [mk('basic-1', 10), mk('topic-a', 10)];
+}
+
+/** 日の鍵と時刻から、その日のローカルの時刻を持つ回答のログ1件 */
+function dayEntry(id, key, dayStr, hour, ok) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  return { id, key, at: new Date(y, m - 1, d, hour, 0, 0).toISOString(), ok };
+}
+
+const NOON = (y, m, d) => new Date(y, m - 1, d, 12, 0, 0);
+
+test('今日の一問: 同じ日・同じ記録なら、何度計算しても同じ問題', () => {
+  const sets = dailySets();
+  const a = Q.dailyQuestion(sets, [], NOON(2026, 11, 20));
+  const b = Q.dailyQuestion(sets, [], new Date(2026, 10, 20, 23, 59));
+  assert.strictEqual(a, b);
+});
+
+test('今日の一問: 日付が変わると、ほぼ別の問題になる（30日で10通り以上）', () => {
+  const sets = dailySets();
+  const seen = new Set();
+  for (let d = 1; d <= 30; d++) seen.add(Q.dailyQuestion(sets, [], NOON(2026, 11, d)));
+  assert.ok(seen.size >= 10, '種類数: ' + seen.size);
+});
+
+test('今日の一問: 記録が無ければ話題別（topic を含む id）の問題集の問題を優先する', () => {
+  const sets = dailySets();
+  for (let d = 1; d <= 20; d++) {
+    assert.ok(Q.dailyQuestion(sets, [], NOON(2026, 11, d)).startsWith('topic-a::'));
+  }
+});
+
+test('今日の一問: 話題別の問題がすべて解いた後なら、ほかの未解答から選ぶ', () => {
+  const sets = dailySets();
+  const log = sets[1].questions.map((q, i) => dayEntry('a' + i, 'topic-a::' + q.id, '2026-11-10', 9, true));
+  const key = Q.dailyQuestion(sets, log, NOON(2026, 11, 20));
+  assert.ok(key.startsWith('basic-1::'));
+});
+
+test('今日の一問: 前に間違えた問題が、未解答より優先される', () => {
+  const sets = dailySets();
+  const log = [dayEntry('a', 'basic-1::q3', '2026-11-19', 9, false)];
+  assert.strictEqual(Q.dailyQuestion(sets, log, NOON(2026, 11, 20)), 'basic-1::q3');
+});
+
+test('今日の一問: 間違えたあと正解し直した問題は、間違えた問題として扱わない', () => {
+  const sets = dailySets();
+  const log = [dayEntry('a', 'basic-1::q3', '2026-11-18', 9, false), dayEntry('b', 'basic-1::q3', '2026-11-19', 9, true)];
+  const key = Q.dailyQuestion(sets, log, NOON(2026, 11, 20));
+  assert.notStrictEqual(key, 'basic-1::q3');
+  assert.ok(key.startsWith('topic-a::'));
+});
+
+test('今日の一問: 間違えた問題が複数あれば、日付で1つに決まる（どれも選ばれうる）', () => {
+  const sets = dailySets();
+  const log = ['q1', 'q2', 'q3', 'q4'].map((q, i) => dayEntry('w' + i, 'basic-1::' + q, '2026-11-01', 9, false));
+  const seen = new Set();
+  for (let d = 2; d <= 28; d++) {
+    const key = Q.dailyQuestion(sets, log, NOON(2026, 11, d));
+    assert.ok(['basic-1::q1', 'basic-1::q2', 'basic-1::q3', 'basic-1::q4'].includes(key));
+    seen.add(key);
+  }
+  assert.ok(seen.size >= 3);
+});
+
+test('今日の一問: 今日解いた回答は、今日の一問を変えない（今日の分を除いて決める）', () => {
+  const sets = dailySets();
+  const before = [dayEntry('a', 'basic-1::q3', '2026-11-19', 9, false)];
+  const first = Q.dailyQuestion(sets, before, NOON(2026, 11, 20));
+  // 今日、別の問題を解いても、今日の一問を解いて正解しても変わらない
+  const after = before.concat([dayEntry('b', first, '2026-11-20', 8, true), dayEntry('c', 'topic-a::q1', '2026-11-20', 9, false)]);
+  assert.strictEqual(Q.dailyQuestion(sets, after, NOON(2026, 11, 20)), first);
+});
+
+test('今日の一問: 全問解いて全部正解なら、全問題から選ぶ', () => {
+  const sets = dailySets();
+  const log = [];
+  sets.forEach((s) => s.questions.forEach((q, i) => log.push(dayEntry(s.id + i, s.id + '::' + q.id, '2026-11-10', 9, true))));
+  const key = Q.dailyQuestion(sets, log, NOON(2026, 11, 20));
+  assert.ok(Object.prototype.hasOwnProperty.call(Q.indexSets(sets), key));
+});
+
+test('今日の一問: 問題が1つも無ければ null', () => {
+  assert.strictEqual(Q.dailyQuestion([], [], NOON(2026, 11, 20)), null);
+  assert.strictEqual(Q.dailyQuestion([{ id: 's', title: 's', questions: [] }], [], NOON(2026, 11, 20)), null);
+});
+
+test('今日の一問: 問題集の消去の印より前の間違いは、間違えた問題に数えない', () => {
+  const sets = dailySets();
+  const log = [
+    dayEntry('a', 'basic-1::q3', '2026-11-18', 9, false),
+    { id: 'c', kind: 'clear', setId: 'basic-1', at: new Date(2026, 10, 19, 9).toISOString() },
+  ];
+  assert.notStrictEqual(Q.dailyQuestion(sets, log, NOON(2026, 11, 20)), 'basic-1::q3');
+});
+
+test('もう1問: 今日の一問と、今日解いた問題は出ない', () => {
+  const sets = dailySets();
+  const now = NOON(2026, 11, 20);
+  const daily = Q.dailyQuestion(sets, [], now);
+  const log = [dayEntry('a', daily, '2026-11-20', 8, true)];
+  const solved = new Set([daily]);
+  for (let i = 0; i < 15; i++) {
+    const key = Q.extraQuestion(sets, log.slice(), now);
+    assert.ok(!solved.has(key), key);
+    solved.add(key);
+    log.push(dayEntry('x' + i, key, '2026-11-20', 9, true));
+  }
+});
+
+test('もう1問: 前に間違えた問題が先に出る', () => {
+  const sets = dailySets();
+  const now = NOON(2026, 11, 20);
+  const log = [dayEntry('a', 'basic-1::q2', '2026-11-18', 9, false), dayEntry('b', 'basic-1::q5', '2026-11-18', 9, false)];
+  const daily = Q.dailyQuestion(sets, log, now);
+  const solvedToday = log.concat([dayEntry('c', daily, '2026-11-20', 8, true)]);
+  const key = Q.extraQuestion(sets, solvedToday, now);
+  assert.ok(['basic-1::q2', 'basic-1::q5'].includes(key));
+  assert.notStrictEqual(key, daily);
+});
+
+test('もう1問: 候補が尽きたら null', () => {
+  const sets = [{ id: 's', title: 's', questions: [{ id: 'q1', question: 'テスト問題1', choices: ['あ', 'い'], answer: 1 }] }];
+  const now = NOON(2026, 11, 20);
+  const log = [dayEntry('a', 's::q1', '2026-11-20', 8, true)];
+  assert.strictEqual(Q.extraQuestion(sets, log, now), null);
+});
+
+test('hashString: 同じ文字列は同じ値で、0 以上の整数', () => {
+  assert.strictEqual(Q.hashString('daily:2026-11-20'), Q.hashString('daily:2026-11-20'));
+  assert.ok(Number.isInteger(Q.hashString('x')) && Q.hashString('x') >= 0);
+  assert.notStrictEqual(Q.hashString('daily:2026-11-20'), Q.hashString('daily:2026-11-21'));
+});

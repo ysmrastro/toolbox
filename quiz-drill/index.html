@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <!-- HTML と JS の版が食い違ったまま起動しないようにするための印（app.js が version.js と突き合わせる） -->
-  <meta name="app-version" content="1.0.5">
+  <meta name="app-version" content="1.1.0">
   <title>4択ドリル | ysmrastro toolbox</title>
   <meta name="description" content="自分で用意した4択問題のファイルを読み込んで、スマホで解いて練習する。問題は端末の中にだけ保存されます。">
 
@@ -30,7 +30,7 @@
   <link rel="stylesheet" href="../shared/css/reset.css">
   <link rel="stylesheet" href="../shared/css/components.css">
   <link rel="stylesheet" href="../shared/css/layout.css">
-  <link rel="stylesheet" href="style.css?v=1.0.5">
+  <link rel="stylesheet" href="style.css?v=1.1.0">
 </head>
 <body>
 
@@ -51,6 +51,13 @@
     </div>
 
     <div id="panel-drill" role="tabpanel" aria-labelledby="tab-drill">
+      <!-- 今日の一問。問題集が1つも無いときは出さない -->
+      <section id="daily-card" class="qd-card qd-daily" hidden>
+        <h2 class="qd-card-title" id="daily-title">今日の一問</h2>
+        <p id="daily-desc" class="qd-note"></p>
+        <button type="button" id="btn-daily" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">今日の一問を解く</button>
+      </section>
+
       <div id="mock-resume-card" class="qd-card qd-resume" hidden>
         <button type="button" id="btn-mock-resume" class="tb-btn tb-btn--primary tb-btn--block qd-big-btn">模擬試験の続きから</button>
         <p id="mock-resume-desc" class="qd-note"></p>
@@ -510,11 +517,11 @@
   <img id="lightbox-img" alt="">
 </div>
 
-<script src="version.js?v=1.0.5"></script>
-<script src="quiz.js?v=1.0.5"></script>
-<script src="analysis.js?v=1.0.5"></script>
-<script src="charts.js?v=1.0.5"></script>
-<script src="storage.js?v=1.0.5"></script>
-<script src="app.js?v=1.0.5"></script>
+<script src="version.js?v=1.1.0"></script>
+<script src="quiz.js?v=1.1.0"></script>
+<script src="analysis.js?v=1.1.0"></script>
+<script src="charts.js?v=1.1.0"></script>
+<script src="storage.js?v=1.1.0"></script>
+<script src="app.js?v=1.1.0"></script>
 </body>
 </html>

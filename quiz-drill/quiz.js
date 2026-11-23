@@ -585,6 +585,98 @@ var QD_QUIZ = (function () {
     });
   }
 
+  /* ===================== 今日の一問 ===================== */
+
+  /** 端末のローカルの日の鍵 'YYYY-MM-DD'（analysis.js の dayKeyOf と同じ形） */
+  function localDayKey(d) {
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  /** 文字列 → 0 以上の整数（FNV-1a）。日付から「ほぼ別の問題」を決める、乱数を使わない決まった値 */
+  function hashString(text) {
+    var h = 2166136261;
+    for (var i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  /** 鍵の一覧から、seed で決まる1つを選ぶ。順は鍵の辞書順に固定する（問題集の並びに左右されない）。空なら null */
+  function pickBySeed(keys, seed) {
+    if (keys.length === 0) return null;
+    var sorted = keys.slice().sort();
+    return sorted[hashString(seed) % sorted.length];
+  }
+
+  /**
+   * 今日の一問の選び方（優先順）。summary は summarizeLog() の返り値、todayKey は今日の日の鍵。
+   *   1. 前に間違えた問題（最後の回答が不正解）のうち、最後に回答した日が今日より前のもの
+   *   2. まだ一度も解いていない問題（問題集の id に topic を含むものがあれば、そちらを優先）
+   *   3. 全問題
+   * exclude（鍵 → true）の問題は、どれからも外す。候補が0なら null。
+   */
+  function pickDaily(sets, summary, todayKey, seed, exclude) {
+    var wrong = [];
+    var unseen = [];
+    var unseenTopic = [];
+    var all = [];
+    sets.forEach(function (set) {
+      set.questions.forEach(function (q) {
+        var key = questionKey(set.id, q.id);
+        if (exclude && exclude[key]) return;
+        all.push(key);
+        var st = summary[key];
+        if (!st || !(st.attempts > 0)) {
+          unseen.push(key);
+          if (String(set.id).indexOf('topic') >= 0) unseenTopic.push(key);
+        } else if (st.last === 'wrong' && localDayKey(new Date(st.lastAt)) < todayKey) {
+          wrong.push(key);
+        }
+      });
+    });
+    var pool = wrong.length ? wrong : unseenTopic.length ? unseenTopic : unseen.length ? unseen : all;
+    return pickBySeed(pool, seed);
+  }
+
+  /** ログのうち、today（日の鍵）より前の回答だけにする。消去の印は時刻によらず残す（問題集の消去を反映するため） */
+  function logBefore(log, todayKey) {
+    return log.filter(function (e) {
+      return e.kind === 'clear' || localDayKey(new Date(e.at)) < todayKey;
+    });
+  }
+
+  /**
+   * 今日の一問の鍵。日付と「今日より前の記録」だけで決まるので、同じ日は今日いくつ解いても変わらない。
+   * 問題が1つも無ければ null。
+   */
+  function dailyQuestion(sets, log, now) {
+    var today = localDayKey(now);
+    var summary = summarizeLog(logBefore(log, today));
+    return pickDaily(sets, summary, today, 'daily:' + today, null);
+  }
+
+  /**
+   * 「もう1問」の鍵。今日の一問の問題と、今日すでに解いた問題を除き、同じ優先順で選ぶ。
+   * 日付に今日の回答数を混ぜるので、解くたびに別の問題になる。候補が0なら null。
+   */
+  function extraQuestion(sets, log, now) {
+    var today = localDayKey(now);
+    var summary = summarizeLog(log);
+    var exclude = {};
+    var daily = dailyQuestion(sets, log, now);
+    if (daily) exclude[daily] = true;
+    var count = 0;
+    effectiveLog(log).forEach(function (e) {
+      if (localDayKey(new Date(e.at)) === today) {
+        exclude[e.key] = true;
+        count += 1;
+      }
+    });
+    return pickDaily(sets, summary, today, 'extra:' + today + ':' + count, exclude);
+  }
+
   /** 問題集の問題数の合計 */
   function countQuestions(sets) {
     return sets.reduce(function (n, set) { return n + set.questions.length; }, 0);
@@ -1163,6 +1255,11 @@ var QD_QUIZ = (function () {
     filterWrongKeys: filterWrongKeys,
     filterUnseen: filterUnseen,
     countQuestions: countQuestions,
+    localDayKey: localDayKey,
+    hashString: hashString,
+    pickDaily: pickDaily,
+    dailyQuestion: dailyQuestion,
+    extraQuestion: extraQuestion,
     choiceOrder: choiceOrder,
     correctPosition: correctPosition,
     correctIndices: correctIndices,

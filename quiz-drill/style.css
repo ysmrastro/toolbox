@@ -107,6 +107,10 @@ body {
 
 .qd-resume .qd-note { text-align: center; }
 
+/* 今日の一問: 説明を上に、ボタンを下に（続きからのカードと同じ幅・高さのボタン） */
+.qd-daily .qd-note { margin: 0 0 var(--tb-space-md); }
+.qd-daily--done .qd-card-title { color: var(--tb-success, var(--tb-text-primary)); }
+
 /* 出題方法・出題数（ラジオをボタン風に並べる） */
 .qd-modes {
   display: grid;

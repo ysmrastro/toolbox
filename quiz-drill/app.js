@@ -92,6 +92,7 @@
     'mock': '模擬試験',
     'weak': '苦手な問題',
     'retry': '間違えた問題だけもう一度',
+    'daily': '今日の一問',
   };
   var ALL_SETS = '';   // 問題集の選択肢の「すべての問題集」（前に間違えた問題・苦手な問題でだけ出す）
   var MAX_ERRORS_SHOWN = 20;
@@ -197,6 +198,7 @@
     }
 
     renderMockResume();
+    renderDaily();
     renderModeFields();
   }
 
@@ -1475,6 +1477,53 @@
     renderQuestion();
   }
 
+  /* ===================== 今日の一問 ===================== */
+
+  /** 今日の一問のカードの状態。問題集が無ければ null */
+  function dailyStatus() {
+    if (state.sets.length === 0) return null;
+    var now = new Date();
+    var today = Q.localDayKey(now);
+    var key = Q.dailyQuestion(state.sets, state.log, now);
+    if (!key) return null;
+    var daily = AN.dailyCounts(state.log);
+    var solvedToday = daily[today] ? daily[today].answers : 0;
+    var done = Q.effectiveLog(state.log).some(function (e) {
+      return e.key === key && Q.localDayKey(new Date(e.at)) === today;
+    });
+    return { now: now, key: key, done: done, solvedToday: solvedToday, streak: AN.currentStreak(daily, now) };
+  }
+
+  function renderDaily() {
+    var d = dailyStatus();
+    var card = $('daily-card');
+    card.hidden = !d;
+    if (!d) return;
+    card.classList.toggle('qd-daily--done', d.done);
+    var more = d.done ? Q.extraQuestion(state.sets, state.log, d.now) : d.key;
+    if (d.done) {
+      $('daily-title').textContent = '今日はできました（連続 ' + d.streak + ' 日）';
+      $('daily-desc').textContent = more ? 'もう少し解くなら、もう1問どうぞ。' : '解ける問題は、今日の分をすべて解きました。';
+      $('btn-daily').textContent = 'もう1問';
+    } else {
+      $('daily-title').textContent = '今日の一問';
+      $('daily-desc').textContent = d.solvedToday > 0
+        ? '今日は ' + d.solvedToday + ' 問解いています（連続 ' + d.streak + ' 日）。今日の一問も解いてみませんか。'
+        : (d.streak > 0 ? 'いま連続 ' + d.streak + ' 日。1問だけでも続きます。' : '1問だけでも続けるのが大事です。');
+      $('btn-daily').textContent = '今日の一問を解く';
+    }
+    $('btn-daily').disabled = !more;
+  }
+
+  function onDaily() {
+    var d = dailyStatus();
+    if (!d) return;
+    var key = d.done ? Q.extraQuestion(state.sets, state.log, d.now) : d.key;
+    if (!key) { renderDaily(); return; }
+    if (state.session && !confirm('途中の問題があります。新しく始めると、途中の分は消えます。よろしいですか？')) return;
+    startSession('daily', [key], d.done ? '今日の一問（もう1問）' : '今日の一問');
+  }
+
   function onStart() {
     var mode = selectedMode();
     saveStartChoices();
@@ -2479,6 +2528,11 @@
   $('btn-sample').addEventListener('click', loadSample);
   $('btn-start').addEventListener('click', onStart);
   $('btn-resume').addEventListener('click', renderQuestion);
+  $('btn-daily').addEventListener('click', onDaily);
+  // ホーム画面に置いたアプリは開いたままのことが多いので、戻ってきたとき（日付が変わっていても）カードを描き直す
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && !$('screen-home').hidden) renderDaily();
+  });
   $('btn-next').addEventListener('click', onNext);
   $('btn-lucky').addEventListener('click', onLucky);
   $('btn-quit').addEventListener('click', onQuit);
