@@ -561,6 +561,8 @@
     });
     // 記録や問題集が変わると renderHome からここに来るので、分析を開いていれば描き直す
     if (state.tab === 'analysis') scheduleAnalysis();
+    // 設定タブを開いたときも、データの削除カードの件数を最新にする
+    if (state.tab === 'settings') renderWipe();
   }
 
   function selectTab(name) {
@@ -1243,6 +1245,7 @@
     return S.getAllTexts().then(function (texts) {
       state.texts = texts;
       renderBooks();
+      renderWipe();   // 設定タブの件数（自作テキストの個数）も最新にする
     });
   }
 
