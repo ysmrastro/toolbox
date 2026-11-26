@@ -282,7 +282,66 @@ var QD_CHARTS = (function () {
     return s;
   }
 
+  /* 投稿用の画像。画像にするときは style.css が使えないので、色と文字の指定は属性に直接書く */
+  var SHARE_W = 1200, SHARE_H = 675;
+  var SHARE_FONT = "-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif";
+  var SHARE_HEAT = ['#242a45', '#2f414e', '#466377', '#618ca6', '#9dccea'];   // 実施数の段階 0〜4
+
+  function shareText1(x, y, size, color, text, extra) {
+    return '<text x="' + x + '" y="' + y + '" font-size="' + size + '" fill="' + color + '"' + (extra || '') + '>' + esc(text) + '</text>';
+  }
+
+  /**
+   * 学習の記録を1枚の画像（1200×675）にする SVG の文字列。
+   * info: { date（表示用の日付）, streak, today, week, total, heat（QD_ANALYSIS.heatmap の返り値） }。
+   * 問題や問題集の名前は入れない（公開の場に投稿しても、中身が出ないように）。
+   */
+  function shareCard(info) {
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + SHARE_W + '" height="' + SHARE_H + '" viewBox="0 0 ' + SHARE_W + ' ' + SHARE_H +
+      '" font-family="' + SHARE_FONT + '">';
+    s += '<rect width="' + SHARE_W + '" height="' + SHARE_H + '" fill="#0d1117"/>';
+    s += shareText1(56, 86, 42, '#7eb8da', '4択ドリル　学習の記録', ' font-weight="700"');
+    s += shareText1(SHARE_W - 56, 86, 30, '#8b949e', info.date, ' text-anchor="end"');
+    var tiles = [
+      { label: '連続学習', value: info.streak, unit: '日', main: true },
+      { label: '今日', value: info.today, unit: '問' },
+      { label: '今週', value: info.week, unit: '問' },
+      { label: '累計', value: info.total, unit: '問' },
+    ];
+    var tw = 257, th = 210, ty = 122;
+    tiles.forEach(function (t, i) {
+      var x = 56 + i * (tw + 20);
+      var text = num(t.value);
+      var digits = text.replace(/,/g, '').length, commas = text.length - digits;
+      var size = Math.min(100, Math.floor(215 / (digits * 0.62 + commas * 0.3 + 0.5)));   // 桁が増えても枠に収める
+      s += '<rect x="' + x + '" y="' + ty + '" width="' + tw + '" height="' + th + '" rx="22" fill="#1a1a2e" stroke="' +
+        (t.main ? '#7eb8da' : '#30363d') + '" stroke-width="' + (t.main ? 3 : 2) + '"/>';
+      s += shareText1(x + 26, ty + 52, 28, t.main ? '#7eb8da' : '#8b949e', t.label, ' font-weight="700"');
+      s += '<text x="' + (x + 26) + '" y="' + (ty + 158) + '" font-size="' + size + '" font-weight="700" fill="' +
+        (t.main ? '#7eb8da' : '#e6edf3') + '">' + text + '<tspan font-size="32" fill="#8b949e" dx="6">' + t.unit + '</tspan></text>';
+    });
+    var cell = 26, gap = 5, left = 100, top = 424;
+    s += shareText1(56, 378, 26, '#8b949e', '学習のカレンダー（直近' + info.heat.weeks.length + '週）');
+    info.heat.months.forEach(function (m) {
+      s += shareText1(left + m.col * (cell + gap), top - 12, 20, '#8b949e', m.month + '月');
+    });
+    [0, 2, 4, 6].forEach(function (r) {
+      s += shareText1(56, top + r * (cell + gap) + 20, 20, '#8b949e', WEEKDAYS[r]);
+    });
+    info.heat.weeks.forEach(function (col, c) {
+      col.forEach(function (d, r) {
+        if (!d) return;
+        s += '<rect x="' + (left + c * (cell + gap)) + '" y="' + (top + r * (cell + gap)) + '" width="' + cell + '" height="' + cell +
+          '" rx="5" fill="' + SHARE_HEAT[d.level] + '"/>';
+      });
+    });
+    s += shareText1(SHARE_W - 56, SHARE_H - 14, 18, '#6e7681', 'ysmrastro.github.io/toolbox/quiz-drill', ' text-anchor="end"');
+    s += '</svg>';
+    return { svg: s, width: SHARE_W, height: SHARE_H };
+  }
+
   return {
+    shareCard: shareCard,
     esc: esc,
     num: num,
     md: md,

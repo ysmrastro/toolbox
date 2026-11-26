@@ -853,16 +853,18 @@ body {
 .qd-an-sub { font-size: var(--tb-font-size-sm); color: var(--tb-text-secondary); font-variant-numeric: tabular-nums; }
 
 /* サマリー */
+/* スマホは、上の段に2枚（連続学習・今日）、下の段に3枚を並べる */
 .qd-an-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--tb-space-sm);
 }
 .qd-an-tile {
+  grid-column: span 2;
   display: flex;
   flex-direction: column;
   gap: var(--tb-space-xs);
-  padding: var(--tb-space-md);
+  padding: var(--tb-space-md) var(--tb-space-sm);
   background: var(--tb-bg-secondary);
   border: 1px solid var(--tb-border);
   border-radius: 1rem;
@@ -880,14 +882,36 @@ body {
 .qd-an-unit { font-size: var(--tb-font-size-sm); color: var(--tb-text-secondary); font-weight: 700; }
 .qd-an-tile-note { font-size: var(--qd-font-size-label); color: var(--tb-text-secondary); font-variant-numeric: tabular-nums; }
 /* 連続学習は1つだけ目立たせる（続けることが一番の目標なので） */
+.qd-an-tile--streak,
+.qd-an-tile--today { grid-column: span 3; padding: var(--tb-space-md); }
+.qd-an-tile:not(.qd-an-tile--streak):not(.qd-an-tile--today) .qd-an-num { font-size: 1.5rem; }
+/* 幅の狭い端末では、下の段の3枚の数字を一段小さくする（4桁が枠に収まるように） */
+@media (max-width: 359px) {
+  .qd-an-tile:not(.qd-an-tile--streak):not(.qd-an-tile--today) .qd-an-num { font-size: 1.25rem; }
+}
 .qd-an-tile--streak {
-  grid-column: 1 / -1;
   border-color: var(--tb-accent);
   background: radial-gradient(120% 140% at 0% 0%, rgba(126, 184, 218, 0.22), transparent 60%), var(--tb-bg-secondary);
   box-shadow: 0 0 32px -8px var(--qd-viz-glow);
 }
 .qd-an-tile--streak .qd-an-num { font-size: var(--tb-font-size-2xl); color: var(--tb-accent); text-shadow: 0 0 18px var(--qd-viz-glow); }
 .qd-an-tile--streak .qd-an-tile-label { color: var(--tb-accent); font-weight: 700; }
+
+/* 記録の画像と投稿 */
+.qd-share { display: grid; gap: var(--tb-space-sm); width: 100%; max-width: 36rem; margin-left: auto; margin-right: auto; }
+.qd-share-panel { display: grid; gap: var(--tb-space-sm); margin-bottom: 0; }
+.qd-share-image { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); }
+.qd-share-input {
+  width: 100%;
+  padding: var(--tb-space-sm);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-primary);
+  color: var(--tb-text-primary);
+  font: inherit;
+  font-size: 1rem;   /* 16px 未満だと、iPhone で入力欄に拡大される */
+}
+.qd-share-btns { display: grid; grid-template-columns: 1fr 1fr; gap: var(--tb-space-sm); }
 
 /* 期間の切り替え（つながったボタン） */
 .qd-seg {
@@ -1153,7 +1177,8 @@ body {
 @media (min-width: 600px) {
   .qd-an { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; }
   .qd-an-headline, .qd-an-summary, .qd-an-span-all, .qd-an-span-2 { grid-column: 1 / -1; }
-  .qd-an-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .qd-an-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .qd-an-summary > .qd-an-tile { grid-column: auto; padding: var(--tb-space-md) var(--tb-space-sm); }
   .qd-an-card { padding: var(--tb-space-lg); }
   .qd-an-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tb-space-xl); }
 }
@@ -1161,11 +1186,9 @@ body {
 @media (min-width: 1024px) {
   .qd-an { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--tb-space-lg); }
   .qd-an-span-2 { grid-column: span 2; }
-  .qd-an-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--tb-space-md); }
-  .qd-an-tile--streak { grid-column: auto; }
-  .qd-an-tile { padding: var(--tb-space-lg); }
-  .qd-an-num { font-size: 2.25rem; }
-  .qd-an-tile--streak .qd-an-num { font-size: 2.25rem; }
+  .qd-an-summary { gap: var(--tb-space-md); }
+  .qd-an-summary > .qd-an-tile { padding: var(--tb-space-lg); }
+  .qd-an-summary > .qd-an-tile .qd-an-num { font-size: 2.25rem; }
   .qd-an-ms { grid-column: 1 / -1; }
   .qd-an-ms .qd-badges { grid-template-columns: 5fr 4fr 2fr; gap: var(--tb-space-xl); }
   .qd-an-ms .qd-badge-row { grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr)); }

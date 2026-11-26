@@ -574,6 +574,122 @@
   }
 
 
+  /* ===================== 記録の画像と投稿 ===================== */
+
+  var SHARE_WEEKS = 34;
+  var SHARE_TAGS_KEY = 'quiz-drill.share-tags';
+  var SHARE_FILE_NAME = 'quiz-drill-記録.png';
+  var share = { file: null, url: null, token: 0 };
+
+  function closeShare() {
+    share.token += 1;
+    share.file = null;
+    if (share.url) { URL.revokeObjectURL(share.url); share.url = null; }
+    $('share-panel').hidden = true;
+    $('share-image').removeAttribute('src');
+  }
+
+  /** SVG の文字列を PNG の Blob にする */
+  function svgToPng(card) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        var canvas = document.createElement('canvas');
+        canvas.width = card.width;
+        canvas.height = card.height;
+        canvas.getContext('2d').drawImage(img, 0, 0, card.width, card.height);
+        canvas.toBlob(function (blob) { if (blob) resolve(blob); else reject(new Error('png')); }, 'image/png');
+      };
+      img.onerror = function () { reject(new Error('svg')); };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(card.svg);
+    });
+  }
+
+  /** 画像を先に作って見せる。共有は次のボタンで行う（iPhone は、押した操作の中でないと共有を開けない） */
+  function onShareMake() {
+    var now = new Date();
+    var daily = AN.dailyCounts(state.log);
+    var sum = AN.summaryCards(daily, now);
+    var card = CH.shareCard({
+      date: now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日（' + WEEK_NAMES[now.getDay()] + '）',
+      streak: sum.streak, today: sum.today, week: sum.week, total: sum.total,
+      heat: AN.heatmap(daily, now, SHARE_WEEKS),
+    });
+    closeShare();
+    var token = share.token;
+    $('share-panel').hidden = false;
+    $('btn-share').hidden = true;
+    $('btn-share-save').disabled = true;
+    $('share-text').value = AN.shareText(sum);
+    $('share-tags').value = loadShareTags();
+    $('share-msg').hidden = true;
+    svgToPng(card).then(function (blob) {
+      if (token !== share.token) return;
+      share.url = URL.createObjectURL(blob);
+      $('share-image').src = share.url;
+      $('btn-share-save').disabled = false;
+      try {
+        share.file = new File([blob], SHARE_FILE_NAME, { type: 'image/png' });
+      } catch (e) { share.file = null; }
+      $('btn-share').hidden = !(share.file && navigator.share && navigator.canShare && navigator.canShare({ files: [share.file] }));
+      $('share-panel').scrollIntoView({ block: 'nearest' });
+    }).catch(function () {
+      if (token !== share.token) return;
+      showShareMessage('画像を作れませんでした。');
+    });
+  }
+
+  function loadShareTags() {
+    try { return localStorage.getItem(SHARE_TAGS_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  function saveShareTags() {
+    try { localStorage.setItem(SHARE_TAGS_KEY, $('share-tags').value); } catch (e) { /* 覚えられなくても投稿はできる */ }
+  }
+
+  function shareMessageText() {
+    return [$('share-text').value.trim(), $('share-tags').value.trim()].filter(Boolean).join('\n');
+  }
+
+  function showShareMessage(message) {
+    $('share-msg').textContent = message;
+    $('share-msg').hidden = false;
+  }
+
+  function copyShareText() {
+    return navigator.clipboard && navigator.clipboard.writeText
+      ? navigator.clipboard.writeText(shareMessageText())
+      : Promise.reject(new Error('clipboard'));
+  }
+
+  function onShare() {
+    if (!share.file) return;
+    var text = shareMessageText();
+    // 共有先によっては画像だけを受け取って文章を捨てるので、先にクリップボードにも入れておく
+    copyShareText().then(function () {
+      showShareMessage('文章はコピーもしてあります。投稿画面に文章が入らないときは、貼り付けてください。');
+    }, function () { /* コピーできなくても、共有はする */ });
+    navigator.share({ files: [share.file], text: text }).catch(function (e) {
+      if (e && e.name === 'AbortError') return;   // 共有を取り消しただけ
+      showShareMessage('共有できませんでした。「画像を保存」と「文章をコピー」を使ってください。');
+    });
+  }
+
+  function onShareSave() {
+    if (!share.url) return;
+    var a = document.createElement('a');
+    a.href = share.url;
+    a.download = SHARE_FILE_NAME;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function onShareCopy() {
+    copyShareText().then(function () { showShareMessage('文章をコピーしました。'); },
+      function () { showShareMessage('コピーできませんでした。欄の文章を選んでコピーしてください。'); });
+  }
+
   /* ===================== 分析 ===================== */
 
   // 集計は analysis.js、SVG は charts.js。ここはデータを渡して描き、操作に応えるだけ。
@@ -636,6 +752,7 @@
       heat: AN.heatmap(daily, now),
     };
     renderAnSummary(AN.summaryCards(daily, now), animate);
+    closeShare();   // 記録が変わっているかもしれないので、作った画像は閉じる
     an.widths = {};
     drawAnCharts(animate);
     renderAnDonut(AN.mastery(state.sets, state.log), animate);
@@ -650,7 +767,10 @@
     countUp($('an-total'), s.total, animate);
     countUp($('an-streak'), s.streak, animate);
     countUp($('an-best'), s.best ? s.best.count : 0, animate);
-    $('an-best-date').textContent = s.best ? fmtDate(s.best.date, true) : 'まだありません';
+    // 枠が狭いので、今年の日付は年を省く
+    $('an-best-date').textContent = s.best
+      ? fmtDate(s.best.date, AN.keyDate(s.best.date).getFullYear() !== new Date().getFullYear())
+      : 'まだありません';
     $('an-streak-note').textContent = s.streak === 0 ? '今日の1問から始まります'
       : s.today > 0 ? '今日の分も入っています' : '今日解くと ' + (s.streak + 1) + '日になります';
     var head;
@@ -2617,6 +2737,11 @@
   $('btn-next').addEventListener('click', onNext);
   $('btn-lucky').addEventListener('click', onLucky);
   $('btn-ask-copy').addEventListener('click', onAskCopy);
+  $('btn-share-make').addEventListener('click', onShareMake);
+  $('btn-share').addEventListener('click', onShare);
+  $('btn-share-save').addEventListener('click', onShareSave);
+  $('btn-share-copy').addEventListener('click', onShareCopy);
+  $('share-tags').addEventListener('input', saveShareTags);
   $('btn-quit').addEventListener('click', onQuit);
   $('btn-retry').addEventListener('click', onRetry);
   $('btn-home').addEventListener('click', function () { renderHome(); showScreen('home'); });

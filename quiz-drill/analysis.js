@@ -122,6 +122,13 @@ var QD_ANALYSIS = (function () {
     return res;
   }
 
+  /** 投稿の文章の下書き。s は summaryCards の返り値。今日解いていなければ、今日の数は書かない */
+  function shareText(s) {
+    var n = function (v) { return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+    var head = s.today > 0 ? '4択ドリルで、今日は' + n(s.today) + '問。' : '4択ドリルの学習の記録。';
+    return head + '連続' + n(s.streak) + '日、累計' + n(s.total) + '問。';
+  }
+
   /**
    * 期間の始まりの日の鍵。range は '30' | '90' | '365'（今日を含めてその日数）か 'all'（最初に解いた日から）。
    * 'all' で記録が無ければ 30日にする（枠を見せるため）。
@@ -380,6 +387,7 @@ var QD_ANALYSIS = (function () {
     heatThresholds: heatThresholds,
     heatLevel: heatLevel,
     heatmap: heatmap,
+    shareText: shareText,
     milestones: milestones,
     recentResults: recentResults,
     mastery: mastery,
