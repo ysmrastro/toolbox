@@ -783,6 +783,37 @@ var QD_QUIZ = (function () {
     return n >= 1 && n <= 20 ? String.fromCharCode(0x2460 + n - 1) : '(' + n + ')';
   }
 
+  /**
+   * 解説で分からない問題を AI に質問するためにコピーする文章。
+   * 選択肢は元の番号順にする（解説が ①② で書かれていても番号が合う）。画像は含められないので、あることだけを書く。
+   * picked は自分が選んだ選択肢の元の添字（0 始まり）。見返しなどで回答が無いときは null。
+   */
+  function askText(set, question, index, picked) {
+    var correct = correctIndices(question);
+    var lines = [
+      '次の問題について、解説を読んでもよく分かりません。分かりやすく説明してください。',
+      '',
+      '【問題】' + questionLabel(set, question, index),
+      question.question,
+    ];
+    if (question.image) {
+      lines.push('（この問題には図がありますが、ここには含まれていません' +
+        (question.imageAlt ? '。図の説明: ' + question.imageAlt : '') + '）');
+    }
+    lines.push('', '【選択肢】');
+    question.choices.forEach(function (choice, i) { lines.push(circled(i + 1) + ' ' + choice); });
+    lines.push('', '【正解】' + correct.map(function (i) { return circled(i + 1); }).join('・') +
+      (correct.length > 1 ? '（どれを選んでも正解）' : ''));
+    if (picked !== null && picked !== undefined) {
+      lines.push('【私の回答】' + circled(picked + 1) + (isCorrectOriginal(question, picked) ? '（正解）' : '（不正解）'));
+    }
+    if (question.explanation) lines.push('', '【解説】', question.explanation);
+    if (question.supplement) lines.push('', '【補足】', question.supplement);
+    if (lines.join('\n').indexOf('$') >= 0) lines.push('', '（$ で囲まれた部分は TeX の数式です）');
+    lines.push('', '【分からないところ】', '');
+    return lines.join('\n');
+  }
+
   /** 問題文の冒頭（改行は空白にし、長ければ … で切る） */
   function excerpt(text, max) {
     var s = String(text).replace(/\s+/g, ' ').trim();
@@ -1290,6 +1321,7 @@ var QD_QUIZ = (function () {
     score: score,
     questionLabel: questionLabel,
     circled: circled,
+    askText: askText,
     excerpt: excerpt,
     searchQuestions: searchQuestions,
     neighborKey: neighborKey,

@@ -434,6 +434,25 @@ body {
 
 .qd-after .qd-big-btn { margin-top: var(--tb-space-lg); }
 
+/* AI に質問する用のコピーの結果と、コピーできないときの手作業用の欄（文字を 16px 以上にして、iPhone の拡大を防ぐ） */
+.qd-ask-msg {
+  margin-top: var(--tb-space-sm);
+  font-size: var(--tb-font-size-sm);
+  color: var(--tb-text-secondary);
+  text-align: center;
+}
+.qd-ask-text {
+  width: 100%;
+  margin-top: var(--tb-space-sm);
+  padding: var(--tb-space-sm);
+  border: 1px solid var(--tb-border);
+  border-radius: var(--tb-radius-md);
+  background: var(--tb-bg-primary);
+  color: var(--tb-text-primary);
+  font: inherit;
+  font-size: 1rem;
+}
+
 /* ===================== 結果 ===================== */
 
 .qd-result { text-align: center; }
