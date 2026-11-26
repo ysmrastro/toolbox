@@ -1376,3 +1376,47 @@ test('今日の一問: 外した問題集の問題は、今日の一問にも �
   assert.strictEqual(Q.dailyQuestion(none, [], NOON(2026, 11, 20)), null);
   assert.strictEqual(Q.extraQuestion(none, [], NOON(2026, 11, 20)), null);
 });
+
+test('AI に質問する用の文章: 元の番号順の選択肢・正解・自分の回答・解説・補足が入る', () => {
+  const set = { id: 's', title: '第9回' };
+  const text = Q.askText(set, q('1', { no: 8, question: '空は何色？', choices: ['赤', '青', '黄', '緑'], answer: 2, explanation: '青い光が散らばる。', supplement: '昼の話。' }), 0, 0);
+  assert.strictEqual(text, [
+    '次の問題について、解説を読んでもよく分かりません。分かりやすく説明してください。',
+    '',
+    '【問題】第9回 問8',
+    '空は何色？',
+    '',
+    '【選択肢】',
+    '① 赤',
+    '② 青',
+    '③ 黄',
+    '④ 緑',
+    '',
+    '【正解】②',
+    '【私の回答】①（不正解）',
+    '',
+    '【解説】',
+    '青い光が散らばる。',
+    '',
+    '【補足】',
+    '昼の話。',
+    '',
+    '【分からないところ】',
+    '',
+  ].join('\n'));
+});
+
+test('AI に質問する用の文章: 回答が無ければ回答の行を出さない。解説・補足が無ければ見出しも出さない', () => {
+  const text = Q.askText({ title: '集' }, q('1'), 2, null);
+  assert.match(text, /【問題】集 問3\n/);
+  assert.doesNotMatch(text, /私の回答|解説】|補足】|TeX|図があります/);
+});
+
+test('AI に質問する用の文章: 複数正答・正解の回答・図・式', () => {
+  const text = Q.askText({ title: '集' }, q('1', { question: '$x^2$ は？', answers: [2, 3], image: 'data:image/png;base64,AAAA', imageAlt: '放物線' }), 0, 2);
+  assert.match(text, /【正解】②・③（どれを選んでも正解）\n/);
+  assert.match(text, /【私の回答】③（正解）\n/);
+  assert.match(text, /図がありますが、ここには含まれていません。図の説明: 放物線）\n/);
+  assert.match(text, /TeX の数式です/);
+  assert.doesNotMatch(text, /base64/);
+});

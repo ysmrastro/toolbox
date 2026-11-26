@@ -1768,6 +1768,11 @@
     $('q-supplement-wrap').hidden = !q.supplement;
     setRich($('q-supplement'), q.supplement);
 
+    // コピーする文章はここで作っておく（ボタンを押した操作の中ですぐ書き込まないと、iPhone ではコピーが拒否される）
+    askCopyText = Q.askText(entry.set, q, entry.index, answer.picked);
+    $('q-ask-msg').hidden = true;
+    $('q-ask-text').hidden = true;
+
     var next = $('btn-next');
     if (review) next.textContent = REVIEW_BACK[state.reviewFrom || 'result'].next;
     else next.textContent = state.session.pos + 1 >= state.session.order.length ? '結果を見る' : '次の問題へ';
@@ -1779,6 +1784,36 @@
       $('btn-prevq').disabled = !Q.neighborKey(entry.set, key, -1);
       $('btn-nextq').disabled = !Q.neighborKey(entry.set, key, 1);
     }
+  }
+
+  /* ===================== AI に質問する用のコピー ===================== */
+
+  var askCopyText = '';   // いま表示している問題の、コピーする文章
+
+  function onAskCopy() {
+    var text = askCopyText;
+    var done = navigator.clipboard && navigator.clipboard.writeText
+      ? navigator.clipboard.writeText(text)
+      : Promise.reject(new Error('clipboard'));
+    done.then(function () {
+      if (text !== askCopyText) return;   // 書き込みの間に別の問題へ移ったら、表示は変えない
+      $('q-ask-text').hidden = true;
+      showAskMessage('コピーしました。AI の入力欄に貼り付けてください。');
+    }, function () {
+      if (text !== askCopyText) return;
+      var area = $('q-ask-text');
+      area.value = text;
+      area.hidden = false;
+      area.focus();
+      area.select();
+      showAskMessage('自動でコピーできませんでした。下の欄を全選択してコピーしてください。');
+    });
+  }
+
+  function showAskMessage(message) {
+    var el = $('q-ask-msg');
+    el.textContent = message;
+    el.hidden = false;
   }
 
   /* ===================== 数式（KaTeX） ===================== */
@@ -2581,6 +2616,7 @@
   });
   $('btn-next').addEventListener('click', onNext);
   $('btn-lucky').addEventListener('click', onLucky);
+  $('btn-ask-copy').addEventListener('click', onAskCopy);
   $('btn-quit').addEventListener('click', onQuit);
   $('btn-retry').addEventListener('click', onRetry);
   $('btn-home').addEventListener('click', function () { renderHome(); showScreen('home'); });
