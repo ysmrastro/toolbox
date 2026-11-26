@@ -383,3 +383,21 @@ test('breakdown: 空のログ', () => {
   assert.strictEqual(r.bySet[0].answers, 0);
   assert.strictEqual(r.bySet[0].rate, null);
 });
+
+test('投稿の文章: 今日解いていれば今日の数を入れ、3桁ごとに区切る', () => {
+  assert.strictEqual(A.shareText({ today: 64, streak: 24, total: 3159 }), '4択ドリルで、今日は64問。連続24日、累計3,159問。');
+  assert.strictEqual(A.shareText({ today: 0, streak: 0, total: 5 }), '4択ドリルの学習の記録。連続0日、累計5問。');
+});
+
+test('投稿の画像: 数字とカレンダーが入り、問題集の名前は入らない', () => {
+  const C = require('../charts.js');
+  const now = new Date(2026, 10, 27, 12, 0);
+  const daily = A.dailyCounts([ans('secret::q1', at(2026, 11, 27, 9), true)]);
+  const card = C.shareCard({ date: '2026年11月27日（金）', streak: 1, today: 1, week: 1, total: 123456, heat: A.heatmap(daily, now, 34) });
+  assert.strictEqual(card.width, 1200);
+  assert.strictEqual(card.height, 675);
+  assert.match(card.svg, /^<svg xmlns=/);
+  assert.match(card.svg, /123,456<tspan/);
+  assert.match(card.svg, /直近34週/);
+  assert.doesNotMatch(card.svg, /secret|NaN|undefined|class=/);
+});
