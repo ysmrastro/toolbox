@@ -614,6 +614,7 @@
       date: now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日（' + WEEK_NAMES[now.getDay()] + '）',
       streak: sum.streak, today: sum.today, week: sum.week, total: sum.total,
       heat: AN.heatmap(daily, now, SHARE_WEEKS),
+      series: AN.dailySeries(daily, '30', now),
     });
     closeShare();
     var token = share.token;

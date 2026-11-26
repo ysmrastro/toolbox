@@ -900,7 +900,7 @@ body {
 /* 記録の画像と投稿 */
 .qd-share { display: grid; gap: var(--tb-space-sm); width: 100%; max-width: 36rem; margin-left: auto; margin-right: auto; }
 .qd-share-panel { display: grid; gap: var(--tb-space-sm); margin-bottom: 0; }
-.qd-share-image { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); }
+.qd-share-image { display: block; width: 100%; height: auto; aspect-ratio: 10 / 9; border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); }
 .qd-share-input {
   width: 100%;
   padding: var(--tb-space-sm);

@@ -283,7 +283,7 @@ var QD_CHARTS = (function () {
   }
 
   /* 投稿用の画像。画像にするときは style.css が使えないので、色と文字の指定は属性に直接書く */
-  var SHARE_W = 1200, SHARE_H = 675;
+  var SHARE_W = 1200, SHARE_H = 1080;
   var SHARE_FONT = "-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif";
   var SHARE_HEAT = ['#242a45', '#2f414e', '#466377', '#618ca6', '#9dccea'];   // 実施数の段階 0〜4
 
@@ -291,9 +291,47 @@ var QD_CHARTS = (function () {
     return '<text x="' + x + '" y="' + y + '" font-size="' + size + '" fill="' + color + '"' + (extra || '') + '>' + esc(text) + '</text>';
   }
 
+  /** 投稿用の画像の下段: 日ごとの問題数の棒（左の目盛り）と累計の線（右の目盛り）。series は QD_ANALYSIS.dailySeries の返り値 */
+  function shareGraph(series) {
+    var days = series.days, n = days.length;
+    var left = 130, right = SHARE_W - 150, top = 740, bottom = 1000;
+    var pw = right - left, ph = bottom - top, step = pw / n, bw = step * 0.64;
+    var leftTicks = fixedTicks(series.max, 4, 10), rightTicks = fixedTicks(series.cumMax, 4, 100);
+    var lMax = leftTicks[leftTicks.length - 1], rMax = rightTicks[rightTicks.length - 1];
+    var yL = function (v) { return bottom - (v / lMax) * ph; };
+    var yR = function (v) { return bottom - (v / rMax) * ph; };
+    var s = shareText1(56, 700, 26, '#8b949e', '直近' + n + '日の問題数と累計');
+    s += '<rect x="' + (SHARE_W - 380) + '" y="683" width="18" height="18" rx="4" fill="#7eb8da"/>';
+    s += shareText1(SHARE_W - 352, 700, 22, '#8b949e', 'その日の問題数');
+    s += '<rect x="' + (SHARE_W - 144) + '" y="690" width="30" height="5" rx="2" fill="#f2c46d"/>';
+    s += shareText1(SHARE_W - 56, 700, 22, '#8b949e', '累計', ' text-anchor="end"');
+    leftTicks.forEach(function (v, i) {
+      var y = r1(yL(v));
+      s += '<line x1="' + left + '" x2="' + right + '" y1="' + y + '" y2="' + y + '" stroke="#262b36" stroke-width="1"/>';
+      s += shareText1(left - 14, r1(y + 7), 20, '#8b949e', num(v), ' text-anchor="end"');
+      s += shareText1(right + 14, r1(yR(rightTicks[i]) + 7), 20, '#f2c46d', num(rightTicks[i]));
+    });
+    days.forEach(function (d, i) {
+      if (!d.answers) return;
+      var h = Math.max(3, bottom - yL(d.answers));
+      s += '<rect data-bar="' + i + '" x="' + r1(left + step * i + (step - bw) / 2) + '" y="' + r1(bottom - h) + '" width="' + r1(bw) +
+        '" height="' + r1(h) + '" rx="4" fill="#7eb8da" fill-opacity="0.85"/>';
+    });
+    if (series.cumMax > 0) {
+      var pts = days.map(function (d, i) { return [left + step * (i + 0.5), yR(d.cum)]; });
+      s += '<path d="' + smoothPath(pts) + '" fill="none" stroke="#f2c46d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>';
+      s += '<circle cx="' + r1(pts[n - 1][0]) + '" cy="' + r1(pts[n - 1][1]) + '" r="8" fill="#f2c46d"/>';
+    }
+    labelIndices(n, pw, 120).forEach(function (i) {
+      s += shareText1(r1(left + step * (i + 0.5)), bottom + 34, 20, '#8b949e', md(days[i].date), ' text-anchor="middle"');
+    });
+    return s;
+  }
+
   /**
-   * 学習の記録を1枚の画像（1200×675）にする SVG の文字列。
-   * info: { date（表示用の日付）, streak, today, week, total, heat（QD_ANALYSIS.heatmap の返り値） }。
+   * 学習の記録を1枚の画像（1200×1080）にする SVG の文字列。
+   * info: { date（表示用の日付）, streak, today, week, total, heat（QD_ANALYSIS.heatmap の返り値）,
+   *         series（QD_ANALYSIS.dailySeries の返り値） }。
    * 問題や問題集の名前は入れない（公開の場に投稿しても、中身が出ないように）。
    */
   function shareCard(info) {
@@ -335,6 +373,7 @@ var QD_CHARTS = (function () {
           '" rx="5" fill="' + SHARE_HEAT[d.level] + '"/>';
       });
     });
+    s += shareGraph(info.series);
     s += shareText1(SHARE_W - 56, SHARE_H - 14, 18, '#6e7681', 'ysmrastro.github.io/toolbox/quiz-drill', ' text-anchor="end"');
     s += '</svg>';
     return { svg: s, width: SHARE_W, height: SHARE_H };
