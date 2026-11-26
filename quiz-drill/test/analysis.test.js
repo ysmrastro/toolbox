@@ -393,11 +393,21 @@ test('投稿の画像: 数字とカレンダーが入り、問題集の名前は
   const C = require('../charts.js');
   const now = new Date(2026, 10, 27, 12, 0);
   const daily = A.dailyCounts([ans('secret::q1', at(2026, 11, 27, 9), true)]);
-  const card = C.shareCard({ date: '2026年11月27日（金）', streak: 1, today: 1, week: 1, total: 123456, heat: A.heatmap(daily, now, 34) });
+  const card = C.shareCard({ date: '2026年11月27日（金）', streak: 1, today: 1, week: 1, total: 123456, heat: A.heatmap(daily, now, 34), series: A.dailySeries(daily, '30', now) });
   assert.strictEqual(card.width, 1200);
-  assert.strictEqual(card.height, 675);
+  assert.strictEqual(card.height, 1080);
+  assert.match(card.svg, /直近30日の問題数と累計/);
+  assert.strictEqual(card.svg.match(/data-bar=/g).length, 1);   // 解いた日は1日だけ
   assert.match(card.svg, /^<svg xmlns=/);
   assert.match(card.svg, /123,456<tspan/);
   assert.match(card.svg, /直近34週/);
   assert.doesNotMatch(card.svg, /secret|NaN|undefined|class=/);
+});
+
+test('投稿の画像: 記録が無くても作れる（棒も線も出さない）', () => {
+  const C = require('../charts.js');
+  const now = new Date(2026, 10, 27, 12, 0);
+  const daily = A.dailyCounts([]);
+  const card = C.shareCard({ date: '2026年11月27日（金）', streak: 0, today: 0, week: 0, total: 0, heat: A.heatmap(daily, now, 34), series: A.dailySeries(daily, '30', now) });
+  assert.doesNotMatch(card.svg, /NaN|undefined|Infinity|data-bar=|<path/);
 });
